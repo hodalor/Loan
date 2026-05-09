@@ -3,14 +3,14 @@ import { GlobalContext } from "../../../../../libs/context/globalContext";
 import MyModal from "../../../../modals";
 import CallRecordModal from "../../../../modals/callRecords";
 import SimpleDataTable from "../../../SimpleDataTable";
+import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 
 export default function PhoneBook(props) {
-  const { loan, customers, setmodalTitle, setCallRecordsModal, modalTitle } =
+  const { setmodalTitle, setCallRecordsModal, modalTitle } =
     React.useContext(GlobalContext);
+  const { customer, customerProfileLoading } = useResolvedLoanDetails();
 
   const [numberCalled, setNumberCalled] = React.useState("");
-  const customersList = Array.isArray(customers) ? customers : [];
-  const customer = customersList.find((item) => item.userId === loan.userId);
   const contacts = Array.isArray(customer?.contacts) ? customer.contacts : [];
 
   const openCallRecordModal = (phone) => {
@@ -112,12 +112,16 @@ export default function PhoneBook(props) {
 
           <div className="space-y-4 p-4">
             <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              All customer numbers are shown in one compact list so calls and call-record updates stay fast.
+              {customerProfileLoading
+                ? "Loading full phone book details from the customer profile."
+                : "All customer numbers are shown in one compact list so calls and call-record updates stay fast."}
             </div>
             <SimpleDataTable
               columns={columns}
               rows={rows}
               emptyMessage="No phone book contacts found."
+              loading={customerProfileLoading}
+              loadingMessage="Loading phone book..."
             />
           </div>
         </div>

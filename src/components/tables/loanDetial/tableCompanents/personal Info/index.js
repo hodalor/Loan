@@ -1,11 +1,9 @@
 import React from "react";
-import { GlobalContext } from "../../../../../libs/context/globalContext";
 import { DetailMatrix, DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
+import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 
 export default function PersonalInfo() {
-  const { loan, customers } = React.useContext(GlobalContext);
-  const customersList = Array.isArray(customers) ? customers : [];
-  const customer = customersList.find((item) => item.userId === loan.userId);
+  const { customer, customerProfileLoading } = useResolvedLoanDetails();
   const contacts = Array.isArray(customer?.contacts) ? customer.contacts : [];
   const totalContacts = contacts.length;
   const fullName =
@@ -18,6 +16,9 @@ export default function PersonalInfo() {
       .join(" ") || "-";
   const dob = customer?.pesonalInfo?.dob;
   const dobText = dob ? new Date(dob).toLocaleDateString() : "-";
+  const registrationDate = customer?.createdAt
+    ? new Date(customer.createdAt).toLocaleString()
+    : "-";
   const rows = [
     [
       { type: "label", content: "Name" },
@@ -64,10 +65,18 @@ export default function PersonalInfo() {
       { content: customer?.pesonalInfo?.incomeSource || "-" },
     ],
     [
+      { type: "label", content: "Registration Date" },
+      { content: registrationDate },
       { type: "label", content: "Date Of Birth" },
       { content: dobText },
       { type: "label", content: "Number Dependent" },
       { content: customer?.pesonalInfo?.relativesINOC || "-" },
+    ],
+    [
+      { type: "label", content: "School Status" },
+      { content: customer?.pesonalInfo?.schoolStatus || "-" },
+      { type: "label", content: "Residency Type" },
+      { content: customer?.pesonalInfo?.residenceType || "-" },
       { type: "label", content: "Work" },
       { content: customer?.workInfo?.workContent || "-" },
     ],
@@ -78,7 +87,13 @@ export default function PersonalInfo() {
       title="Personal information"
       subtitle="Customer profile, residence details, and application contact information."
     >
-      <DetailSectionHint text="This section now handles missing customer fields safely instead of crashing the page." />
+      <DetailSectionHint
+        text={
+          customerProfileLoading
+            ? "Loading the full customer profile including registration and personal details."
+            : "This section now handles missing customer fields safely instead of crashing the page."
+        }
+      />
       <DetailMatrix rows={rows} />
     </DetailSectionCard>
   );

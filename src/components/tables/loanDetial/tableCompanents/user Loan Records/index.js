@@ -1,12 +1,10 @@
 import React from "react";
-import { GlobalContext } from "../../../../../libs/context/globalContext";
 import SimpleDataTable from "../../../SimpleDataTable";
+import useResolvedLoanDetails from "../../useResolvedLoanDetails";
+import { DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
 
 export default function UserLoanRecords() {
-  const { loan, customers } = React.useContext(GlobalContext);
-
-  const customersList = Array.isArray(customers) ? customers : [];
-  const customer = customersList.find((item) => item.userId === loan.userId);
+  const { customer, customerProfileLoading } = useResolvedLoanDetails();
   const customerLoans = Array.isArray(customer?.loan?.loans)
     ? customer.loan.loans
     : [];
@@ -54,21 +52,24 @@ export default function UserLoanRecords() {
         }));
 
   return (
-    <div className="card">
-      <div className="card-body">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
-            User application and loan cases
-          </div>
-          <div className="p-4">
-            <SimpleDataTable
-              columns={columns}
-              rows={rows}
-              emptyMessage="No user loan cases found."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="User application and loan cases"
+      subtitle="Historical loan records already recorded for this customer."
+    >
+      <DetailSectionHint
+        text={
+          customerProfileLoading
+            ? "Loading the customer profile to show the full loan history."
+            : `${rows.length} loan record${rows.length === 1 ? "" : "s"} found for this customer.`
+        }
+      />
+      <SimpleDataTable
+        columns={columns}
+        rows={rows}
+        emptyMessage="No user loan cases found."
+        loading={customerProfileLoading}
+        loadingMessage="Loading customer loan records..."
+      />
+    </DetailSectionCard>
   );
 }

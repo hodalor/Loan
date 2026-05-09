@@ -8,13 +8,11 @@ import {
   DetailSectionHint,
   StatusBadge,
 } from "../../DetailSectionCard";
+import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 
 export default function IdentityInfo() {
-  const { loan, customers, modalTitle, setmodalTitle, setImageToView } =
-    React.useContext(GlobalContext);
-
-  const customersList = Array.isArray(customers) ? customers : [];
-  const customer = customersList.find((item) => item.userId === loan.userId);
+  const { modalTitle, setmodalTitle, setImageToView } = React.useContext(GlobalContext);
+  const { loan, customer, customerProfileLoading } = useResolvedLoanDetails();
   const dob = customer?.pesonalInfo?.dob || "";
   const age = dob ? new Date().getFullYear() - new Date(dob).getFullYear() : "-";
   const livePhoto = loan?.facialRecog || "";
@@ -49,7 +47,13 @@ export default function IdentityInfo() {
         title="Internal matching information"
         subtitle="Identity check, OCR data, and image verification for this customer."
       >
-        <DetailSectionHint text="Tap any available image to open it in the preview modal." />
+        <DetailSectionHint
+          text={
+            customerProfileLoading
+              ? "Loading the full identity record and verification images."
+              : "Tap any available image to open it in the preview modal."
+          }
+        />
         <DetailMatrix rows={matchingRows} />
 
         <div className="mt-4 grid gap-4 md:grid-cols-3">

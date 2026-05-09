@@ -1,12 +1,9 @@
 import React from "react";
-import { GlobalContext } from "../../../../../libs/context/globalContext";
 import { DetailMatrix, DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
+import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 
 export default function JobInfo() {
-  const { loan, customers } = React.useContext(GlobalContext);
-
-  const customersList = Array.isArray(customers) ? customers : [];
-  const customer = customersList.find((item) => item.userId === loan.userId);
+  const { customer, customerProfileLoading } = useResolvedLoanDetails();
   const workInfo = customer?.workInfo || {};
 
   const rows = [
@@ -41,7 +38,13 @@ export default function JobInfo() {
       title="Job information"
       subtitle="Employment and workplace details used during review."
     >
-      <DetailSectionHint text="This section summarizes the customer work profile captured during application." />
+      <DetailSectionHint
+        text={
+          customerProfileLoading
+            ? "Loading the full employment profile recorded by the system."
+            : "This section summarizes the customer work profile captured during application."
+        }
+      />
       <DetailMatrix rows={rows} />
     </DetailSectionCard>
   );

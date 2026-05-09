@@ -1,13 +1,10 @@
 import React from "react";
-import { GlobalContext } from "../../../../../libs/context/globalContext";
 import SimpleDataTable from "../../../SimpleDataTable";
 import { DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
+import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 
 export default function PaymentMethod() {
-  const { loan, customers } = React.useContext(GlobalContext);
-
-  const customersList = Array.isArray(customers) ? customers : [];
-  const customer = customersList.find((item) => item.userId === loan.userId);
+  const { loan, customer, customerProfileLoading } = useResolvedLoanDetails();
   const paymentMethods = Array.isArray(customer?.paymentMethods)
     ? customer.paymentMethods
     : loan?.paymentMethod
@@ -55,13 +52,19 @@ export default function PaymentMethod() {
       subtitle="Accounts and payment channels linked to this customer."
     >
       <DetailSectionHint
-        text={`${rows.length} collection method${rows.length === 1 ? "" : "s"} available for this case.`}
+        text={
+          customerProfileLoading
+            ? "Loading saved collection methods from the customer profile."
+            : `${rows.length} collection method${rows.length === 1 ? "" : "s"} available for this case.`
+        }
       />
       <SimpleDataTable
         columns={columns}
         rows={rows}
         emptyMessage="No collection methods found."
         dense
+        loading={customerProfileLoading}
+        loadingMessage="Loading collection methods..."
       />
     </DetailSectionCard>
   );
