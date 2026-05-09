@@ -1,0 +1,33 @@
+{
+  "name": "zam_perf_backend",
+  "version": "1.0.0",
+  "description": "back end sevice for perficient loans app",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": {
+    "email": "alfuty09@gmail.com",
+    "name": "Abdallah",
+    "githubName": "ilyaseen19"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.1",
+    "fs-extra": "^11.1.0",
+    "mongoose": "^6.5.2",
+    "multer": "1.4.5-lts.1",
+    "node-fetch": "2",
+    "nodemon": "^2.0.20",
+    "request": "^2.88.2",
+    "simple-node-logger": "^21.8.12",
+    "socket.io": "^4.5.1",
+    "string-crypto": "^2.0.2",
+    "uuid": "^9.0.0"
+  }
+}
