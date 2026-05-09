@@ -323,11 +323,13 @@ io.on("connection", (socket) => {
   });
 });
 
-
-// mongoose database connection
-connectDB();
-
 const PORT = config.server.port;
-httpServer.listen(PORT, () => {
-  console.log(`server running on port ${PORT}`)
-});
+
+const startServer = async () => {
+  await connectDB();
+  httpServer.listen(PORT, () => {
+    console.log(`server running on port ${PORT}`);
+  });
+};
+
+startServer();

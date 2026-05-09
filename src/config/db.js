@@ -5,7 +5,10 @@ const mongoose = require("mongoose");
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(config.database, {});
-    console.log(`MongoDB connected :${conn.connection.host}`)
+    console.log(
+      `Connected to the DB: ${conn.connection.name} on ${conn.connection.host}`
+    );
+    return conn;
   } catch (error) {
     console.error(`mongodb error${error}`)
     process.exit(1);
