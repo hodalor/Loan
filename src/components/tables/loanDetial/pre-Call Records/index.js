@@ -1,21 +1,24 @@
 import React from "react";
 import { GlobalContext } from "../../../../libs/context/globalContext";
 import SimpleDataTable from "../../SimpleDataTable";
+import { DetailSectionCard, DetailSectionHint } from "../DetailSectionCard";
 
 export default function PreCallRecords() {
   const { loan } = React.useContext(GlobalContext);
-  const preCallRecords = loan.preCollCallRecords;
+  const preCallRecords = Array.isArray(loan?.preCollCallRecords)
+    ? loan.preCollCallRecords
+    : [];
 
   const columns = [
     {
       key: "calledNumber",
-      label: "Called Number",
+      label: "Called number",
       cellClassName: "font-semibold text-slate-900",
     },
     { key: "relation", label: "Relationship" },
-    { key: "callResult", label: "Call Result" },
-    { key: "calldate", label: "Creation Date" },
-    { key: "preCollOfficer", label: "Credit Audit Employee" },
+    { key: "callResult", label: "Call result" },
+    { key: "calldate", label: "Creation time" },
+    { key: "preCollOfficer", label: "Pre-collection staff" },
     { key: "remarks", label: "Remarks" },
   ];
 
@@ -31,21 +34,17 @@ export default function PreCallRecords() {
         }));
 
   return (
-    <div className="card">
-      <div className="card-body">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
-            Pre-collection call records
-          </div>
-          <div className="p-4">
-            <SimpleDataTable
-              columns={columns}
-              rows={rows}
-              emptyMessage="No pre-collection call records found."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Pre-collection call records"
+      subtitle="Reminder calls and follow-up notes before the loan reaches collection."
+    >
+      <DetailSectionHint text={`${rows.length} pre-collection record${rows.length === 1 ? "" : "s"} available.`} />
+      <SimpleDataTable
+        columns={columns}
+        rows={rows}
+        emptyMessage="No pre-collection call records found."
+        dense
+      />
+    </DetailSectionCard>
   );
 }

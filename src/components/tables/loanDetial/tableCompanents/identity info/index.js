@@ -2,134 +2,122 @@ import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
 import MyModal from "../../../../modals";
 import ImgModalContent from "../../../../modals/imgContent";
+import {
+  DetailMatrix,
+  DetailSectionCard,
+  DetailSectionHint,
+  StatusBadge,
+} from "../../DetailSectionCard";
 
 export default function IdentityInfo() {
   const { loan, customers, modalTitle, setmodalTitle, setImageToView } =
     React.useContext(GlobalContext);
 
-  let customer = customers.find((item) => item.userId === loan.userId);
-
-  let dob = customer === undefined ? "" : customer.pesonalInfo.dob;
-
-  let age = new Date().getFullYear() - new Date(dob).getFullYear();
+  const customersList = Array.isArray(customers) ? customers : [];
+  const customer = customersList.find((item) => item.userId === loan.userId);
+  const dob = customer?.pesonalInfo?.dob || "";
+  const age = dob ? new Date().getFullYear() - new Date(dob).getFullYear() : "-";
+  const livePhoto = loan?.facialRecog || "";
+  const idFront = customer?.IDinfo?.idFront || "";
+  const matchingRows = [
+    [
+      { type: "label", content: "OCR name" },
+      {
+        content:
+          [customer?.IDinfo?.firstName, customer?.IDinfo?.middleName, customer?.IDinfo?.lastName]
+            .filter(Boolean)
+            .join(" ") || "-",
+      },
+      { type: "label", content: "OCR ID number" },
+      { content: customer?.IDinfo?.gCardNumber || "-" },
+      { type: "label", content: "Age" },
+      { content: age },
+    ],
+    [
+      { type: "label", content: "Province" },
+      { content: customer?.pesonalInfo?.areaName || "-" },
+      { type: "label", content: "Area" },
+      { content: customer?.pesonalInfo?.dAddress || "-" },
+      { type: "label", content: "OCR similarity" },
+      { content: "-" },
+    ],
+  ];
 
   return (
     <div>
-      <div className="card">
-        <div className="card-body">
-          <div className="row" style={{ paddingTop: "none" }}>
-            <div
-              className="col"
-              style={{
-                backgroundColor: "#79bbff",
-                height: "2.5rem",
-                display: "flex",
-                alignItems: "center",
-                color: "white ",
-              }}
-            >
-              Identity information and OCR verification
-            </div>
-          </div>
-          <div className="row">
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              OCR
-            </div>
-            <div className=" col-2 border" style={{}}></div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              OCR ID Number
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {customer === undefined ? "" : customer.IDinfo.gCardNumber}
-            </div>
+      <DetailSectionCard
+        title="Internal matching information"
+        subtitle="Identity check, OCR data, and image verification for this customer."
+      >
+        <DetailSectionHint text="Tap any available image to open it in the preview modal." />
+        <DetailMatrix rows={matchingRows} />
 
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Age
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (!livePhoto) return;
+              setImageToView(livePhoto);
+              setmodalTitle("imgContent");
+            }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={!livePhoto}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-900">Living photo</span>
+              <StatusBadge tone={livePhoto ? "success" : "neutral"}>
+                {livePhoto ? "Available" : "Missing"}
+              </StatusBadge>
             </div>
-            <div className=" col-2 border" style={{}}>
-              {age}
-            </div>
-          </div>
-          <div className="row">
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Province
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {customer === undefined ? "" : customer.pesonalInfo.areaName}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              OCR Similarity
-            </div>
-            <div className=" col-2 border" style={{}}></div>
-          </div>
-          <div className="row">
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Live Photo
-            </div>
-            <div className=" col-2">
+            {livePhoto ? (
               <img
-                src={loan.facialRecog}
+                src={livePhoto}
                 alt="Live verification selfie"
-                width={100}
-                height={100}
-                type="button"
-                role="button"
-                onClick={() => {
-                  setImageToView(loan.facialRecog);
-                  setmodalTitle("imgContent");
-                }}
+                className="h-28 w-full rounded-2xl object-cover"
               />
+            ) : (
+              <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
+                No image
+              </div>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!idFront) return;
+              setImageToView(idFront);
+              setmodalTitle("imgContent");
+            }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={!idFront}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-900">ID card picture</span>
+              <StatusBadge tone={idFront ? "success" : "neutral"}>
+                {idFront ? "Available" : "Missing"}
+              </StatusBadge>
             </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              ID Card Picture
+            {idFront ? (
+              <img src={idFront} alt="ID card front" className="h-28 w-full rounded-2xl object-cover" />
+            ) : (
+              <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
+                No image
+              </div>
+            )}
+          </button>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-900">ID genggam</span>
+              <StatusBadge tone="danger">Failed</StatusBadge>
             </div>
-            <div className=" col-2 border" style={{}}>
-              <img
-                src={customer === undefined ? "" : customer.IDinfo.idFront}
-                alt="ID card front"
-                width={100}
-                height={100}
-                type="button"
-                role="button"
-                onClick={() => {
-                  setImageToView(customer.IDinfo.idFront);
-                  setmodalTitle("imgContent");
-                }}
-              />
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              givive Picture
-            </div>
-            <div className=" col-2 border" style={{}}>
-              <img src="avatar.png" alt="Customer avatar" width="100" height="100" />
+            <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
+              Verification pending
             </div>
           </div>
         </div>
-      </div>
+      </DetailSectionCard>
       {modalTitle === "imgContent" ? (
         <MyModal>
           <ImgModalContent />

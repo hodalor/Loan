@@ -13,55 +13,58 @@ import PhoneBook from "../../../components/tables/loanDetial/tableCompanents/Pho
 import ReviewCallRecords from "../../../components/tables/loanDetial/tableCompanents/review Call Record";
 import UserLoanRecords from "../../../components/tables/loanDetial/tableCompanents/user Loan Records";
 import { GlobalContext } from "../../../libs/context/globalContext";
+import LoanDetailsPageShell from "../../../components/tables/loanDetial/LoanDetailsPageShell";
 
 export default function CollectionLoanDetails() {
   const { loan } = React.useContext(GlobalContext);
 
   return (
-    <div className="Container">
-      <div className="">
-        <CollectionInfo />
-      </div>
-      <div className="">
-        <PaymentPlan />
-      </div>
-      <div className="">
-        <PaymentMethod />
-      </div>
-      <div className="">
-        <PhoneBook title="col" />
-      </div>
-      <div className="">
-        <ReviewCallRecords />
-      </div>
-      {loan.loanStatus === "Rejected" || loan.loanStatus === "Granted" ? (
+    <LoanDetailsPageShell emptyRedirect="/collection-cases">
+      <div className="Container">
         <div className="">
-          <ReviewFinalResult loanStatus={loan.loanStatus} />
+          <CollectionInfo />
         </div>
-      ) : null}
-      <div className="">
-        <PreCallRecords />
-      </div>
-      <div className="">
-        <CollectionCallRecords />
-      </div>
-      <div className="">
-        <PersonalInfo />
-      </div>
+        <div className="">
+          <PaymentPlan />
+        </div>
+        <div className="">
+          <PaymentMethod />
+        </div>
+        <div className="">
+          <PhoneBook title="col" />
+        </div>
+        <div className="">
+          <ReviewCallRecords />
+        </div>
+        {loan.loanStatus === "Rejected" || loan.loanStatus === "Granted" ? (
+          <div className="">
+            <ReviewFinalResult loanStatus={loan.loanStatus} />
+          </div>
+        ) : null}
+        <div className="">
+          <PreCallRecords />
+        </div>
+        <div className="">
+          <CollectionCallRecords />
+        </div>
+        <div className="">
+          <PersonalInfo />
+        </div>
 
-      <div className="">
-        <JobInfo />
-      </div>
-      <div className="">
-        <IdentityInfo />
-      </div>
+        <div className="">
+          <JobInfo />
+        </div>
+        <div className="">
+          <IdentityInfo />
+        </div>
 
-      <div className="">
-        <UserLoanRecords />
+        <div className="">
+          <UserLoanRecords />
+        </div>
+        <div className="">
+          <ExtensionRecords />
+        </div>
       </div>
-      <div className="">
-        <ExtensionRecords />
-      </div>
-    </div>
+    </LoanDetailsPageShell>
   );
 }

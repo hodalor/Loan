@@ -1,24 +1,30 @@
 import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
 import SimpleDataTable from "../../../SimpleDataTable";
+import { DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
 
 export default function PaymentMethod() {
   const { loan, customers } = React.useContext(GlobalContext);
 
-  const customer = customers.find((item) => item.userId === loan.userId);
-  const paymentMethods = customer?.paymentMethods || [];
+  const customersList = Array.isArray(customers) ? customers : [];
+  const customer = customersList.find((item) => item.userId === loan.userId);
+  const paymentMethods = Array.isArray(customer?.paymentMethods)
+    ? customer.paymentMethods
+    : loan?.paymentMethod
+    ? [{ method: loan.paymentMethod, createdAt: loan.doa }]
+    : [];
   const getMethodLabel = (item = {}) =>
     String(item.method || "").includes("@") ? "Card / Email" : "Mobile Money";
 
   const columns = [
     {
       key: "operator",
-      label: "Collection Methods",
+      label: "Collection methods",
       cellClassName: "font-semibold text-slate-900",
     },
-    { key: "method", label: "Account Number" },
-    { key: "createdAt", label: "Bind Date" },
-    { key: "autoDeduction", label: "Signed Auto Deduction" },
+    { key: "method", label: "Card number/Account number/Collection code" },
+    { key: "createdAt", label: "Bind time" },
+    { key: "autoDeduction", label: "Whether sign deduction agreement" },
     {
       key: "action",
       label: "Action",
@@ -27,7 +33,7 @@ export default function PaymentMethod() {
           type="button"
           className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"
         >
-          Send text message
+          Send SMS message
         </button>
       ),
     },
@@ -40,25 +46,23 @@ export default function PaymentMethod() {
     createdAt: paymentMethod?.createdAt
       ? new Date(paymentMethod.createdAt).toLocaleDateString()
       : "-",
-    autoDeduction: "Not signed",
+    autoDeduction: "not support",
   }));
 
   return (
-    <div className="card">
-      <div className="card-body">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
-            Collection method information
-          </div>
-          <div className="p-4">
-            <SimpleDataTable
-              columns={columns}
-              rows={rows}
-              emptyMessage="No collection methods found."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Collection method information"
+      subtitle="Accounts and payment channels linked to this customer."
+    >
+      <DetailSectionHint
+        text={`${rows.length} collection method${rows.length === 1 ? "" : "s"} available for this case.`}
+      />
+      <SimpleDataTable
+        columns={columns}
+        rows={rows}
+        emptyMessage="No collection methods found."
+        dense
+      />
+    </DetailSectionCard>
   );
 }

@@ -8,37 +8,42 @@ import PhoneBook from "../../../components/tables/loanDetial/tableCompanents/Pho
 import ReviewCallRecords from "../../../components/tables/loanDetial/tableCompanents/review Call Record";
 import ReviewResult from "../../../components/tables/loanDetial/tableCompanents/Review Result";
 import UserLoanRecords from "../../../components/tables/loanDetial/tableCompanents/user Loan Records";
+import LoanDetailsPageShell, {
+  LoanDetailSectionBoundary,
+} from "../../../components/tables/loanDetial/LoanDetailsPageShell";
 
 export default function ReviewLoanDetails() {
   return (
-    <div className="Container">
-      <div>
-        <BasicInfo />
+    <LoanDetailsPageShell emptyRedirect="/order-list">
+      <div className="Container">
+        <LoanDetailSectionBoundary title="Basic information">
+          <BasicInfo />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Internal matching information">
+          <IdentityInfo />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Address book">
+          <PhoneBook title="" />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Message record">
+          <ReviewCallRecords />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Personal information">
+          <PersonalInfo />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Collection method information">
+          <PaymentMethod />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Job information">
+          <JobInfo />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="User application and loan cases">
+          <UserLoanRecords />
+        </LoanDetailSectionBoundary>
+        <LoanDetailSectionBoundary title="Credit audit result">
+          <ReviewResult />
+        </LoanDetailSectionBoundary>
       </div>
-      <div>
-        <IdentityInfo />
-      </div>
-      <div>
-        <PhoneBook title="" />
-      </div>
-      <div>
-        <ReviewCallRecords />
-      </div>
-      <div>
-        <PersonalInfo />
-      </div>
-      <div>
-        <PaymentMethod />
-      </div>
-      <div>
-        <JobInfo />
-      </div>
-      <div>
-        <UserLoanRecords />
-      </div>
-      <div>
-        <ReviewResult />
-      </div>
-    </div>
+    </LoanDetailsPageShell>
   );
 }

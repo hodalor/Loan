@@ -5,7 +5,11 @@ import SimpleDataTable from "../../../SimpleDataTable";
 export default function UserLoanRecords() {
   const { loan, customers } = React.useContext(GlobalContext);
 
-  const customer = customers.find((item) => item.userId === loan.userId);
+  const customersList = Array.isArray(customers) ? customers : [];
+  const customer = customersList.find((item) => item.userId === loan.userId);
+  const customerLoans = Array.isArray(customer?.loan?.loans)
+    ? customer.loan.loans
+    : [];
 
   const checkOverdue = (value) => {
     const inComingDate = new Date(value);
@@ -34,7 +38,7 @@ export default function UserLoanRecords() {
   const rows =
     customer === undefined
       ? []
-      : customer.loan.loans.map((loanItem, index) => ({
+      : customerLoans.map((loanItem, index) => ({
           ...loanItem,
           id: loanItem?.ID || index + 1,
           number: index + 1,

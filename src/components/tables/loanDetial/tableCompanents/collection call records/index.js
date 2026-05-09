@@ -1,27 +1,29 @@
 import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
 import SimpleDataTable from "../../../SimpleDataTable";
+import { DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
 
 export default function CollectionCallRecords() {
   const { loan } = React.useContext(GlobalContext);
+  const collectionRecords = Array.isArray(loan?.collCallRecords) ? loan.collCallRecords : [];
 
   const columns = [
     {
       key: "calledNumber",
-      label: "Called Number",
+      label: "Called number",
       cellClassName: "font-semibold text-slate-900",
     },
     { key: "relation", label: "Relationship" },
-    { key: "callResult", label: "Call Result" },
-    { key: "creationDate", label: "Creation Date" },
-    { key: "collOfficer", label: "Credit Audit Employee" },
+    { key: "callResult", label: "Call result" },
+    { key: "creationDate", label: "Creation time" },
+    { key: "collOfficer", label: "Collection staff" },
     { key: "remarks", label: "Remarks" },
   ];
 
   const rows =
-    loan.collCallRecords === undefined || loan.collCallRecords.length === 0
+    collectionRecords.length === 0
       ? []
-      : loan.collCallRecords.map((item, index) => ({
+      : collectionRecords.map((item, index) => ({
           ...item,
           id: index + 1,
           creationDate: item?.callDate
@@ -30,21 +32,17 @@ export default function CollectionCallRecords() {
         }));
 
   return (
-    <div className="card">
-      <div className="card-body">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
-            Collection call records
-          </div>
-          <div className="p-4">
-            <SimpleDataTable
-              columns={columns}
-              rows={rows}
-              emptyMessage="No collection call records found."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Collection call records"
+      subtitle="Follow-up calls, outcomes, and notes after the loan enters collection."
+    >
+      <DetailSectionHint text={`${rows.length} collection call record${rows.length === 1 ? "" : "s"} available.`} />
+      <SimpleDataTable
+        columns={columns}
+        rows={rows}
+        emptyMessage="No collection call records found."
+        dense
+      />
+    </DetailSectionCard>
   );
 }

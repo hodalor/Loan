@@ -9,8 +9,9 @@ export default function PhoneBook(props) {
     React.useContext(GlobalContext);
 
   const [numberCalled, setNumberCalled] = React.useState("");
-  const customer = customers.find((item) => item.userId === loan.userId);
-  const contacts = customer?.contacts || [];
+  const customersList = Array.isArray(customers) ? customers : [];
+  const customer = customersList.find((item) => item.userId === loan.userId);
+  const contacts = Array.isArray(customer?.contacts) ? customer.contacts : [];
 
   const openCallRecordModal = (phone) => {
     setmodalTitle("callRecords");

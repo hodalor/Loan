@@ -1,6 +1,7 @@
 import React from "react";
 import { GlobalContext } from "../../../../libs/context/globalContext";
 import SimpleDataTable from "../../SimpleDataTable";
+import { DetailSectionCard, DetailSectionHint } from "../DetailSectionCard";
 
 export default function PaymentPlan() {
   const { loan } = React.useContext(GlobalContext);
@@ -70,22 +71,18 @@ export default function PaymentPlan() {
         ];
 
   return (
-    <div className="card">
-      <div className="card-body">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
-            Repayment Plan
-          </div>
-          <div className="p-4">
-            <SimpleDataTable
-              columns={columns}
-              rows={rows}
-              rowKey="id"
-              emptyMessage="No repayment plan found."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Repayment plan"
+      subtitle="Payment timeline, due dates, and remaining balance for the current loan."
+    >
+      <DetailSectionHint text="The same repayment plan block is reused by review, pre-collection, and collection detail pages." />
+      <SimpleDataTable
+        columns={columns}
+        rows={rows}
+        rowKey="id"
+        emptyMessage="No repayment plan found."
+        dense
+      />
+    </DetailSectionCard>
   );
 }

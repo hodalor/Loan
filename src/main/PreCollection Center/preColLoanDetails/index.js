@@ -14,55 +14,58 @@ import ReviewFinalResult from "../../../components/tables/loanDetial/Review Fina
 import ExtensionRecords from "../../../components/tables/loanDetial/tableCompanents/Extension records";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import PaymentMethod from "../../../components/tables/loanDetial/tableCompanents/Payment Method";
+import LoanDetailsPageShell from "../../../components/tables/loanDetial/LoanDetailsPageShell";
 
 export default function PreLoanDetails() {
   const { loan } = React.useContext(GlobalContext);
 
   return (
-    <div className="Container">
-      <div className="">
-        <PhoneBook title="precol" />
-      </div>
+    <LoanDetailsPageShell emptyRedirect="/advance-case-list">
+      <div className="Container">
+        <div className="">
+          <PhoneBook title="precol" />
+        </div>
 
-      <div className="">
-        <ReviewCallRecords />
-      </div>
+        <div className="">
+          <ReviewCallRecords />
+        </div>
 
-      <div className="">
-        <PersonalInfo />
-      </div>
+        <div className="">
+          <PersonalInfo />
+        </div>
 
-      <div className="">
-        <IdentityInfo />
-      </div>
+        <div className="">
+          <IdentityInfo />
+        </div>
 
-      <div className="">
-        <JobInfo />
-      </div>
+        <div className="">
+          <JobInfo />
+        </div>
 
-      <div className="">
-        <PreCallRecords />
-      </div>
-      <div className="">
-        <PreColInfo />
-      </div>
-      <div className="">
-        <PaymentPlan />
-      </div>
+        <div className="">
+          <PreCallRecords />
+        </div>
+        <div className="">
+          <PreColInfo />
+        </div>
+        <div className="">
+          <PaymentPlan />
+        </div>
 
-      <div className="">
-        <PaymentMethod />
-      </div>
+        <div className="">
+          <PaymentMethod />
+        </div>
 
-      <div className="">
-        <UserLoanRecords />
+        <div className="">
+          <UserLoanRecords />
+        </div>
+        <div className="">
+          <ReviewFinalResult loanStatus={loan.loanStatus} />
+        </div>
+        <div className="">
+          <ExtensionRecords />
+        </div>
       </div>
-      <div className="">
-        <ReviewFinalResult loanStatus={loan.loanStatus} />
-      </div>
-      <div className="">
-        <ExtensionRecords />
-      </div>
-    </div>
+    </LoanDetailsPageShell>
   );
 }

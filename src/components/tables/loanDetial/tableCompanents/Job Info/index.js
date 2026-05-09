@@ -1,82 +1,48 @@
 import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
+import { DetailMatrix, DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
 
 export default function JobInfo() {
   const { loan, customers } = React.useContext(GlobalContext);
 
-  let customer = customers.find((item) => item.userId === loan.userId);
+  const customersList = Array.isArray(customers) ? customers : [];
+  const customer = customersList.find((item) => item.userId === loan.userId);
+  const workInfo = customer?.workInfo || {};
+
+  const rows = [
+    [
+      { type: "label", content: "Profession" },
+      { content: workInfo.workContent || "-" },
+      { type: "label", content: "Company Name" },
+      { content: workInfo.workUnit || "-" },
+      { type: "label", content: "Company Address" },
+      { content: workInfo.workAddress || "-" },
+    ],
+    [
+      { type: "label", content: "Work Email" },
+      { content: customer?.email || "-" },
+      { type: "label", content: "Monthly Income" },
+      { content: workInfo.currentIncome ? `GHS ${workInfo.currentIncome}` : "-" },
+      { type: "label", content: "Company City" },
+      { content: workInfo.companyAddress || "-" },
+    ],
+    [
+      { type: "label", content: "Company Industry" },
+      { content: workInfo.industry || "-" },
+      { type: "label", content: "Nearest Landmark" },
+      { content: workInfo.LNDmarkCompany || "-" },
+      { type: "label", content: "Working Hours" },
+      { content: workInfo.workHours || "-" },
+    ],
+  ];
 
   return (
-    <div>
-      <div className="card">
-        <div className="card-body">
-          <div className="row">
-            <div className="col" style={{backgroundColor:"#79bbff", height:"2.5rem", display:"flex", alignItems:"center", color:"white "}}>
-            Job information
-            </div>
-          </div>
-          <div className="row">
-            <div className=" col-2 border" style={{ backgroundColor:"#f2f6fc"}}>
-              Profession
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {customer === undefined ? "" : customer.workInfo.workContent}
-            </div>
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Company Name
-            </div>
-            <div className=" col-2 border" style={{}}>
-            {customer === undefined ? "" : customer.workInfo.workUnit}
-            </div>
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Company Address
-            </div>
-            <div className=" col-2 border" style={{}}>
-            {customer === undefined ? "" : customer.workInfo.workAddress}
-            </div>
-          </div>
-          <div className="row">
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc",}}>
-              Work Email
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {customer === undefined ? "" : customer.email}
-            </div>
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Monthly Income
-            </div>
-            <div className=" col-2 border" style={{}}>
-             GHS {customer === undefined ? "" : customer.workInfo.currentIncome}
-            </div>
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Company City 
-            </div>
-            <div className=" col-2 border" style={{}}>
-            {customer === undefined ? "" : customer.workInfo.companyAddress}
-            </div>
-          </div>
-          <div className="row">
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Company Industry
-            </div>
-            <div className=" col-2" style={{}}>
-            {customer === undefined ? "" : customer.workInfo.industry}
-            </div>
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Nearest Landmark
-            </div>
-            <div className=" col-2 border" style={{}}>
-            {customer === undefined ? "" : customer.workInfo.LNDmarkCompany}
-            </div>
-            <div className=" col-2 border" style={{backgroundColor:"#f2f6fc"}}>
-              Work Certificate Photo
-            </div>
-            <div className=" col-2 border" style={{}}>
-              image
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Job information"
+      subtitle="Employment and workplace details used during review."
+    >
+      <DetailSectionHint text="This section summarizes the customer work profile captured during application." />
+      <DetailMatrix rows={rows} />
+    </DetailSectionCard>
   );
 }

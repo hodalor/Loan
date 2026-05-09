@@ -1,5 +1,6 @@
 import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
+import { DetailMatrix, DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
 
 export default function CollectionInfo() {
   const { loan } = React.useContext(GlobalContext);
@@ -20,143 +21,73 @@ export default function CollectionInfo() {
     return dur;
   };
 
+  const remainingAmount =
+    loan?.caseStatus === "Completed"
+      ? parseFloat(loan.repaymentAmount || 0) -
+        parseFloat(loan.amountPaid || 0) +
+        (2 / 100) * parseInt(loan.amount || 0, 10) * _calcDAte(loan)
+      : loan?.amountPaid === undefined
+      ? loan?.repaymentAmount || 0
+      : (parseFloat(loan.repaymentAmount || 0) - parseFloat(loan.amountPaid || 0)).toFixed(2);
+
+  const amountPayable =
+    loan?.caseStatus === "Completed"
+      ? parseFloat(loan.repaymentAmount || 0) -
+        parseFloat(loan.amountPaid || 0) +
+        (2 / 100) * parseInt(loan.amount || 0, 10) * _calcDAte(loan)
+      : (
+          parseFloat(loan?.repaymentAmount || 0) -
+          parseFloat(loan?.amountPaid || 0) +
+          overduPenalty
+        ).toFixed(2);
+
+  const rows = [
+    [
+      { type: "label", content: "Loan ID" },
+      { content: loan?.ID || "-" },
+      { type: "label", content: "Remaining Amount" },
+      { content: `GHS ${remainingAmount}` },
+      { type: "label", content: "Overdue Penalty" },
+      { content: `GHS ${loan?.caseStatus === "Completed" ? (2 / 100) * parseInt(loan.amount || 0, 10) * _calcDAte(loan) : overduPenalty}` },
+    ],
+    [
+      { type: "label", content: "Amount Payable" },
+      { content: `GHS ${amountPayable}` },
+      { type: "label", content: "Collection completion date" },
+      {
+        content:
+          loan?.dp === undefined || loan?.dp === null
+            ? "-"
+            : new Date(loan.dp).toLocaleDateString(),
+      },
+      { type: "label", content: "Collection Staff" },
+      { content: loan?.collofficer || "-" },
+    ],
+    [
+      { type: "label", content: "Due Date" },
+      {
+        content:
+          loan?.dop === undefined || loan?.dop === null
+            ? "-"
+            : new Date(loan.dop).toLocaleDateString(),
+      },
+      { type: "label", content: "Overdue days" },
+      {
+        content:
+          loan?.caseStatus === "Completed" ? _calcDAte(loan) : loan === undefined ? 0 : -loan.dur,
+      },
+      { type: "label", content: "Case status" },
+      { content: loan?.paymentStatus || "-" },
+    ],
+  ];
+
   return (
-    <div>
-      <div className="card">
-        <div className="card-body">
-          <div className="row">
-            <div
-              className="col"
-              style={{
-                backgroundColor: "#79bbff",
-                height: "2.5rem",
-                display: "flex",
-                alignItems: "center",
-                color: "white ",
-              }}
-            >
-              Collection Information
-            </div>
-          </div>
-          <div className="row" style={{ height: "2.5rem" }}>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Loan ID
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.ID === undefined ? "" : loan.ID}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Remaining Amount
-            </div>
-            <div className=" col-2 border" style={{}}>
-              GHS
-              {loan.caseStatus === "Completed"
-                ? parseFloat(loan.repaymentAmount) -
-                  parseFloat(loan.amountPaid) +
-                  (2 / 100) * parseInt(loan.amount) * _calcDAte(loan)
-                : loan === undefined || loan.amountPaid === undefined
-                ? loan.repaymentAmount
-                : (
-                    parseFloat(loan.repaymentAmount) -
-                    parseFloat(loan.amountPaid)
-                  ).toFixed(2)}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Overdue Penalty
-            </div>
-            <div className=" col-2 border" style={{}}>
-              GHS
-              {loan.caseStatus === "Completed"
-                ? (2 / 100) * parseInt(loan.amount) * _calcDAte(loan)
-                : overduPenalty}
-            </div>
-          </div>
-          <div className="row">
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Amout Payable
-            </div>
-            <div className=" col-2 border" style={{}}>
-              GHS
-              {loan.caseStatus === "Completed"
-                ? parseFloat(loan.repaymentAmount) -
-                  parseFloat(loan.amountPaid) +
-                  (2 / 100) * parseInt(loan.amount) * _calcDAte(loan)
-                : (
-                    parseFloat(loan.repaymentAmount) -
-                    parseFloat(loan.amountPaid) +
-                    overduPenalty
-                  ).toFixed(2)}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Collection completion date
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.dp === undefined || loan.dp === null
-                ? ""
-                : new Date(loan.dp).toLocaleDateString()}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Collection Staff
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.collofficer === undefined ? "" : loan.collofficer}
-            </div>
-          </div>
-          <div className="row" style={{ height: "2.5rem" }}>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Due Date
-            </div>
-            <div className=" col-2" style={{}}>
-              {loan.dop === undefined
-                ? ""
-                : new Date(loan.dop).toLocaleDateString()}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Overdue days
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.caseStatus === "Completed"
-                ? _calcDAte(loan)
-                : loan === undefined
-                ? 0
-                : -loan.dur}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              casae status
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.paymentStatus === undefined ? "" : loan.paymentStatus}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Collection information"
+      subtitle="Balance, overdue status, and collection assignment for this case."
+    >
+      <DetailSectionHint text="This section summarizes the active collection amounts and timeline." />
+      <DetailMatrix rows={rows} />
+    </DetailSectionCard>
   );
 }

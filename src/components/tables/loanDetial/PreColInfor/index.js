@@ -1,91 +1,46 @@
 import React from "react";
 import { GlobalContext } from "../../../../libs/context/globalContext";
+import { DetailMatrix, DetailSectionCard, DetailSectionHint } from "../DetailSectionCard";
 
 export default function PreColInfo() {
   const { loan } = React.useContext(GlobalContext);
 
+  const rows = [
+    [
+      { type: "label", content: "Loan ID" },
+      { content: loan?.ID || "-" },
+      { type: "label", content: "Remaining repayment days" },
+      { content: loan?.dur === 2 ? "T2" : loan?.dur === 1 ? "T1" : "T0" },
+      { type: "label", content: "Remaining repayment amount" },
+      {
+        content:
+          loan?.amountPaid === undefined
+            ? loan?.repaymentAmount || "-"
+            : parseInt(loan.repaymentAmount || 0, 10) - parseInt(loan.amountPaid || 0, 10),
+      },
+    ],
+    [
+      { type: "label", content: "Case status" },
+      { content: loan?.paymentStatus || "-" },
+      { type: "label", content: "Advance Employee" },
+      { content: loan?.preCollOfficer || "-" },
+      { type: "label", content: "Repayment Date" },
+      {
+        content:
+          loan?.dop === undefined || loan?.dop === null
+            ? "-"
+            : new Date(loan.dop).toLocaleDateString(),
+      },
+    ],
+  ];
+
   return (
-    <div>
-      <div className="card">
-        <div className="card-body">
-          <div className="row">
-            <div
-              className="col"
-              style={{
-                backgroundColor: "#79bbff",
-                height: "2.5rem",
-                display: "flex",
-                alignItems: "center",
-                color: "white ",
-              }}
-            >
-              Pre-collection information
-            </div>
-          </div>
-          <div className="row">
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Loan ID
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan === undefined ? "" : loan.ID}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Remaining repayment days
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.dur === 2 ? "T2" : loan.dur === 1 ? "T1" : "T0"}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Remaining repayment amount
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.amountPaid === undefined
-                ? loan.repaymentAmount
-                : parseInt(loan.repaymentAmount) - parseInt(loan.amountPaid)}
-            </div>
-          </div>
-          <div className="row">
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Case status
-            </div>
-            <div className=" col-2 border" style={{ height: "2rem" }}>
-              {loan.paymentStatus === undefined ? "" : loan.paymentStatus}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Advance Employee
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan.preCollOfficer === undefined ? "" : loan.preCollOfficer}
-            </div>
-            <div
-              className=" col-2 border"
-              style={{ backgroundColor: "#f2f6fc" }}
-            >
-              Repayment Date
-            </div>
-            <div className=" col-2 border" style={{}}>
-              {loan === undefined
-                ? ""
-                : new Date(loan.dop).toLocaleDateString()}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Pre-collection information"
+      subtitle="Upcoming repayment status and the assigned advance officer."
+    >
+      <DetailSectionHint text="This section is shared with the review and collection flows, but shows pre-collection timing data." />
+      <DetailMatrix rows={rows} />
+    </DetailSectionCard>
   );
 }

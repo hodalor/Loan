@@ -1,26 +1,29 @@
 import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
 import SimpleDataTable from "../../../SimpleDataTable";
+import { DetailSectionCard, DetailSectionHint } from "../../DetailSectionCard";
 
 export default function ReviewCallRecords() {
   const { loan } = React.useContext(GlobalContext);
 
-  const callRecords = loan.auditCallRecords;
+  const callRecords = Array.isArray(loan?.auditCallRecords)
+    ? loan.auditCallRecords
+    : [];
   const columns = [
     {
       key: "calledNumber",
-      label: "Called Number",
+      label: "Called number",
       cellClassName: "font-semibold text-slate-900",
     },
     { key: "relation", label: "Relationship" },
-    { key: "callResult", label: "Call Result" },
-    { key: "callDate", label: "Creation Date" },
-    { key: "auditOfficer", label: "Credit Audit Employee" },
+    { key: "callResult", label: "Call result" },
+    { key: "callDate", label: "Creation time" },
+    { key: "auditOfficer", label: "Credit review staff" },
     { key: "remarks", label: "Remarks" },
   ];
 
   const rows =
-    callRecords === undefined || callRecords.length === 0
+    callRecords.length === 0
       ? []
       : callRecords.map((callRecord, index) => ({
           ...callRecord,
@@ -31,21 +34,17 @@ export default function ReviewCallRecords() {
         }));
 
   return (
-    <div className="card">
-      <div className="card-body">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
-            Review call records
-          </div>
-          <div className="p-4">
-            <SimpleDataTable
-              columns={columns}
-              rows={rows}
-              emptyMessage="No review call records found."
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    <DetailSectionCard
+      title="Message record"
+      subtitle="Phone verification and audit communication history for this case."
+    >
+      <DetailSectionHint text={`${rows.length} message record${rows.length === 1 ? "" : "s"} available.`} />
+      <SimpleDataTable
+        columns={columns}
+        rows={rows}
+        emptyMessage="No review call records found."
+        dense
+      />
+    </DetailSectionCard>
   );
 }

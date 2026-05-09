@@ -2,6 +2,12 @@ import React from "react";
 import { GlobalContext } from "../../../../../libs/context/globalContext";
 import DefaultLoader from "../../../../loaders/defaultLoader";
 import UploadFile from "../../../../inputs/fileUpload";
+import {
+  DetailMatrix,
+  DetailSectionCard,
+  DetailSectionHint,
+  StatusBadge,
+} from "../../DetailSectionCard";
 
 export default function ReviewResult() {
   const {
@@ -18,190 +24,147 @@ export default function ReviewResult() {
   const canApproveLoan = _hasAccess("action:loan:approve");
   const canRejectLoan = _hasAccess("action:loan:reject");
   const canSubmitReview = canApproveLoan || canRejectLoan;
+  const isAssigned = Boolean(loan?.rvOfName);
+  const isPendingReview = loan?.loanStatus === "Review";
+  const statusTone =
+    loan?.loanStatus === "Rejected"
+      ? "danger"
+      : loan?.loanStatus === "Granted"
+      ? "success"
+      : "warning";
+  const summaryRows = [
+    [
+      { type: "label", content: "Audit result" },
+      {
+        content: isAssigned
+          ? loan?.loanStatus === "Review"
+            ? "Waiting review results"
+            : `Loan ${loan?.loanStatus || "-"}`
+          : "Unassigned",
+      },
+      { type: "label", content: "Assigned officer" },
+      { content: loan?.rvOfName || "-" },
+      { type: "label", content: "Audit comment" },
+      { content: loan?.rvOfCom || "-" },
+    ],
+  ];
 
   return (
-    <div>
-      {loan.rvOfName === "" ? null : (
-        <div className="card">
-          <div className="card-body">
-            <div className="row">
-              <div
-                className="col"
-                style={{
-                  backgroundColor: "#79bbff",
-                  height: "2.5rem",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "white ",
-                }}
-              >
-                Credit audit result
-              </div>
-            </div>
-            <div className="row">
-              <div
-                className=" col-2 border"
-                style={{ backgroundColor: "#f2f6fc" }}
-              >
-                Audit result
-              </div>
-              {loan.rvOfName === "" ? (
-                "Un-assigned"
-              ) : (
-                <div className=" col-6 border" style={{ height: "2.5rem" }}>
-                  Assigned:{" "}
-                  {loan.loanStatus === "Review" ? (
-                    <span> Waiting review results</span>
-                  ) : (
-                    <span> Loan {loan.loanStatus}</span>
-                  )}
-                </div>
-              )}
+    <DetailSectionCard
+      title="Credit audit result"
+      subtitle="Review decision, supporting notes, and evidence uploads."
+    >
+      {!isAssigned ? (
+        <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          This case has not been assigned to a credit review staff member yet.
+        </div>
+      ) : (
+        <>
+          <DetailSectionHint text="Use this section to inspect the current review status and complete approval or rejection." />
+          <DetailMatrix rows={summaryRows} />
 
-              <div
-                className=" col-2 border "
-                style={{ backgroundColor: "#f2f6fc" }}
-              >
-                Attachment Data
-              </div>
-              <div className=" col-2 border" style={{}}>
-                No data available
-              </div>
-            </div>
-            <div className="row">
-              <div
-                className=" col-2 border"
-                style={{ backgroundColor: "#f2f6fc" }}
-              >
-                Audit Status
-              </div>
-              <div className=" col-10 border">
-                {loan.loanStatus !== "Review" ? (
-                  <span
-                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                      loan.loanStatus === "Rejected"
-                        ? "bg-rose-100 text-rose-700"
-                        : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    <span>{loan.loanStatus === "Rejected" ? "Rejected" : "Granted"}</span>
-                  </span>
-                ) : (
-                  <div className="flex flex-wrap gap-4 px-3 py-3 text-sm">
-                    <span className="w-full font-semibold text-slate-700">
-                      Grant or reject loan
-                    </span>
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="loan-review-state"
-                        value="granted"
-                        disabled={globalLoader ? true : !canApproveLoan}
-                        checked={loanState === "granted"}
-                        onChange={(e) => setLoanState(e.target.value)}
-                      />
-                      <span>Grant loan</span>
-                    </label>
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="loan-review-state"
-                        value="rejected"
-                        disabled={globalLoader ? true : !canRejectLoan}
-                        checked={loanState === "rejected"}
-                        onChange={(e) => setLoanState(e.target.value)}
-                      />
-                      <span>Reject loan</span>
-                    </label>
-                  </div>
-                )}
-              </div>
-            </div>
-            {loan.loanStatus !== "Review" ? null : (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                {loanState === "" ? null : (
-                  <div className="row">
-                    <div
-                      className=" col-2 border"
-                      style={{ backgroundColor: "#f2f6fc" }}
-                    >
-                      Audit Comment
-                    </div>
-                    <div className=" col-10 border">
-                      <textarea
-                        style={{
-                          width: "95%",
-                          height: "3rem",
-                          fontSize: 12,
-                          margin: "0.7rem",
-                        }}
-                        disabled={globalLoader ? true : false}
-                        type="text"
-                        value={rvOfCom}
-                        onChange={(e) => setRvOfCom(e.target.value)}
-                        className="form-control"
-                        placeholder="Please enter your comments here"
-                        aria-label="text"
-                      />
-                    </div>
-                  </div>
-                )}
+                <h4 className="text-sm font-semibold text-slate-900">Audit status</h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  {isPendingReview
+                    ? "Choose whether to grant or reject this loan."
+                    : "This case already has a final audit decision."}
+                </p>
+              </div>
+              <StatusBadge tone={statusTone}>
+                {isPendingReview ? "Pending review" : loan?.loanStatus || "Unknown"}
+              </StatusBadge>
+            </div>
 
-                {!canSubmitReview ? (
-                  <div className="row">
-                    <div className="col-12 border p-3 text-sm text-amber-600">
-                      Loan review actions are hidden by your current grants.
-                    </div>
-                  </div>
-                ) : null}
+            {isPendingReview ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="loan-review-state"
+                    value="granted"
+                    disabled={globalLoader ? true : !canApproveLoan}
+                    checked={loanState === "granted"}
+                    onChange={(e) => setLoanState(e.target.value)}
+                  />
+                  <span>Grant loan</span>
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+                  <input
+                    type="radio"
+                    name="loan-review-state"
+                    value="rejected"
+                    disabled={globalLoader ? true : !canRejectLoan}
+                    checked={loanState === "rejected"}
+                    onChange={(e) => setLoanState(e.target.value)}
+                  />
+                  <span>Reject loan</span>
+                </label>
+              </div>
+            ) : null}
+          </div>
 
-                <div className="row">
-                  <div
-                    className=" col-2 border"
-                    style={{ backgroundColor: "#f2f6fc", height: "3rem" }}
-                  >
-                    {" "}
-                    Upload ID
-                  </div>
-                  <div className=" col-md-4 border" style={{}}>
-                    <UploadFile />
-                  </div>
-                  {inputs.image === null ? null : (
+          {isPendingReview ? (
+            <div className="mt-4 space-y-4">
+              {loanState ? (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Audit comment
+                  </span>
+                  <textarea
+                    disabled={globalLoader}
+                    value={rvOfCom}
+                    onChange={(e) => setRvOfCom(e.target.value)}
+                    className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Please enter your comments here"
+                    aria-label="Audit comment"
+                  />
+                </label>
+              ) : null}
+
+              {!canSubmitReview ? (
+                <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Loan review actions are hidden by your current grants.
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <div>
+                  <span className="mb-2 block text-sm font-semibold text-slate-700">
+                    Upload ID / proof
+                  </span>
+                  <UploadFile />
+                </div>
+                {inputs.image !== null ? (
+                  <div className="flex items-end">
                     <button
                       type="button"
                       onClick={_handleUploadImage}
-                      disabled={globalLoader ? true : false}
-                      className="btn btn-primary"
-                      style={{ height: "1.6rem", margin: "0.7rem" }}
+                      disabled={globalLoader}
+                      className="app-btn-secondary min-w-[140px]"
                     >
                       {globalLoader ? <DefaultLoader /> : "Save image"}
                     </button>
-                  )}
-                </div>
-                <div className="row">
-                  <div
-                    className=" col-2 border"
-                    style={{ backgroundColor: "#f2f6fc", height: "3rem" }}
-                  ></div>
-                  <div className=" col-10 border" style={{}}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        _handleLoanStatus({ loanState, rvOfCom, loan })
-                      }
-                      disabled={globalLoader ? true : !canSubmitReview}
-                      className="btn btn-primary"
-                      style={{ height: "1.6rem", margin: "0.7rem" }}
-                    >
-                      {globalLoader ? <DefaultLoader /> : "Submit"}
-                    </button>
                   </div>
-                </div>
+                ) : null}
               </div>
-            )}
-          </div>
-        </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => _handleLoanStatus({ loanState, rvOfCom, loan })}
+                  disabled={globalLoader ? true : !canSubmitReview}
+                  className="app-btn-primary"
+                >
+                  {globalLoader ? <DefaultLoader /> : "Submit audit result"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
-    </div>
+    </DetailSectionCard>
   );
 }
