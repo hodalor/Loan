@@ -1,0 +1,50 @@
+import React from "react";
+import { GlobalContext } from "../../../../../libs/context/globalContext";
+import SimpleDataTable from "../../../SimpleDataTable";
+
+export default function CollectionCallRecords() {
+  const { loan } = React.useContext(GlobalContext);
+
+  const columns = [
+    {
+      key: "calledNumber",
+      label: "Called Number",
+      cellClassName: "font-semibold text-slate-900",
+    },
+    { key: "relation", label: "Relationship" },
+    { key: "callResult", label: "Call Result" },
+    { key: "creationDate", label: "Creation Date" },
+    { key: "collOfficer", label: "Credit Audit Employee" },
+    { key: "remarks", label: "Remarks" },
+  ];
+
+  const rows =
+    loan.collCallRecords === undefined || loan.collCallRecords.length === 0
+      ? []
+      : loan.collCallRecords.map((item, index) => ({
+          ...item,
+          id: index + 1,
+          creationDate: item?.callDate
+            ? new Date(item.callDate).toLocaleDateString()
+            : "-",
+        }));
+
+  return (
+    <div className="card">
+      <div className="card-body">
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="bg-sky-500 px-4 py-3 text-sm font-semibold text-white">
+            Collection call records
+          </div>
+          <div className="p-4">
+            <SimpleDataTable
+              columns={columns}
+              rows={rows}
+              emptyMessage="No collection call records found."
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

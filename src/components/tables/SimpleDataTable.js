@@ -1,0 +1,136 @@
+import React from "react";
+import DefaultLoader from "../loaders/defaultLoader";
+
+export default function SimpleDataTable({
+  columns = [],
+  rows = [],
+  emptyMessage = "No data available.",
+  rowKey = "id",
+  className = "",
+  onRowClick,
+  getRowClassName,
+  tableClassName = "",
+  dense = false,
+  pagination = true,
+  pageSize = 10,
+  loading = false,
+  loadingMessage = "Loading data...",
+}) {
+  const headCellClassName = dense ? "px-3 py-2.5" : "px-4 py-3";
+  const bodyCellClassName = dense ? "px-3 py-2.5" : "px-4 py-3";
+  const [currentPage, setCurrentPage] = React.useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize, rows.length]);
+
+  const paginatedRows = React.useMemo(() => {
+    if (!pagination) return rows;
+
+    const startIndex = (currentPage - 1) * pageSize;
+    return rows.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, pageSize, pagination, rows]);
+
+  const pageStart = rows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEnd = rows.length === 0 ? 0 : Math.min(currentPage * pageSize, rows.length);
+  const showLoadingState = loading && rows.length === 0;
+
+  return (
+    <div className={`overflow-hidden rounded-3xl border border-slate-200 bg-white ${className}`}>
+      <div className="overflow-auto">
+        <table className={`min-w-full ${tableClassName}`.trim()}>
+          <thead className="bg-slate-100">
+            <tr className="text-left text-xs uppercase tracking-[0.16em] text-slate-500">
+              {columns.map((column) => (
+                <th key={column.key} className={`${headCellClassName} font-semibold`}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {showLoadingState ? (
+              <tr>
+                <td
+                  colSpan={Math.max(columns.length, 1)}
+                  className="px-4 py-10 text-center text-sm text-slate-500"
+                >
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <DefaultLoader />
+                    <span>{loadingMessage}</span>
+                  </div>
+                </td>
+              </tr>
+            ) : paginatedRows.length > 0 ? (
+              paginatedRows.map((row, index) => {
+                const keyValue = row?.[rowKey] ?? `${index}`;
+                const isClickable = typeof onRowClick === "function";
+                const customRowClassName = getRowClassName ? getRowClassName(row, index) : "";
+
+                return (
+                  <tr
+                    key={`${keyValue}-${index}`}
+                    className={`align-top ${isClickable ? "cursor-pointer hover:bg-slate-50" : ""} ${customRowClassName}`}
+                    onClick={isClickable ? () => onRowClick(row, index) : undefined}
+                  >
+                    {columns.map((column) => (
+                      <td
+                        key={`${keyValue}-${column.key}`}
+                        className={`${bodyCellClassName} text-sm text-slate-700 ${
+                          column.cellClassName || ""
+                        }`}
+                      >
+                        {column.render
+                          ? column.render(row, index)
+                          : row?.[column.key] ?? "-"}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td
+                  colSpan={Math.max(columns.length, 1)}
+                  className="px-4 py-8 text-center text-sm text-slate-500"
+                >
+                  {emptyMessage}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {pagination && rows.length > pageSize ? (
+        <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">
+            Showing {pageStart}-{pageEnd} of {rows.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            >
+              Prev
+            </button>
+            <span className="rounded-xl bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
