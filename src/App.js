@@ -47,7 +47,7 @@ const educationLevels = [
 const relationshipOptions = ["Parent", "Sibling", "Spouse", "Friend", "Employer", "Other"];
 const residenceTypes = ["Family house", "Rented", "Owned", "Hostel", "Other"];
 const maritalStatuses = ["Single", "Married", "Divorced", "Widowed"];
-const idTypes = ["NRC", "Passport", "Voter Card", "Driver License"];
+const idTypes = ["National ID", "Passport", "Voter Card", "Driver License"];
 const workHoursOptions = ["Full time", "Part time", "Shift", "Flexible"];
 let runtimeLocale = "en-ZM";
 let runtimeCurrencySymbol = "K";
@@ -195,6 +195,8 @@ const isPhoneValid = (value = "") => value.trim().length >= 10;
 const isPinValid = (value = "") => /^\d{4}$/.test(value.trim());
 const isNotEmpty = (value = "") => String(value).trim() !== "";
 const isBrowserFile = (value) => typeof File !== "undefined" && value instanceof File;
+const isPreviewableImageSrc = (value = "") =>
+  /^(https?:\/\/|data:|blob:|\/)/i.test(String(value || "").trim());
 const normalizeStoredFile = (value) =>
   value && typeof value === "object" && value.name
     ? {
@@ -220,6 +222,13 @@ const toDraftFileValue = (value) => {
   return normalizeStoredFile(value);
 };
 const hasIdentityAsset = (value) => isBrowserFile(value) || Boolean(value?.uploaded);
+const getIdentityPreviewSrc = (value) => {
+  if (!value) return "";
+  if (isBrowserFile(value)) {
+    return URL.createObjectURL(value);
+  }
+  return isPreviewableImageSrc(value?.name) ? value.name : "";
+};
 const toMoney = (value = 0) => Number.parseFloat(Number(value || 0).toFixed(2));
 const applyRuntimeCountryFormatting = (country = {}) => {
   runtimeLocale = country?.locale || "en-ZM";
@@ -2958,9 +2967,9 @@ function ProfileApplicationFlow({
           </div>
 
           <UploadGuideCard
-            title={`${formData.identity.idType || "NRC"} Photo (front)`}
+            title={`${formData.identity.idType || "National ID"} Photo (front)`}
             sideLabel="Front"
-            helperText={`Front photo of ${formData.identity.idType || "NRC"} card`}
+            helperText={`Front photo of ${formData.identity.idType || "National ID"} card`}
             file={formData.identity.frontPhoto}
             onChange={(file) => updateSection("identity", "frontPhoto", file)}
             variant="front"
@@ -2968,9 +2977,9 @@ function ProfileApplicationFlow({
           />
 
           <UploadGuideCard
-            title={`${formData.identity.idType || "NRC"} Photo (back)`}
+            title={`${formData.identity.idType || "National ID"} Photo (back)`}
             sideLabel="Back"
-            helperText={`Back photo of ${formData.identity.idType || "NRC"} card`}
+            helperText={`Back photo of ${formData.identity.idType || "National ID"} card`}
             file={formData.identity.backPhoto}
             onChange={(file) => updateSection("identity", "backPhoto", file)}
             variant="back"
@@ -2978,12 +2987,12 @@ function ProfileApplicationFlow({
           />
 
           <UploadGuideCard
-            title={`Please take a photo holding your ${formData.identity.idType || "NRC"} front`}
+            title={`Please take a photo holding your ${formData.identity.idType || "National ID"} front`}
             helperText="Selfie with your document clearly visible"
             file={formData.identity.selfiePhoto}
             onChange={(file) => updateSection("identity", "selfiePhoto", file)}
             variant="selfie"
-            buttonText={`Selfie with your ${formData.identity.idType || "NRC"}`}
+            buttonText={`Selfie with your ${formData.identity.idType || "National ID"}`}
             fullWidth
           />
         </div>
@@ -3232,6 +3241,16 @@ function UploadGuideCard({
   buttonText,
   fullWidth = false,
 }) {
+  const previewSrc = useMemo(() => getIdentityPreviewSrc(file), [file]);
+
+  useEffect(() => {
+    return () => {
+      if (previewSrc.startsWith("blob:")) {
+        URL.revokeObjectURL(previewSrc);
+      }
+    };
+  }, [previewSrc]);
+
   return (
     <div className={`upload-guide-card ${fullWidth ? "upload-guide-full" : ""}`}>
       <div className="upload-guide-head">
@@ -3249,14 +3268,21 @@ function UploadGuideCard({
           <div className="corner top-right" />
           <div className="corner bottom-left" />
           <div className="corner bottom-right" />
-          <div className={`id-art id-art-${variant}`}>
-            <div className="art-card" />
-            <div className="art-avatar" />
-            <div className="art-line art-line-1" />
-            <div className="art-line art-line-2" />
-            <div className="art-line art-line-3" />
-            <div className="art-line art-line-4" />
-          </div>
+          {previewSrc ? (
+            <>
+              <img className="id-preview-image" src={previewSrc} alt={title} />
+              <span className="id-preview-badge">Preview</span>
+            </>
+          ) : (
+            <div className={`id-art id-art-${variant}`}>
+              <div className="art-card" />
+              <div className="art-avatar" />
+              <div className="art-line art-line-1" />
+              <div className="art-line art-line-2" />
+              <div className="art-line art-line-3" />
+              <div className="art-line art-line-4" />
+            </div>
+          )}
         </div>
       </div>
       <label className={`upload-cta ${fullWidth ? "upload-cta-primary" : ""}`}>
