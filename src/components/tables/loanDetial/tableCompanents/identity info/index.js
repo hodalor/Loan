@@ -15,12 +15,15 @@ export default function IdentityInfo() {
   const { loan, customer, customerProfileLoading } = useResolvedLoanDetails();
   const [livePhotoFailed, setLivePhotoFailed] = React.useState(false);
   const [idFrontFailed, setIdFrontFailed] = React.useState(false);
+  const [idBackFailed, setIdBackFailed] = React.useState(false);
   const dob = customer?.pesonalInfo?.dob || "";
   const age = dob ? new Date().getFullYear() - new Date(dob).getFullYear() : "-";
-  const livePhoto = loan?.facialRecog || "";
+  const livePhoto = customer?.userImage || loan?.facialRecog || "";
   const idFront = customer?.IDinfo?.idFront || "";
+  const idBack = customer?.IDinfo?.idBack || "";
   const canOpenLivePhoto = Boolean(livePhoto) && !livePhotoFailed;
   const canOpenIdFront = Boolean(idFront) && !idFrontFailed;
+  const canOpenIdBack = Boolean(idBack) && !idBackFailed;
 
   React.useEffect(() => {
     setLivePhotoFailed(false);
@@ -29,6 +32,10 @@ export default function IdentityInfo() {
   React.useEffect(() => {
     setIdFrontFailed(false);
   }, [idFront]);
+
+  React.useEffect(() => {
+    setIdBackFailed(false);
+  }, [idBack]);
   const matchingRows = [
     [
       { type: "label", content: "OCR name" },
@@ -110,7 +117,7 @@ export default function IdentityInfo() {
             disabled={!canOpenIdFront}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-slate-900">ID card picture</span>
+              <span className="text-sm font-semibold text-slate-900">ID front photo</span>
               <StatusBadge tone={idFrontFailed ? "danger" : idFront ? "success" : "neutral"}>
                 {idFrontFailed ? "Failed" : idFront ? "Available" : "Missing"}
               </StatusBadge>
@@ -129,15 +136,35 @@ export default function IdentityInfo() {
             )}
           </button>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <button
+            type="button"
+            onClick={() => {
+              if (!canOpenIdBack) return;
+              setImageToView(idBack);
+              setmodalTitle("imgContent");
+            }}
+            className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={!canOpenIdBack}
+          >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-slate-900">ID genggam</span>
-              <StatusBadge tone="danger">Failed</StatusBadge>
+              <span className="text-sm font-semibold text-slate-900">ID back photo</span>
+              <StatusBadge tone={idBackFailed ? "danger" : idBack ? "success" : "neutral"}>
+                {idBackFailed ? "Failed" : idBack ? "Available" : "Missing"}
+              </StatusBadge>
             </div>
-            <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
-              Verification pending
-            </div>
-          </div>
+            {canOpenIdBack ? (
+              <img
+                src={idBack}
+                alt="ID card back"
+                className="h-28 w-full rounded-2xl object-cover"
+                onError={() => setIdBackFailed(true)}
+              />
+            ) : (
+              <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
+                {idBackFailed ? "Image failed to load" : "No image"}
+              </div>
+            )}
+          </button>
         </div>
       </DetailSectionCard>
       {modalTitle === "imgContent" ? (
