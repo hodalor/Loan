@@ -27,6 +27,7 @@ export default function MyModal(props) {
     if (modalTitle === "colContent") return true;
     if (modalTitle === "loanDetails") return loanDetailsModals;
     if (modalTitle === "callRecords") return callRecords;
+    if (modalTitle === "imgContent") return true;
 
     if (modalTitle === "") return null;
   };
@@ -83,6 +84,8 @@ export default function MyModal(props) {
       ? "max-w-[720px]"
       : modalTitle === "callRecords"
       ? "max-w-2xl"
+      : modalTitle === "imgContent"
+      ? "max-w-5xl"
       : "max-w-4xl";
 
   return (

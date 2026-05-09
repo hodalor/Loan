@@ -13,10 +13,22 @@ import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 export default function IdentityInfo() {
   const { modalTitle, setmodalTitle, setImageToView } = React.useContext(GlobalContext);
   const { loan, customer, customerProfileLoading } = useResolvedLoanDetails();
+  const [livePhotoFailed, setLivePhotoFailed] = React.useState(false);
+  const [idFrontFailed, setIdFrontFailed] = React.useState(false);
   const dob = customer?.pesonalInfo?.dob || "";
   const age = dob ? new Date().getFullYear() - new Date(dob).getFullYear() : "-";
   const livePhoto = loan?.facialRecog || "";
   const idFront = customer?.IDinfo?.idFront || "";
+  const canOpenLivePhoto = Boolean(livePhoto) && !livePhotoFailed;
+  const canOpenIdFront = Boolean(idFront) && !idFrontFailed;
+
+  React.useEffect(() => {
+    setLivePhotoFailed(false);
+  }, [livePhoto]);
+
+  React.useEffect(() => {
+    setIdFrontFailed(false);
+  }, [idFront]);
   const matchingRows = [
     [
       { type: "label", content: "OCR name" },
@@ -60,28 +72,29 @@ export default function IdentityInfo() {
           <button
             type="button"
             onClick={() => {
-              if (!livePhoto) return;
+              if (!canOpenLivePhoto) return;
               setImageToView(livePhoto);
               setmodalTitle("imgContent");
             }}
             className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={!livePhoto}
+            disabled={!canOpenLivePhoto}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-slate-900">Living photo</span>
-              <StatusBadge tone={livePhoto ? "success" : "neutral"}>
-                {livePhoto ? "Available" : "Missing"}
+              <StatusBadge tone={livePhotoFailed ? "danger" : livePhoto ? "success" : "neutral"}>
+                {livePhotoFailed ? "Failed" : livePhoto ? "Available" : "Missing"}
               </StatusBadge>
             </div>
-            {livePhoto ? (
+            {canOpenLivePhoto ? (
               <img
                 src={livePhoto}
                 alt="Live verification selfie"
                 className="h-28 w-full rounded-2xl object-cover"
+                onError={() => setLivePhotoFailed(true)}
               />
             ) : (
               <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
-                No image
+                {livePhotoFailed ? "Image failed to load" : "No image"}
               </div>
             )}
           </button>
@@ -89,24 +102,29 @@ export default function IdentityInfo() {
           <button
             type="button"
             onClick={() => {
-              if (!idFront) return;
+              if (!canOpenIdFront) return;
               setImageToView(idFront);
               setmodalTitle("imgContent");
             }}
             className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
-            disabled={!idFront}
+            disabled={!canOpenIdFront}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-slate-900">ID card picture</span>
-              <StatusBadge tone={idFront ? "success" : "neutral"}>
-                {idFront ? "Available" : "Missing"}
+              <StatusBadge tone={idFrontFailed ? "danger" : idFront ? "success" : "neutral"}>
+                {idFrontFailed ? "Failed" : idFront ? "Available" : "Missing"}
               </StatusBadge>
             </div>
-            {idFront ? (
-              <img src={idFront} alt="ID card front" className="h-28 w-full rounded-2xl object-cover" />
+            {canOpenIdFront ? (
+              <img
+                src={idFront}
+                alt="ID card front"
+                className="h-28 w-full rounded-2xl object-cover"
+                onError={() => setIdFrontFailed(true)}
+              />
             ) : (
               <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-100 text-sm text-slate-500">
-                No image
+                {idFrontFailed ? "Image failed to load" : "No image"}
               </div>
             )}
           </button>
