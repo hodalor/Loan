@@ -55,6 +55,9 @@ import { hasPermission } from "../../config/navigation";
 
 const isSettledPaymentStatus = (status = "") =>
   ["Payed", "Paid"].includes(String(status || "").trim());
+const hasRecordedRepayment = (loan = {}) =>
+  Number.parseFloat(loan?.amountPaid || 0) > 0 ||
+  (Array.isArray(loan?.paymentRecords) && loan.paymentRecords.length > 0);
 
 export const GlobalContext = React.createContext();
 
@@ -586,14 +589,14 @@ export default function GlobalContextProvider(props) {
         if (
           colCallRec === 0 &&
           preCallRec !== 0 &&
-          isSettledPaymentStatus(loan.paymentStatus) &&
+          (isSettledPaymentStatus(loan.paymentStatus) || hasRecordedRepayment(loan)) &&
           clearanceType !== "balance"
         ) {
           preCompletedCases.push(loan);
         }
         if (
           colCallRec !== 0 &&
-          isSettledPaymentStatus(loan.paymentStatus) &&
+          (isSettledPaymentStatus(loan.paymentStatus) || hasRecordedRepayment(loan)) &&
           clearanceType !== "balance"
         ) {
           collCompletedCases.push(loan);
