@@ -5,6 +5,28 @@ import { _getSystemConfig } from "../../../handlers";
 import { dataBaseUrl } from "../../../libs/endpoints";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 
+const normalizeStatus = (record = {}) =>
+  String(
+    record?.requestStatus ||
+      record?.extStatus ||
+      record?.status ||
+      record?.approvalStatus ||
+      "Approved"
+  ).trim();
+
+const normalizeSource = (record = {}) => {
+  const rawSource = String(record?.source || "").trim().toLowerCase();
+
+  if (rawSource === "manual" || rawSource === "admin") return "manual";
+  if (rawSource === "self" || rawSource === "customer") return "self";
+
+  const requestedBy = String(record?.requestedBy || "").trim().toLowerCase();
+  if (requestedBy === "admin") return "manual";
+  if (requestedBy === "customer") return "self";
+
+  return "self";
+};
+
 const TAB_ITEMS = [
   { id: "extended", label: "Extended" },
   { id: "extend", label: "Extend" },
@@ -67,21 +89,26 @@ export default function ApplyExtension() {
               exAppDate: rec.createdAt ? new Date(rec.createdAt).toLocaleDateString() : "-",
               repaymentDate: rec.extExpDate ? new Date(rec.extExpDate).toLocaleDateString() : "-",
               fee: rec.extHandlingFee || "-",
-              source: rec.source || "self",
-              approvalStatus: rec.requestStatus || rec.extStatus || "Approved",
-              requestedBy: rec.requestedBy || (rec.source === "manual" ? "Admin" : "Customer"),
-              approvedBy: rec.approvedBy || (rec.source === "manual" ? "-" : "System"),
+              source: normalizeSource(rec),
+              approvalStatus: normalizeStatus(rec),
+              requestedBy:
+                rec.requestedBy || (normalizeSource(rec) === "manual" ? "Admin" : "Customer"),
+              approvedBy:
+                rec.approvedBy || (normalizeSource(rec) === "manual" ? "-" : "System"),
               proofUrl: rec.proofUrl || "",
             }))
           : []
-      ),
+      ).sort((left, right) => {
+        const leftTime = new Date(left.createdAt || left.exAppDate || 0).getTime();
+        const rightTime = new Date(right.createdAt || right.exAppDate || 0).getTime();
+        return rightTime - leftTime;
+      }),
     [loans]
   );
 
   const extendedRows = extensionRows.filter((row) => {
-    const isApproved = (row.approvalStatus || "").toLowerCase() === "approved";
     const matchesSource = sourceFilter === "all" ? true : row.source === sourceFilter;
-    return isApproved && matchesSource;
+    return matchesSource;
   });
 
   const approvalRows = extensionRows.filter(
