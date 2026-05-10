@@ -297,7 +297,47 @@ export default function GlobalContextProvider(props) {
     msg: "",
     type: "",
   });
-  const SOCKET_ACTION_TIMEOUT_MS = 20000;
+  const SOCKET_ACTION_TIMEOUT_MS = 45000;
+
+  const ensureSocketConnected = React.useCallback(() => {
+    if (socket.connected) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const cleanup = () => {
+        socket.off("connect", handleConnect);
+        socket.off("connect_error", handleConnectError);
+      };
+
+      const handleConnect = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+
+      const handleConnectError = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      socket.on("connect", handleConnect);
+      socket.on("connect_error", handleConnectError);
+      socket.connect();
+
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error("Socket connection timed out."));
+      }, 10000);
+    });
+  }, []);
 
   const setActionLoading = React.useCallback((actionKey, value) => {
     if (!actionKey) return;
@@ -325,7 +365,18 @@ export default function GlobalContextProvider(props) {
     [actionLoaders]
   );
 
-  const emitWithAck = React.useCallback((eventName, payload, timeoutMessage) => {
+  const emitWithAck = React.useCallback(async (eventName, payload, timeoutMessage) => {
+    try {
+      await ensureSocketConnected();
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error?.message ||
+          "Real-time connection is unavailable. Refresh and try again.",
+      };
+    }
+
     return new Promise((resolve) => {
       let settled = false;
       const timer = setTimeout(() => {
@@ -356,7 +407,7 @@ export default function GlobalContextProvider(props) {
 
       socket.emit(eventName, payload, finish);
     });
-  }, []);
+  }, [ensureSocketConnected]);
 
   const _hasAccess = React.useCallback(
     (permissionKey) =>
