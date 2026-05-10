@@ -4,6 +4,29 @@ import { GlobalContext } from "../../libs/context/globalContext";
 import MyModal from "../modals";
 import BigLoader from "../loaders/bigLoader";
 import ImgModalContent from "../modals/imgContent";
+import { apiBaseUrl } from "../../libs/endpoints";
+
+const normalizeProofUrl = (value = "") => {
+  const rawValue = String(value || "").trim();
+
+  if (!rawValue) return "";
+  if (!apiBaseUrl) return rawValue;
+
+  const uploadIndex = rawValue.indexOf("/upload/");
+  if (rawValue.startsWith("/upload/")) {
+    return `${apiBaseUrl}${rawValue}`;
+  }
+
+  if (rawValue.startsWith("upload/")) {
+    return `${apiBaseUrl}/${rawValue}`;
+  }
+
+  if (uploadIndex >= 0) {
+    return `${apiBaseUrl}${rawValue.slice(uploadIndex)}`;
+  }
+
+  return rawValue;
+};
 
 export default function PublicTransfare() {
   const {
@@ -23,8 +46,12 @@ export default function PublicTransfare() {
   } = React.useContext(GlobalContext);
 
   const [area, setArea] = React.useState("");
+  const [proofLoadFailed, setProofLoadFailed] = React.useState(false);
   const canReviewPayments = _hasAccess("action:payment:review");
-  const proofAuditUrl = loan.clearanceRecord?.recordProofAudit || "";
+  const proofAuditUrl = React.useMemo(
+    () => normalizeProofUrl(loan.clearanceRecord?.recordProofAudit),
+    [loan.clearanceRecord?.recordProofAudit]
+  );
   const hasConfirmationProof = inputs.image instanceof File;
   const trimmedRemark = area.trim();
   const reductionAmount =
@@ -62,12 +89,18 @@ export default function PublicTransfare() {
     { label: "Remarks", value: loan.clearanceRecord.remarks },
   ];
 
+  React.useEffect(() => {
+    setProofLoadFailed(false);
+  }, [proofAuditUrl]);
+
   const handleOpenProofPreview = () => {
-    if (!proofAuditUrl) {
+    if (!proofAuditUrl || proofLoadFailed) {
       return setAlerts({
         ...alerts,
         type: "warning",
-        msg: "No recorded proof is available for this repayment.",
+        msg: proofAuditUrl
+          ? "The recorded proof image could not be loaded."
+          : "No recorded proof is available for this repayment.",
         open: true,
       });
     }
@@ -144,25 +177,30 @@ export default function PublicTransfare() {
                   type="button"
                   className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-400"
                   onClick={handleOpenProofPreview}
-                  disabled={!proofAuditUrl}
+                  disabled={!proofAuditUrl || proofLoadFailed}
                 >
-                  {proofAuditUrl ? "Open large preview" : "No proof"}
+                  {proofAuditUrl && !proofLoadFailed ? "Open large preview" : "No proof"}
                 </button>
               </div>
               <button
                 type="button"
                 className="mt-4 flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
                 onClick={handleOpenProofPreview}
-                disabled={!proofAuditUrl}
+                disabled={!proofAuditUrl || proofLoadFailed}
               >
-                {proofAuditUrl ? (
+                {proofAuditUrl && !proofLoadFailed ? (
                   <img
                     alt="Repayment proof"
                     className="max-h-[280px] rounded-xl object-contain"
                     src={proofAuditUrl}
+                    onError={() => setProofLoadFailed(true)}
                   />
                 ) : (
-                  <span className="text-sm text-slate-500">No repayment proof uploaded.</span>
+                  <span className="text-sm text-slate-500">
+                    {proofLoadFailed
+                      ? "The uploaded proof could not be loaded from the current server."
+                      : "No repayment proof uploaded."}
+                  </span>
                 )}
               </button>
             </div>

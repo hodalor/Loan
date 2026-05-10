@@ -28,6 +28,7 @@ export default function MyModal(props) {
     if (modalTitle === "loanDetails") return loanDetailsModals;
     if (modalTitle === "callRecords") return callRecords;
     if (modalTitle === "imgContent") return true;
+    if (modalTitle === "publicT") return true;
 
     if (modalTitle === "") return null;
   };
