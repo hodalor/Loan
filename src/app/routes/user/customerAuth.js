@@ -19,6 +19,7 @@ const {
   consumeVerifiedOtp,
 } = require("../../services/customerAuth");
 const { getSystemConfig, getActiveCountryConfig } = require("../../services/systemConfig");
+const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
 
 const router = express.Router();
 
@@ -180,6 +181,18 @@ const buildPortalContent = (systemConfig = {}) => ({
   countries: (Array.isArray(systemConfig.countries) ? systemConfig.countries : [])
     .filter((country) => country?.isEnabled !== false)
     .map((country) => buildCountryProfile(country)),
+  authVerification: {
+    otpMode: systemConfig.authVerification?.otpMode === "real" ? "real" : "demo",
+    firebaseWebConfig: {
+      apiKey: systemConfig.authVerification?.firebaseWebConfig?.apiKey || "",
+      authDomain: systemConfig.authVerification?.firebaseWebConfig?.authDomain || "",
+      projectId: systemConfig.authVerification?.firebaseWebConfig?.projectId || "",
+      storageBucket: systemConfig.authVerification?.firebaseWebConfig?.storageBucket || "",
+      messagingSenderId:
+        systemConfig.authVerification?.firebaseWebConfig?.messagingSenderId || "",
+      appId: systemConfig.authVerification?.firebaseWebConfig?.appId || "",
+    },
+  },
 });
 const buildLifecycleConfig = (systemConfig = {}) => ({
   overduePenaltyRate: Number(systemConfig.overduePenaltyRate || 0),
@@ -1248,11 +1261,21 @@ router.post("/auth/set-pin", async (req, res) => {
       });
     }
 
-    const verification = consumeVerifiedOtp({ phone, purpose });
-    if (!verification.success) {
+    let verification = null;
+    if (systemConfig.authVerification?.otpMode === "real") {
+      verification = await verifyFirebasePhoneToken({
+        idToken: req.body?.firebaseIdToken,
+        phone,
+        firebaseWebConfig: systemConfig.authVerification?.firebaseWebConfig,
+      });
+    } else {
+      verification = consumeVerifiedOtp({ phone, purpose });
+    }
+
+    if (!verification?.success) {
       return res.status(400).json({
         success: 0,
-        message: verification.message,
+        message: verification?.message || "Phone verification is required before setting a PIN.",
       });
     }
 

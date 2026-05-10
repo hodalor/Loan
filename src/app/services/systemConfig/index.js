@@ -219,6 +219,17 @@ const DEFAULT_PORTAL_CONTENT = {
   supportEmail: "customer@cedilending.com",
   supportWhatsapp: "+260 000 000 000",
 };
+const DEFAULT_AUTH_VERIFICATION = {
+  otpMode: "demo",
+  firebaseWebConfig: {
+    apiKey: "AIzaSyC8jJstpNICe6CFWODCZvZ7gU7NHgQIZyo",
+    authDomain: "loan-d61b8.firebaseapp.com",
+    projectId: "loan-d61b8",
+    storageBucket: "loan-d61b8.firebasestorage.app",
+    messagingSenderId: "684116041224",
+    appId: "1:684116041224:web:b399f294c6d1f3b82e7bbd",
+  },
+};
 const DEFAULT_CONFIG = {
   key: "default",
   disbursementMode: "manual",
@@ -242,6 +253,7 @@ const DEFAULT_CONFIG = {
   countries: DEFAULT_COUNTRIES,
   allowPartialRepayment: true,
   portalContent: DEFAULT_PORTAL_CONTENT,
+  authVerification: DEFAULT_AUTH_VERIFICATION,
 };
 
 const slugify = (value = "") =>
@@ -450,6 +462,31 @@ const sanitizePortalContent = (content = {}) => ({
   ).trim(),
 });
 
+const sanitizeFirebaseWebConfig = (config = {}) => ({
+  apiKey: String(config?.apiKey || DEFAULT_AUTH_VERIFICATION.firebaseWebConfig.apiKey).trim(),
+  authDomain: String(
+    config?.authDomain || DEFAULT_AUTH_VERIFICATION.firebaseWebConfig.authDomain
+  ).trim(),
+  projectId: String(
+    config?.projectId || DEFAULT_AUTH_VERIFICATION.firebaseWebConfig.projectId
+  ).trim(),
+  storageBucket: String(
+    config?.storageBucket || DEFAULT_AUTH_VERIFICATION.firebaseWebConfig.storageBucket
+  ).trim(),
+  messagingSenderId: String(
+    config?.messagingSenderId ||
+      DEFAULT_AUTH_VERIFICATION.firebaseWebConfig.messagingSenderId
+  ).trim(),
+  appId: String(config?.appId || DEFAULT_AUTH_VERIFICATION.firebaseWebConfig.appId).trim(),
+});
+
+const sanitizeAuthVerification = (config = {}) => ({
+  otpMode: String(config?.otpMode || DEFAULT_AUTH_VERIFICATION.otpMode).trim() === "real"
+    ? "real"
+    : "demo",
+  firebaseWebConfig: sanitizeFirebaseWebConfig(config?.firebaseWebConfig),
+});
+
 const sanitizeIncomingConfig = (payload = {}) => {
   const nextConfig = {
     ...DEFAULT_CONFIG,
@@ -505,6 +542,7 @@ const sanitizeIncomingConfig = (payload = {}) => {
   }
   nextConfig.allowPartialRepayment = Boolean(nextConfig.allowPartialRepayment);
   nextConfig.portalContent = sanitizePortalContent(nextConfig.portalContent);
+  nextConfig.authVerification = sanitizeAuthVerification(nextConfig.authVerification);
 
   return nextConfig;
 };
@@ -557,6 +595,7 @@ module.exports = {
   DEFAULT_REPAYMENT_OPTIONS,
   DEFAULT_LOAN_TERMS,
   DEFAULT_PORTAL_CONTENT,
+  DEFAULT_AUTH_VERIFICATION,
   getActiveCountryConfig,
   getSystemConfig,
   saveSystemConfig,

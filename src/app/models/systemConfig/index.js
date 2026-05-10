@@ -256,6 +256,50 @@ const portalContentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const firebaseWebConfigSchema = new mongoose.Schema(
+  {
+    apiKey: {
+      type: String,
+      default: "",
+    },
+    authDomain: {
+      type: String,
+      default: "",
+    },
+    projectId: {
+      type: String,
+      default: "",
+    },
+    storageBucket: {
+      type: String,
+      default: "",
+    },
+    messagingSenderId: {
+      type: String,
+      default: "",
+    },
+    appId: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
+const authVerificationSchema = new mongoose.Schema(
+  {
+    otpMode: {
+      type: String,
+      default: "demo",
+    },
+    firebaseWebConfig: {
+      type: firebaseWebConfigSchema,
+      default: () => ({}),
+    },
+  },
+  { _id: false }
+);
+
 const systemConfigSchema = new mongoose.Schema(
   {
     key: {
@@ -345,6 +389,10 @@ const systemConfigSchema = new mongoose.Schema(
     },
     portalContent: {
       type: portalContentSchema,
+      default: () => ({}),
+    },
+    authVerification: {
+      type: authVerificationSchema,
       default: () => ({}),
     },
   },
