@@ -162,6 +162,30 @@ const testNasano = async (url) => {
 // testNasano("https://fs1.nsano.com:4001/api/fusion/tp/82dd87dd129548329b2d8532b97e2baf")
 
 io.on("connection", (socket) => {
+  const respondToSocketAction = (callBack, payload = {}) => {
+    if (typeof callBack === "function") {
+      callBack(payload);
+    }
+  };
+
+  const handleSocketAction = (callBack, action, successMessage, failureMessage) =>
+    Promise.resolve()
+      .then(action)
+      .then((result) => {
+        respondToSocketAction(callBack, {
+          success: Boolean(result),
+          message: result ? successMessage : failureMessage,
+        });
+      })
+      .catch((error) => {
+        logger.error(error);
+        respondToSocketAction(callBack, {
+          success: false,
+          message: failureMessage || "Request failed.",
+          error: error?.message || "Unknown socket error",
+        });
+      });
+
   //registering all connected customers with userId
   socket.on("init", (userId) => {
     // console.log(userId);
@@ -212,71 +236,59 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("assignTask", async (data, callBack) => {
-    // set admin active status
-    let res = await _assignRevTask(data);
+  socket.on("assignTask", (data, callBack) =>
+    handleSocketAction(
+      callBack,
+      () => _assignRevTask(data),
+      "Task assigned successfully",
+      "could not assign task"
+    )
+  );
 
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res ? "Task assigned successfully" : "could not assign task",
-    });
-  });
+  socket.on("assignPreTask", (data, callBack) =>
+    handleSocketAction(
+      callBack,
+      () => _assignPreTask(data),
+      "Task assigned successfully",
+      "could not assign task"
+    )
+  );
 
-  socket.on("assignPreTask", async (data, callBack) => {
-    // set admin active status
-    let res = await _assignPreTask(data);
+  socket.on("assignColTask", (data, callBack) =>
+    handleSocketAction(
+      callBack,
+      () => _assignColTask(data),
+      "Task assigned successfully",
+      "could not assign task"
+    )
+  );
 
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res ? "Task assigned successfully" : "could not assign task",
-    });
-  });
+  socket.on("re_assignTask", (data, callBack) =>
+    handleSocketAction(
+      callBack,
+      () => _reAssignRevTask(data),
+      "Task assigned successfully",
+      "could not assign task"
+    )
+  );
 
-  socket.on("assignColTask", async (data, callBack) => {
-    // set admin active status
-    let res = await _assignColTask(data);
+  socket.on("reAssignColTask", (data, callBack) =>
+    handleSocketAction(
+      callBack,
+      () => _reAssignColTask(data),
+      "Task assigned successfully",
+      "could not assign task"
+    )
+  );
 
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res ? "Task assigned successfully" : "could not assign task",
-    });
-  });
-
-  socket.on("re_assignTask", async (data, callBack) => {
-    // set admin active status
-    let res = await _reAssignRevTask(data);
-
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res ? "Task assigned successfully" : "could not assign task",
-    });
-  });
-
-  socket.on("reAssignColTask", async (data, callBack) => {
-    // set admin active status
-    let res = await _reAssignColTask(data);
-
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res ? "Task assigned successfully" : "could not assign task",
-    });
-  });
-
-  socket.on("re_assignPreTask", async (data, callBack) => {
-    // set admin active status
-    let res = await _reAssignPreTask(data);
-
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res ? "Task assigned successfully" : "could not assign task",
-    });
-  });
+  socket.on("re_assignPreTask", (data, callBack) =>
+    handleSocketAction(
+      callBack,
+      () => _reAssignPreTask(data),
+      "Task assigned successfully",
+      "could not assign task"
+    )
+  );
 
   socket.on("remove_user", async (_id, callBack) => {
     // set admin active status
