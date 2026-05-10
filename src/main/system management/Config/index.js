@@ -206,6 +206,29 @@ export default function SystemConfig() {
     }));
   };
 
+  const updateAuthVerificationField = (field, value) => {
+    setConfig((current) => ({
+      ...current,
+      authVerification: {
+        ...(current.authVerification || {}),
+        [field]: value,
+      },
+    }));
+  };
+
+  const updateFirebaseWebConfigField = (field, value) => {
+    setConfig((current) => ({
+      ...current,
+      authVerification: {
+        ...(current.authVerification || {}),
+        firebaseWebConfig: {
+          ...(current.authVerification?.firebaseWebConfig || {}),
+          [field]: value,
+        },
+      },
+    }));
+  };
+
   const handleChannelToggle = (channel) => {
     setConfig((current) => {
       const implemented = Array.isArray(current.implementedChannels)
@@ -615,6 +638,13 @@ export default function SystemConfig() {
   );
   const totalFaqs = (config.portalContent?.faqs || []).length;
   const totalTutorials = (config.portalContent?.repaymentTutorials || []).length;
+  const otpMode = config.authVerification?.otpMode === "real" ? "real" : "demo";
+  const firebaseConfigured = Boolean(
+    config.authVerification?.firebaseWebConfig?.apiKey &&
+      config.authVerification?.firebaseWebConfig?.authDomain &&
+      config.authVerification?.firebaseWebConfig?.projectId &&
+      config.authVerification?.firebaseWebConfig?.appId
+  );
   const activeCountry =
     (config.countries || []).find((item) => item.code === config.activeCountryCode) ||
     config.countries?.[0] ||
@@ -1657,6 +1687,138 @@ export default function SystemConfig() {
                           updatePortalContentField("supportWhatsapp", e.target.value)
                         }
                         placeholder="+260 000 000 000"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
+                  <h4 className="text-base font-semibold text-slate-900">
+                    Authentication Verification
+                  </h4>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Switch the customer app between sandbox demo OTP and real Firebase phone verification.
+                  </p>
+
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                    <button
+                      type="button"
+                      disabled={!canSaveConfig}
+                      onClick={() => updateAuthVerificationField("otpMode", "demo")}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        otpMode === "demo"
+                          ? "border-blue-500 bg-blue-50 shadow-soft"
+                          : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-slate-900">Demo OTP</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Keep sandbox testing active and show the OTP in the customer message banner.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canSaveConfig}
+                      onClick={() => updateAuthVerificationField("otpMode", "real")}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        otpMode === "real"
+                          ? "border-emerald-500 bg-emerald-50 shadow-soft"
+                          : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-slate-900">Real Firebase OTP</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Send real SMS verification through Firebase Phone Auth before PIN setup or reset.
+                      </p>
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <MiniMetric
+                      title="Current Mode"
+                      value={otpMode === "real" ? "Real Firebase" : "Demo"}
+                      emphasis={otpMode === "real"}
+                    />
+                    <MiniMetric
+                      title="Firebase Config"
+                      value={firebaseConfigured ? "Ready" : "Incomplete"}
+                      emphasis={firebaseConfigured}
+                    />
+                  </div>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="app-label">Firebase API Key</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={config.authVerification?.firebaseWebConfig?.apiKey || ""}
+                        onChange={(e) =>
+                          updateFirebaseWebConfigField("apiKey", e.target.value)
+                        }
+                        placeholder="AIza..."
+                      />
+                    </div>
+                    <div>
+                      <label className="app-label">Auth Domain</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={config.authVerification?.firebaseWebConfig?.authDomain || ""}
+                        onChange={(e) =>
+                          updateFirebaseWebConfigField("authDomain", e.target.value)
+                        }
+                        placeholder="project.firebaseapp.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="app-label">Project ID</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={config.authVerification?.firebaseWebConfig?.projectId || ""}
+                        onChange={(e) =>
+                          updateFirebaseWebConfigField("projectId", e.target.value)
+                        }
+                        placeholder="loan-d61b8"
+                      />
+                    </div>
+                    <div>
+                      <label className="app-label">App ID</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={config.authVerification?.firebaseWebConfig?.appId || ""}
+                        onChange={(e) =>
+                          updateFirebaseWebConfigField("appId", e.target.value)
+                        }
+                        placeholder="1:xxxx:web:xxxx"
+                      />
+                    </div>
+                    <div>
+                      <label className="app-label">Messaging Sender ID</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={
+                          config.authVerification?.firebaseWebConfig?.messagingSenderId || ""
+                        }
+                        onChange={(e) =>
+                          updateFirebaseWebConfigField("messagingSenderId", e.target.value)
+                        }
+                        placeholder="684116041224"
+                      />
+                    </div>
+                    <div>
+                      <label className="app-label">Storage Bucket</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={config.authVerification?.firebaseWebConfig?.storageBucket || ""}
+                        onChange={(e) =>
+                          updateFirebaseWebConfigField("storageBucket", e.target.value)
+                        }
+                        placeholder="loan-d61b8.firebasestorage.app"
                       />
                     </div>
                   </div>

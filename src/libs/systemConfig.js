@@ -212,6 +212,17 @@ export const defaultSystemConfig = {
     },
   ],
   allowPartialRepayment: true,
+  authVerification: {
+    otpMode: "demo",
+    firebaseWebConfig: {
+      apiKey: "AIzaSyC8jJstpNICe6CFWODCZvZ7gU7NHgQIZyo",
+      authDomain: "loan-d61b8.firebaseapp.com",
+      projectId: "loan-d61b8",
+      storageBucket: "loan-d61b8.firebasestorage.app",
+      messagingSenderId: "684116041224",
+      appId: "1:684116041224:web:b399f294c6d1f3b82e7bbd",
+    },
+  },
   portalContent: {
     appName: "Pathway Loans",
     logoUrl: "",
