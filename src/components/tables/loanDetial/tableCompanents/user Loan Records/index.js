@@ -33,6 +33,9 @@ export default function UserLoanRecords() {
     { key: "overdueDays", label: "Overdue Days" },
   ];
 
+  const isSettledPayment = (status) =>
+    ["Payed", "Paid"].includes(String(status || "").trim());
+
   const rows =
     customer === undefined
       ? []
@@ -42,7 +45,7 @@ export default function UserLoanRecords() {
           number: index + 1,
           doa: loanItem?.doa ? new Date(loanItem.doa).toLocaleDateString() : "-",
           overdueDays:
-            loanItem.paymentStatus === "Payed"
+            isSettledPayment(loanItem.paymentStatus)
               ? calcDateDiff(loanItem)
               : loanItem.dop === null
               ? loanItem.loanStatus

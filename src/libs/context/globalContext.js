@@ -53,6 +53,9 @@ import _getColRankRec from "../ranking/colRank";
 import _getColRankRecCase from "../ranking/colRankCase";
 import { hasPermission } from "../../config/navigation";
 
+const isSettledPaymentStatus = (status = "") =>
+  ["Payed", "Paid"].includes(String(status || "").trim());
+
 export const GlobalContext = React.createContext();
 
 export default function GlobalContextProvider(props) {
@@ -583,14 +586,14 @@ export default function GlobalContextProvider(props) {
         if (
           colCallRec === 0 &&
           preCallRec !== 0 &&
-          loan.paymentStatus === "Payed" &&
+          isSettledPaymentStatus(loan.paymentStatus) &&
           clearanceType !== "balance"
         ) {
           preCompletedCases.push(loan);
         }
         if (
           colCallRec !== 0 &&
-          loan.paymentStatus === "Payed" &&
+          isSettledPaymentStatus(loan.paymentStatus) &&
           clearanceType !== "balance"
         ) {
           collCompletedCases.push(loan);

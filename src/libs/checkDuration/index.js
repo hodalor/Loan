@@ -1,3 +1,5 @@
+const isSettledPayment = (status = "") => ["Payed", "Paid"].includes(String(status || "").trim());
+
 const _getPreColLoans = async (loanData) => {
   var loans = [];
 
@@ -72,7 +74,7 @@ const _getPreColPayRecs = async (loanData) => {
     if (
       colCallRec === 0 &&
       preCallRec !== 0 &&
-      loan.paymentStatus === "Payed" &&
+      isSettledPayment(loan.paymentStatus) &&
       loan.clearanceRecord.recordType !== "balance"
     ) {
       loans.push(loan);
@@ -93,7 +95,7 @@ const _getColPayRecs = async (loanData) => {
 
     if (
       colCallRec !== 0 &&
-      loan.paymentStatus === "Payed" &&
+      isSettledPayment(loan.paymentStatus) &&
       loan.clearanceRecord.recordType !== "balance"
     ) {
       loans.push(loan);

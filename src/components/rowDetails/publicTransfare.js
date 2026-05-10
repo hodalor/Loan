@@ -54,15 +54,7 @@ export default function PublicTransfare() {
   );
   const hasConfirmationProof = inputs.image instanceof File;
   const trimmedRemark = area.trim();
-  const reductionAmount =
-    loan.amountPaid === undefined
-      ? parseFloat(loan.repaymentAmount) +
-        (2 / 100) * loan.amount * -loan.dur -
-        parseFloat(loan.clearanceRecord.amountPaid)
-      : parseFloat(loan.repaymentAmount) +
-        (2 / 100) * loan.amount * -loan.dur -
-        (parseFloat(loan.amountPaid) +
-          parseFloat(loan.clearanceRecord.amountPaid));
+  const amountBeingCleared = Number.parseFloat(loan.clearanceRecord?.amountPaid || 0);
   const remainingAmount =
     Math.sign(loan.dur) === -1
       ? loan.amountPaid === undefined
@@ -286,8 +278,14 @@ export default function PublicTransfare() {
                 <span>{loan.ID}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-slate-900">Reduction Amount</span>
-                <span>{reductionAmount}</span>
+                <span className="font-semibold text-slate-900">Amount Being Cleared</span>
+                <span>{amountBeingCleared}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-slate-900">
+                  Remaining Amount After Approval
+                </span>
+                <span>{remainingAmount}</span>
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">

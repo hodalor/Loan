@@ -19,7 +19,8 @@ export default function Balance() {
 
   const [area, setArea] = React.useState("");
   const canReviewPayments = _hasAccess("action:payment:review");
-  const reductionAmount =
+  const amountBeingCleared = Number.parseFloat(loan.clearanceRecord?.amountPaid || 0);
+  const remainingAmountAfterApproval =
     loan.amountPaid === undefined
       ? parseFloat(loan.repaymentAmount) +
         ((2 / 100) * loan.amount * Math.sign(loan.dur) === -1 ? -loan.dur : 1) -
@@ -33,7 +34,8 @@ export default function Balance() {
     { label: "Order ID", value: loan.ID },
     { label: "User ID", value: loan.userId },
     { label: "Paid Amount", value: loan.amountPaid },
-    { label: "Remaining Amount", value: reductionAmount },
+    { label: "Amount Being Cleared", value: amountBeingCleared },
+    { label: "Remaining Amount After Approval", value: remainingAmountAfterApproval },
   ];
 
   return (
@@ -152,8 +154,14 @@ export default function Balance() {
                 <span>{loan.ID}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold text-slate-900">Reduction Amount</span>
-                <span>{reductionAmount}</span>
+                <span className="font-semibold text-slate-900">Amount Being Cleared</span>
+                <span>{amountBeingCleared}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-slate-900">
+                  Remaining Amount After Approval
+                </span>
+                <span>{remainingAmountAfterApproval}</span>
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
