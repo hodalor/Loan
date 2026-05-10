@@ -164,6 +164,13 @@
   line-height: 1.5;
 }
 
+#firebase-recaptcha-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  min-height: 78px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   loginCustomer,
   requestCustomerOtp,
@@ -17,6 +17,12 @@ import {
   submitApplicationProfile,
   verifyPaystackPortalTransaction,
 } from "./api/application";
+import {
+  isFirebasePhoneVerificationReady,
+  requestFirebasePhoneOtp,
+  resetFirebasePhoneVerification,
+  verifyFirebasePhoneOtp,
+} from "./firebase/phoneAuth";
 import "./App.css";
 
 const APPLICATION_STEPS = [
@@ -98,6 +104,17 @@ const buildDefaultPortalContent = () => ({
       cardProviders: [],
     },
   ],
+  authVerification: {
+    otpMode: "demo",
+    firebaseWebConfig: {
+      apiKey: "",
+      authDomain: "",
+      projectId: "",
+      storageBucket: "",
+      messagingSenderId: "",
+      appId: "",
+    },
+  },
 });
 
 const buildInitialContact = () => ({
@@ -691,6 +708,7 @@ const validateStepById = (stepId, formData) => {
 };
 
 function App() {
+  const firebaseConfirmationRef = useRef(null);
   const [screen, setScreen] = useState("login");
   const [activeTab, setActiveTab] = useState("home");
   const [authMode, setAuthMode] = useState("signup");
@@ -719,6 +737,7 @@ function App() {
   const [extensionSummaryData, setExtensionSummaryData] = useState(null);
   const [transactionReceipt, setTransactionReceipt] = useState(null);
   const [pendingGatewayTransaction, setPendingGatewayTransaction] = useState(null);
+  const [firebaseIdToken, setFirebaseIdToken] = useState("");
   const [appMessage, setAppMessage] = useState({
     type: "info",
     text: "Sign in with phone number and your 4-digit PIN, or create a new application.",
@@ -756,8 +775,19 @@ function App() {
     getCountryByCode(availableCountries, selectedCountryCode) ||
     portalContent?.activeCountry ||
     buildDefaultPortalContent().activeCountry;
+  const otpMode = portalContent?.authVerification?.otpMode === "real" ? "real" : "demo";
+  const firebaseWebConfig =
+    portalContent?.authVerification?.firebaseWebConfig ||
+    buildDefaultPortalContent().authVerification.firebaseWebConfig;
+  const isRealOtpMode = otpMode === "real";
+  const firebaseVerificationReady = isFirebasePhoneVerificationReady(firebaseWebConfig);
 
   const showMessage = (type, text) => setAppMessage({ type, text });
+  const resetOtpVerificationState = useCallback(() => {
+    firebaseConfirmationRef.current = null;
+    setFirebaseIdToken("");
+    resetFirebasePhoneVerification();
+  }, []);
 
   const updateSection = (section, field, value) => {
     setFormData((current) => ({
@@ -1070,6 +1100,14 @@ function App() {
     loadPortalContent({ quiet: true });
   }, [loadPortalContent]);
 
+  useEffect(() => () => resetFirebasePhoneVerification(), []);
+
+  useEffect(() => {
+    if (!isRealOtpMode) {
+      resetOtpVerificationState();
+    }
+  }, [isRealOtpMode, resetOtpVerificationState]);
+
   useEffect(() => {
     if (screen !== "portal") return undefined;
 
@@ -1190,6 +1228,7 @@ function App() {
   ]);
 
   const switchToOtpFlow = (mode) => {
+    resetOtpVerificationState();
     setAuthMode(mode);
     setScreen("otp");
     setOtpRequested(false);
@@ -1218,51 +1257,108 @@ function App() {
       return;
     }
 
-    setAuthLoading(true);
-    const response = await requestCustomerOtp({
-      phone,
-      purpose: authMode,
-      countryCode: formData.otp.countryCode || selectedCountryCode,
-    });
-    setAuthLoading(false);
-
-    if (response.success === 0) {
-      showMessage("error", response.message || "OTP request failed.");
+    if (isRealOtpMode && !firebaseVerificationReady) {
+      showMessage("error", "Real OTP is enabled, but Firebase phone verification is not configured yet.");
       return;
     }
 
-    setOtpRequested(true);
-    setFormData((current) => ({
-      ...current,
-      otp: {
-        ...current.otp,
+    resetOtpVerificationState();
+    setAuthLoading(true);
+
+    try {
+      if (isRealOtpMode) {
+        const resolvedCountryCode = formData.otp.countryCode || selectedCountryCode;
+        const resolvedCountry =
+          getCountryByCode(availableCountries, resolvedCountryCode) || selectedCountry;
+
+        const { confirmationResult, e164Phone } = await requestFirebasePhoneOtp({
+          firebaseConfig: firebaseWebConfig,
+          phone,
+          dialCode: resolvedCountry?.dialCode || "",
+          recaptchaContainerId: "firebase-recaptcha-container",
+        });
+
+        firebaseConfirmationRef.current = confirmationResult;
+        setOtpRequested(true);
+        setFormData((current) => ({
+          ...current,
+          otp: {
+            ...current.otp,
+            phone,
+            otp: "",
+            countryCode: resolvedCountryCode,
+          },
+          login: {
+            ...current.login,
+            phone,
+            countryCode: resolvedCountryCode,
+          },
+          personal: {
+            ...current.personal,
+            phone,
+            countryCode: resolvedCountryCode,
+          },
+        }));
+
+        if (resolvedCountryCode) {
+          setSelectedCountryCode(resolvedCountryCode);
+        }
+
+        showMessage("success", `OTP sent by SMS to ${e164Phone}. Enter the code to continue.`);
+        return;
+      }
+
+      const response = await requestCustomerOtp({
         phone,
-        otp: "",
-        countryCode:
-          response.data?.country?.code || current.otp.countryCode || selectedCountryCode,
-      },
-      login: {
-        ...current.login,
-        phone,
-        countryCode:
-          response.data?.country?.code || current.login.countryCode || selectedCountryCode,
-      },
-      personal: {
-        ...current.personal,
-        phone,
-        countryCode:
-          response.data?.country?.code || current.personal.countryCode || selectedCountryCode,
-      },
-    }));
-    if (response.data?.country?.code) {
-      setSelectedCountryCode(response.data.country.code);
+        purpose: authMode,
+        countryCode: formData.otp.countryCode || selectedCountryCode,
+      });
+
+      if (response.success === 0) {
+        showMessage("error", response.message || "OTP request failed.");
+        return;
+      }
+
+      const resolvedCountryCode =
+        response.data?.country?.code || formData.otp.countryCode || selectedCountryCode;
+
+      setOtpRequested(true);
+      setFormData((current) => ({
+        ...current,
+        otp: {
+          ...current.otp,
+          phone,
+          otp: "",
+          countryCode: resolvedCountryCode,
+        },
+        login: {
+          ...current.login,
+          phone,
+          countryCode: resolvedCountryCode,
+        },
+        personal: {
+          ...current.personal,
+          phone,
+          countryCode: resolvedCountryCode,
+        },
+      }));
+
+      if (resolvedCountryCode) {
+        setSelectedCountryCode(resolvedCountryCode);
+      }
+
+      showMessage(
+        "success",
+        response.data?.otpCode
+          ? `OTP requested successfully. Demo OTP: ${response.data.otpCode}`
+          : "OTP requested successfully."
+      );
+    } catch (error) {
+      setOtpRequested(false);
+      showMessage("error", error?.message || "OTP request failed.");
+    } finally {
+      setAuthLoading(false);
     }
-    showMessage(
-      "success",
-      response.data?.otpCode
-        ? `OTP requested successfully. Demo OTP: ${response.data.otpCode}`
-        : "OTP requested successfully."
-    );
   };
 
   const handleVerifyOtp = async () => {
@@ -1277,26 +1373,43 @@ function App() {
     }
 
     setAuthLoading(true);
-    const response = await verifyCustomerOtp({
-      phone: formData.otp.phone.trim(),
-      otp: formData.otp.otp.trim(),
-      purpose: authMode,
-      countryCode: formData.otp.countryCode || selectedCountryCode,
-    });
-    setAuthLoading(false);
 
-    if (response.success === 0) {
-      showMessage("error", response.message || "OTP verification failed.");
-      return;
+    try {
+      if (isRealOtpMode) {
+        const verification = await verifyFirebasePhoneOtp({
+          confirmationResult: firebaseConfirmationRef.current,
+          otp: formData.otp.otp.trim(),
+        });
+
+        setFirebaseIdToken(verification.idToken);
+        firebaseConfirmationRef.current = null;
+      } else {
+        const response = await verifyCustomerOtp({
+          phone: formData.otp.phone.trim(),
+          otp: formData.otp.otp.trim(),
+          purpose: authMode,
+          countryCode: formData.otp.countryCode || selectedCountryCode,
+        });
+
+        if (response.success === 0) {
+          showMessage("error", response.message || "OTP verification failed.");
+          return;
+        }
+      }
+
+      resetFirebasePhoneVerification();
+      setScreen("pin");
+      showMessage(
+        "success",
+        authMode === "reset"
+          ? "OTP verified. Set your new 4-digit PIN."
+          : "OTP verified. Create a 4-digit PIN to continue."
+      );
+    } catch (error) {
+      showMessage("error", error?.message || "OTP verification failed.");
+    } finally {
+      setAuthLoading(false);
     }
-
-    setScreen("pin");
-    showMessage(
-      "success",
-      authMode === "reset"
-        ? "OTP verified. Set your new 4-digit PIN."
-        : "OTP verified. Create a 4-digit PIN to continue."
-    );
   };
 
   const handleSavePin = async () => {
@@ -1315,12 +1428,18 @@ function App() {
 
     const phone = formData.otp.phone.trim();
 
+    if (isRealOtpMode && !firebaseIdToken) {
+      showMessage("error", "Verify the SMS OTP before saving your PIN.");
+      return;
+    }
+
     setAuthLoading(true);
     const response = await setCustomerPin({
       phone,
       pin,
       purpose: authMode,
       countryCode: formData.otp.countryCode || selectedCountryCode,
+      firebaseIdToken: isRealOtpMode ? firebaseIdToken : "",
     });
     setAuthLoading(false);
 
@@ -1332,6 +1451,10 @@ function App() {
     setSessionAccount(response.data || { phone });
     setFormData((current) => ({
       ...current,
+      otp: {
+        ...current.otp,
+        otp: "",
+      },
       login: {
         phone,
         pin,
@@ -1352,6 +1475,9 @@ function App() {
     if (response.data?.country?.code) {
       setSelectedCountryCode(response.data.country.code);
     }
+
+    setOtpRequested(false);
+    resetOtpVerificationState();
 
     if (authMode === "reset") {
       setScreen("login");
@@ -1811,6 +1937,7 @@ function App() {
   const handleLogout = () => {
     const fallbackCountryCode =
       portalContent?.activeCountry?.code || buildDefaultPortalContent().activeCountry.code;
+    resetOtpVerificationState();
     setScreen("login");
     setActiveTab("home");
     setApplyMode("profile");
@@ -1949,15 +2076,22 @@ function App() {
 
                 {otpRequested ? (
                   <p className="support-copy">
-                    OTP requested for {formData.otp.phone}. Use the demo code shown in the message banner.
+                    {isRealOtpMode
+                      ? `OTP requested for ${formData.otp.phone}. Enter the SMS code sent to your phone.`
+                      : `OTP requested for ${formData.otp.phone}. Use the demo code shown in the message banner.`}
                   </p>
                 ) : null}
+                {isRealOtpMode ? <div id="firebase-recaptcha-container" /> : null}
 
                 <div className="actions">
                   <button
                     type="button"
                     className="ghost-btn"
-                    onClick={() => setScreen("login")}
+                    onClick={() => {
+                      resetOtpVerificationState();
+                      setOtpRequested(false);
+                      setScreen("login");
+                    }}
                     disabled={authLoading}
                   >
                     Back
