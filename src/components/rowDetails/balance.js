@@ -169,7 +169,10 @@ export default function Balance() {
                 className="app-btn-primary px-4"
                 onClick={() => _handleConfirmClear(area)}
               >
-                <i className="fa fa-check text-sm" />
+                <span className="inline-flex items-center gap-2">
+                  <i className="fa fa-check text-sm" />
+                  Confirm decision
+                </span>
               </button>
             </div>
           </div>
