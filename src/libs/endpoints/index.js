@@ -6,9 +6,7 @@ const isLocalHost = () => {
   return ["localhost", "127.0.0.1"].includes(window.location.hostname);
 };
 
-const defaultApiBaseUrl = isLocalHost()
-  ? "http://localhost:9000"
-  : "https://pathway-api.onrender.com";
+const defaultApiBaseUrl = isLocalHost() ? "http://localhost:9000" : "";
 
 const apiBaseUrl = trimTrailingSlash(
   process.env.REACT_APP_API_BASE_URL || defaultApiBaseUrl
