@@ -1,6 +1,7 @@
 const express = require("express");
 const { _encrypt } = require("../../../libs/encrypt");
 const Admins = require("../../models/admin");
+const StaffGroups = require("../../models/staffGroup");
 
 const router = express.Router();
 
@@ -17,6 +18,7 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       email,
       department,
       permissions,
+      staffGroupId,
     } = req.body;
 
     const user = await Admins.findOne({ userName });
@@ -32,12 +34,33 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       user.password = encryptedPass;
     }
 
+    let staffGroupName = "";
+    if (staffGroupId) {
+      const group = await StaffGroups.findById(staffGroupId).lean();
+
+      if (!group)
+        return res.status(400).json({
+          success: 0,
+          message: "Selected group could not be found",
+        });
+
+      if (String(group.department || "").trim() !== String(department || "").trim())
+        return res.status(400).json({
+          success: 0,
+          message: "Selected group does not belong to the chosen department",
+        });
+
+      staffGroupName = group.name;
+    }
+
     user.role = role;
     user.firstName = firstName;
     user.lastName = lastName;
     user.phone = phone;
     user.email = email;
     user.department = department;
+    user.staffGroupId = staffGroupId ? String(staffGroupId) : "";
+    user.staffGroupName = staffGroupName;
     user.permissions = Array.isArray(permissions) ? permissions : user.permissions;
 
     let updatedUser = await user.save();

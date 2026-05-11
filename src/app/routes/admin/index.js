@@ -4,6 +4,7 @@ const getAllAdmins = require("./getAllAdmins");
 const updateAdmin = require("./updateAdmin");
 const login = require("./login");
 const systemConfig = require("./systemConfig");
+const staffGroups = require("./staffGroups");
 
 module.exports = {
   login,
@@ -12,4 +13,5 @@ module.exports = {
   getAllAdmins,
   updateAdmin,
   systemConfig,
+  staffGroups,
 };

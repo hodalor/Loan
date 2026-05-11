@@ -2,6 +2,7 @@ const express = require("express");
 const { _encrypt } = require("../../../libs/encrypt");
 const _generateString = require("../../../libs/generateID");
 const Admins = require("../../models/admin");
+const StaffGroups = require("../../models/staffGroup");
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ router.post("/createAdmin", async (req, res) => {
       role,
       department,
       permissions,
+      staffGroupId,
     } = req.body;
 
     const user = await Admins.findOne({ userName });
@@ -42,6 +44,25 @@ router.post("/createAdmin", async (req, res) => {
           "A user with this email account already exist please chose a different one!",
       });
 
+    let staffGroupName = "";
+    if (staffGroupId) {
+      const group = await StaffGroups.findById(staffGroupId).lean();
+
+      if (!group)
+        return res.status(400).json({
+          success: 0,
+          message: "Selected group could not be found",
+        });
+
+      if (String(group.department || "").trim() !== String(department || "").trim())
+        return res.status(400).json({
+          success: 0,
+          message: "Selected group does not belong to the chosen department",
+        });
+
+      staffGroupName = group.name;
+    }
+
     const generatedID = await _generateString(6);
 
     const encryptPass = await _encrypt(password);
@@ -60,6 +81,8 @@ router.post("/createAdmin", async (req, res) => {
       role,
       department,
       permissions: Array.isArray(permissions) ? permissions : [],
+      staffGroupId: staffGroupId ? String(staffGroupId) : "",
+      staffGroupName,
     });
 
     const savedUser = await userData.save();

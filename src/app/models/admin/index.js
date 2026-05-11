@@ -77,6 +77,17 @@ const adminSchema = new mongoose.Schema(
       required: true,
       unique: false,
     },
+    staffGroupId: {
+      type: String,
+      required: false,
+      default: "",
+      index: true,
+    },
+    staffGroupName: {
+      type: String,
+      required: false,
+      default: "",
+    },
     isActive: {
       type: Boolean,
       required: true,

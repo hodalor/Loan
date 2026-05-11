@@ -80,37 +80,74 @@ const _assignPreTask = async (data) => {
 };
 
 const _reAssignPreTask = async (data) => {
-  let adminCases = data.casesSelected.flat(1);
+  const adminCases = data.casesSelected.flat(1);
+  const ids = adminCases.map((cas) => cas.ID);
+  const personnelList = Array.isArray(data.personnelList)
+    ? data.personnelList
+    : data.newAdmin
+    ? [data.newAdmin]
+    : [];
 
-  let oldAdmin = await Admins.findOne({ userName: data.oldAdmin.userName });
+  if (ids.length === 0 || personnelList.length === 0) return false;
 
-  let newAdmin = await Admins.findOne({ userName: data.newAdmin.userName });
+  const records = await Loans.find({ ID: { $in: ids } });
+  const recordsMap = new Map(records.map((item) => [item.ID, item]));
+  const orderedRecords = ids.map((id) => recordsMap.get(id)).filter(Boolean);
+  const assignments = buildRoundRobinAssignments(orderedRecords, personnelList);
+  const oldAdminNames = [
+    ...new Set(
+      adminCases
+        .map((item) => String(item.preCollOfficer || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  const targetAdminNames = personnelList.map((item) => item.userName);
+  const admins = await Admins.find({
+    userName: { $in: [...new Set([...oldAdminNames, ...targetAdminNames])] },
+  });
+  const adminsMap = new Map(admins.map((item) => [item.userName, item]));
+  const assignmentGroups = assignments.reduce((accumulator, assignment) => {
+    const loanIds = accumulator.get(assignment.userName) || [];
+    loanIds.push(assignment.loan.ID);
+    accumulator.set(assignment.userName, loanIds);
+    return accumulator;
+  }, new Map());
 
-  let ids = adminCases.map((cas) => cas.ID);
-
-  await Loans.updateMany(
-    { ID: { $in: ids } },
-    {
-      $set: {
-        preCollOfficer: data.newAdmin.userName,
+  await Loans.bulkWrite(
+    assignments.map((assignment) => ({
+      updateOne: {
+        filter: { ID: assignment.loan.ID },
+        update: {
+          $set: {
+            preCollOfficer: assignment.userName,
+          },
+        },
       },
-    }
+    }))
   );
 
-  oldAdmin.casesAssigned = (oldAdmin.casesAssigned || []).filter(
-    (cas) => !ids.includes(cas.loanId)
-  );
-  newAdmin.casesAssigned = mergeAssignedCases(newAdmin.casesAssigned, ids);
+  oldAdminNames.forEach((userName) => {
+    const admin = adminsMap.get(userName);
+    if (!admin) return;
 
-  let savedUser = await newAdmin.save();
+    admin.casesAssigned = (admin.casesAssigned || []).filter(
+      (cas) => !ids.includes(cas.loanId)
+    );
+  });
 
-  if (newAdmin.userId !== oldAdmin.userId) {
-    let savedOld = await oldAdmin.save();
-  }
+  targetAdminNames.forEach((userName) => {
+    const admin = adminsMap.get(userName);
+    if (!admin) return;
 
-  if (savedUser) return true;
+    admin.casesAssigned = mergeAssignedCases(
+      admin.casesAssigned,
+      assignmentGroups.get(userName) || []
+    );
+  });
 
-  if (!savedUser) return false;
+  await Promise.all([...adminsMap.values()].map((admin) => admin.save()));
+
+  return true;
 };
 
 module.exports = { _assignPreTask, _reAssignPreTask };

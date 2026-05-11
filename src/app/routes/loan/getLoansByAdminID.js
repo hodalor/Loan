@@ -1,6 +1,7 @@
 const express = require("express");
 const Loans = require("../../models/loans");
 const Admins = require("../../models/admin");
+const StaffGroups = require("../../models/staffGroup");
 const Users = require("../../models/users");
 const { getCalendarDayDifferenceByCountry } = require("../../../libs/countryTime");
 
@@ -123,87 +124,93 @@ router.get("/getData/:id", async (req, res) => {
       });
 
     if (role === "super-admin" || role === "admin" || role === "rv-team-lead") {
-      const [admins, users, loans] = await Promise.all([
+      const [admins, users, loans, staffGroups] = await Promise.all([
         findAdmins(),
         findUsers(),
         findLoans(),
+        StaffGroups.find().sort({ department: 1, name: 1 }).lean(),
       ]);
 
       return res.status(200).json({
         success: 1,
-        data: { loans, users, admins },
+        data: { loans, users, admins, staffGroups },
       });
     }
 
     if (role === "pre-team-lead") {
-      const [admins, users, allLoans] = await Promise.all([
+      const [admins, users, allLoans, staffGroups] = await Promise.all([
         findAdmins(),
         findUsers(),
         findLoans(),
+        StaffGroups.find().sort({ department: 1, name: 1 }).lean(),
       ]);
       const loans = filterPreCollectionLoans(allLoans, users);
 
       return res.status(200).json({
         success: 1,
-        data: { loans, users, admins },
+        data: { loans, users, admins, staffGroups },
       });
     }
 
     if (role === "col-team-lead") {
-      const [admins, users, allLoans] = await Promise.all([
+      const [admins, users, allLoans, staffGroups] = await Promise.all([
         findAdmins(),
         findUsers(),
         findLoans(),
+        StaffGroups.find().sort({ department: 1, name: 1 }).lean(),
       ]);
       const loans = filterCollectionLoans(allLoans, users);
 
       return res.status(200).json({
         success: 1,
-        data: { loans, users, admins },
+        data: { loans, users, admins, staffGroups },
       });
     }
 
     if (role === "rev-personel") {
-      const [users, loans] = await Promise.all([
+      const [users, loans, staffGroups] = await Promise.all([
         findUsers(),
         findLoans({ rvOfName: user.userName }),
+        StaffGroups.find().sort({ department: 1, name: 1 }).lean(),
       ]);
 
       return res.status(200).json({
         success: 1,
-        data: { loans, users },
+        data: { loans, users, staffGroups },
       });
     }
 
     if (role === "pre-personel") {
-      const [users, allLoans] = await Promise.all([
+      const [users, allLoans, staffGroups] = await Promise.all([
         findUsers(),
         findLoans(),
+        StaffGroups.find().sort({ department: 1, name: 1 }).lean(),
       ]);
       const loans = filterPreCollectionLoans(allLoans, users, user.userName);
 
       return res.status(200).json({
         success: 1,
-        data: { loans, users },
+        data: { loans, users, staffGroups },
       });
     }
 
     if (role === "col-personel") {
-      const [users, allLoans] = await Promise.all([
+      const [users, allLoans, staffGroups] = await Promise.all([
         findUsers(),
         findLoans(),
+        StaffGroups.find().sort({ department: 1, name: 1 }).lean(),
       ]);
       const loans = filterCollectionLoans(allLoans, users, user.userName);
 
       return res.status(200).json({
         success: 1,
-        data: { loans, users },
+        data: { loans, users, staffGroups },
       });
     }
 
     return res.status(200).json({
       success: 1,
-      data: { loans: [], users: [], admins: [] },
+      data: { loans: [], users: [], admins: [], staffGroups: [] },
     });
   } catch (error) {
     console.log(error);
