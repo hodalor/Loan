@@ -81,7 +81,6 @@ export default function CollectionPaymentRecords() {
             ? {}
             : loan.collCallRecords.slice(-1)[0];
         const repaymentAmount = parseFloat(loan.repaymentAmount || 0) + calcPenalty(loan);
-        const amountPaid = parseFloat(loan.amountPaid || 0);
         const overallAmountPaid = parseFloat(loan.overallAmountPaid || loan.amountPaid || 0);
 
         return {
