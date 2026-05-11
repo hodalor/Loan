@@ -27,6 +27,7 @@ const formatColumnLabel = (value = new Date()) => {
   return date.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "2-digit",
+    year: "numeric",
   });
 };
 
@@ -62,12 +63,42 @@ const toNumber = (value = 0) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const isSettledPaymentStatus = (status = "") =>
+  ["Paid", "Payed"].includes(String(status || "").trim());
+
+const getPaymentProgressType = (item = {}) => {
+  const repaymentAmount = toNumber(item?.repaymentAmount);
+  const amountPaid = toNumber(item?.amountPaid);
+
+  if (amountPaid <= 0) return "none";
+  if (
+    isSettledPaymentStatus(item?.paymentStatus) ||
+    item?.caseStatus === "Completed" ||
+    (repaymentAmount > 0 && amountPaid + 0.009 >= repaymentAmount)
+  ) {
+    return "full";
+  }
+
+  return "partial";
+};
+
+const matchesPaymentFilter = (item = {}, paymentFilter = "all") => {
+  const type = getPaymentProgressType(item);
+
+  if (paymentFilter === "partial") return type === "partial";
+  if (paymentFilter === "full") return type === "full";
+  return type !== "none";
+};
+
+const formatPercent = (value = 0) => `${toNumber(value).toFixed(2)}%`;
+
 const buildRankingTable = ({
   data = [],
   startDate,
   endDate,
   officerField = "userName",
   mode = "amount",
+  paymentFilter = "all",
 }) => {
   const normalizedStart = toStartOfDay(startDate);
   const normalizedEnd = toEndOfDay(endDate);
@@ -96,6 +127,7 @@ const buildRankingTable = ({
 
     if (!officerName || !paidDate || Number.isNaN(paidDate.getTime())) return;
     if (paidDate < normalizedStart || paidDate > normalizedEnd) return;
+    if (!matchesPaymentFilter(item, paymentFilter)) return;
 
     const dayKey = formatDateKey(paidDate);
     const existing =
@@ -136,4 +168,139 @@ const buildRankingTable = ({
   return { columns, rows };
 };
 
-export { buildRankingTable, getDefaultDateRange };
+const buildPercentageRankingTable = ({
+  assignedData = [],
+  collectedData = [],
+  startDate,
+  endDate,
+  officerField = "userName",
+  mode = "amount",
+  paymentFilter = "all",
+}) => {
+  const normalizedStart = toStartOfDay(startDate);
+  const normalizedEnd = toEndOfDay(endDate);
+
+  const columns =
+    mode === "amount"
+      ? [
+          { key: "rank", label: "Rank", cellClassName: "font-semibold text-slate-900" },
+          { key: "userName", label: "User Name", cellClassName: "font-semibold text-slate-900" },
+          { key: "assignedAmount", label: "Assigned Amount" },
+          { key: "collectedAmount", label: "Collected Amount" },
+          { key: "percentage", label: "% Collected" },
+        ]
+      : [
+          { key: "rank", label: "Rank", cellClassName: "font-semibold text-slate-900" },
+          { key: "userName", label: "User Name", cellClassName: "font-semibold text-slate-900" },
+          { key: "assignedCases", label: "Assigned Cases" },
+          { key: "collectedCases", label: "Collected Cases" },
+          { key: "percentage", label: "% Collected" },
+        ];
+
+  if (!normalizedStart || !normalizedEnd) {
+    return { columns, rows: [] };
+  }
+
+  const rankMap = new Map();
+
+  (Array.isArray(assignedData) ? assignedData : []).forEach((item) => {
+    const officerName = String(item?.[officerField] || "").trim();
+    const dueDate = item?.dop ? new Date(item.dop) : null;
+
+    if (!officerName || !dueDate || Number.isNaN(dueDate.getTime())) return;
+    if (dueDate < normalizedStart || dueDate > normalizedEnd) return;
+
+    const existing =
+      rankMap.get(officerName) ||
+      {
+        userName: officerName,
+        assignedAmount: 0,
+        collectedAmount: 0,
+        assignedCases: 0,
+        collectedCases: 0,
+      };
+
+    existing.assignedAmount += toNumber(item?.repaymentAmount);
+    existing.assignedCases += 1;
+    rankMap.set(officerName, existing);
+  });
+
+  (Array.isArray(collectedData) ? collectedData : []).forEach((item) => {
+    const officerName = String(item?.[officerField] || "").trim();
+    const paidDate = item?.dp ? new Date(item.dp) : null;
+
+    if (!officerName || !paidDate || Number.isNaN(paidDate.getTime())) return;
+    if (paidDate < normalizedStart || paidDate > normalizedEnd) return;
+    if (!matchesPaymentFilter(item, paymentFilter)) return;
+
+    const existing =
+      rankMap.get(officerName) ||
+      {
+        userName: officerName,
+        assignedAmount: 0,
+        collectedAmount: 0,
+        assignedCases: 0,
+        collectedCases: 0,
+      };
+
+    existing.collectedAmount += toNumber(item?.amountPaid);
+    existing.collectedCases += 1;
+    rankMap.set(officerName, existing);
+  });
+
+  const rows = [...rankMap.values()]
+    .filter((item) => item.assignedCases > 0 || item.collectedCases > 0)
+    .sort((left, right) => {
+      const leftValue =
+        mode === "amount"
+          ? left.assignedAmount > 0
+            ? (left.collectedAmount / left.assignedAmount) * 100
+            : 0
+          : left.assignedCases > 0
+          ? (left.collectedCases / left.assignedCases) * 100
+          : 0;
+      const rightValue =
+        mode === "amount"
+          ? right.assignedAmount > 0
+            ? (right.collectedAmount / right.assignedAmount) * 100
+            : 0
+          : right.assignedCases > 0
+          ? (right.collectedCases / right.assignedCases) * 100
+          : 0;
+
+      return rightValue - leftValue || left.userName.localeCompare(right.userName);
+    })
+    .map((item, index) => {
+      const percentage =
+        mode === "amount"
+          ? item.assignedAmount > 0
+            ? (item.collectedAmount / item.assignedAmount) * 100
+            : 0
+          : item.assignedCases > 0
+          ? (item.collectedCases / item.assignedCases) * 100
+          : 0;
+
+      return {
+        id: `${item.userName}-${mode}-${index}`,
+        rank: index + 1,
+        userName: item.userName,
+        assignedAmount: item.assignedAmount.toFixed(2),
+        collectedAmount: item.collectedAmount.toFixed(2),
+        assignedCases: item.assignedCases,
+        collectedCases: item.collectedCases,
+        percentage: formatPercent(percentage),
+        total: formatPercent(percentage),
+      };
+    });
+
+  return { columns, rows };
+};
+
+export {
+  buildPercentageRankingTable,
+  buildRankingTable,
+  formatPercent,
+  getDefaultDateRange,
+  getPaymentProgressType,
+  matchesPaymentFilter,
+};

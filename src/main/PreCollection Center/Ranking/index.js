@@ -1,7 +1,11 @@
 import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
-import { buildRankingTable, getDefaultDateRange } from "../../../libs/ranking/dateRangeRanking";
+import {
+  buildPercentageRankingTable,
+  buildRankingTable,
+  getDefaultDateRange,
+} from "../../../libs/ranking/dateRangeRanking";
 import {
   getLastMonthRange,
   getLastNDaysRange,
@@ -12,12 +16,21 @@ import {
 const TAB_ITEMS = [
   { id: "amount", label: "Amount Collected" },
   { id: "cases", label: "Cases Collected" },
+  { id: "amountPercentage", label: "Amount %" },
+  { id: "casePercentage", label: "Cases %" },
+];
+
+const PAYMENT_FILTER_OPTIONS = [
+  { value: "all", label: "All Payments" },
+  { value: "partial", label: "Partial Payments" },
+  { value: "full", label: "Full Payments" },
 ];
 
 export default function PreCollectionRanking() {
-  const { prePayment, globalLoader, preCompCases } = React.useContext(GlobalContext);
+  const { loans, prePayment, globalLoader } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("amount");
   const [range, setRange] = React.useState(() => getDefaultDateRange(7));
+  const [paymentFilter, setPaymentFilter] = React.useState("all");
 
   const [startDate, endDate] = range || [];
 
@@ -29,26 +42,71 @@ export default function PreCollectionRanking() {
         endDate,
         officerField: "preCollOfficer",
         mode: "amount",
+        paymentFilter,
       }),
-    [endDate, prePayment, startDate]
+    [endDate, paymentFilter, prePayment, startDate]
   );
 
   const caseTable = React.useMemo(
     () =>
       buildRankingTable({
-        data: preCompCases,
+        data: prePayment,
         startDate,
         endDate,
         officerField: "preCollOfficer",
         mode: "cases",
+        paymentFilter,
       }),
-    [endDate, preCompCases, startDate]
+    [endDate, paymentFilter, prePayment, startDate]
   );
 
-  const activeTable = activeTab === "amount" ? amountTable : caseTable;
+  const amountPercentageTable = React.useMemo(
+    () =>
+      buildPercentageRankingTable({
+        assignedData: loans.filter((loan) => String(loan?.preCollOfficer || "").trim()),
+        collectedData: prePayment,
+        startDate,
+        endDate,
+        officerField: "preCollOfficer",
+        mode: "amount",
+        paymentFilter,
+      }),
+    [endDate, loans, paymentFilter, prePayment, startDate]
+  );
+
+  const casePercentageTable = React.useMemo(
+    () =>
+      buildPercentageRankingTable({
+        assignedData: loans.filter((loan) => String(loan?.preCollOfficer || "").trim()),
+        collectedData: prePayment,
+        startDate,
+        endDate,
+        officerField: "preCollOfficer",
+        mode: "cases",
+        paymentFilter,
+      }),
+    [endDate, loans, paymentFilter, prePayment, startDate]
+  );
+
+  const activeTable =
+    activeTab === "amount"
+      ? amountTable
+      : activeTab === "cases"
+      ? caseTable
+      : activeTab === "amountPercentage"
+      ? amountPercentageTable
+      : casePercentageTable;
   const activeRows = activeTable.rows;
   const activeColumns = activeTable.columns;
   const topPerformer = activeRows[0];
+  const bestTotalLabel =
+    activeTab === "amountPercentage" || activeTab === "casePercentage"
+      ? "Best Rate"
+      : "Best Total";
+  const bestTotalValue =
+    activeTab === "amountPercentage" || activeTab === "casePercentage"
+      ? topPerformer?.percentage || "0.00%"
+      : topPerformer?.total ?? 0;
 
   const handleExport = () => {
     if (!activeRows.length) return;
@@ -102,15 +160,15 @@ export default function PreCollectionRanking() {
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Best Total</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{bestTotalLabel}</div>
               <div className="mt-2 text-base font-semibold text-slate-900">
-                {topPerformer?.total ?? 0}
+                {bestTotalValue}
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Current View</div>
               <div className="mt-2 text-base font-semibold text-slate-900">
-                {activeTab === "amount" ? "Amount" : "Cases"}
+                {TAB_ITEMS.find((tab) => tab.id === activeTab)?.label || "Amount"}
               </div>
             </div>
           </div>
@@ -178,6 +236,28 @@ export default function PreCollectionRanking() {
             >
               Last Month
             </button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[260px_1fr]">
+            <div>
+              <label className="app-label">Payment Filter</label>
+              <select
+                className="app-select"
+                value={paymentFilter}
+                onChange={(event) => setPaymentFilter(event.target.value)}
+              >
+                {PAYMENT_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <p className="text-sm text-slate-500">
+                Use `Full Payments` on case views to count only fully settled cases.
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3 border-b border-slate-200">
