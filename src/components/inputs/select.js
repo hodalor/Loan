@@ -11,6 +11,9 @@ export default function BasicSelect(props) {
     if (props.title === "Advance Staff") return select.advanceStaff;
     if (props.title === "Collection Staff") return select.collectionStaff;
     if (props.title === "Case Status") return select.caseStatus;
+    if (props.title === "Advance Group") return select.advanceGroup;
+    if (props.title === "Collection Group") return select.collectionGroup;
+    if (props.title === "Review Group") return select.reviewGroup;
     if (props.title === "Roles*" || props.title === "Roles") return select.role;
     if (props.title === "Relationship") return select.relationship;
     if (props.title === "Call result") return select.callResult;

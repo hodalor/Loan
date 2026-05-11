@@ -3,6 +3,7 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import BasicSelect from "../../../components/inputs/select";
 import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
+import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 export default function PrePaymentRecords() {
   const {
@@ -12,6 +13,7 @@ export default function PrePaymentRecords() {
     globalLoader,
     customers,
     admins,
+    staffGroups,
     inputs,
     select,
     dateRange,
@@ -26,6 +28,10 @@ export default function PrePaymentRecords() {
         (admin) => admin.role === "pre-personel" || admin.role === "pre-team-lead"
       ),
     [admins]
+  );
+  const groupOptions = React.useMemo(
+    () => getGroupOptionsByDepartment(staffGroups, "pre-collection"),
+    [staffGroups]
   );
 
   const _calcTotalAmount = (data) => {
@@ -144,6 +150,7 @@ export default function PrePaymentRecords() {
     const normalizedAdvanceStaff = String(select.advanceStaff || "")
       .trim()
       .toLowerCase();
+    const normalizedAdvanceGroup = String(select.advanceGroup || "").trim();
 
     return rows.filter((row) => {
       const matchesUserId =
@@ -161,12 +168,19 @@ export default function PrePaymentRecords() {
           .trim()
           .toLowerCase()
           .includes(normalizedAdvanceStaff);
+      const matchedAdmin = admins.find(
+        (admin) => String(admin.userName || "") === String(row.preCollOfficer || "")
+      );
+      const matchesAdvanceGroup =
+        !normalizedAdvanceGroup ||
+        String(matchedAdmin?.staffGroupId || "") === normalizedAdvanceGroup;
 
       return (
         matchesUserId &&
         matchesLoanId &&
         matchesPhone &&
         matchesAdvanceStaff &&
+        matchesAdvanceGroup &&
         isWithinDateRange(row.dp)
       );
     });
@@ -176,6 +190,8 @@ export default function PrePaymentRecords() {
     inputs.userId,
     isWithinDateRange,
     rows,
+    admins,
+    select.advanceGroup,
     select.advanceStaff,
   ]);
 
@@ -261,6 +277,10 @@ export default function PrePaymentRecords() {
               }
             />
             <BasicSelect data={preOff} title="Advance Staff" />
+            <BasicSelect
+              data={groupOptions}
+              title="Advance Group"
+            />
             <CustomDateRangeInputs />
           </div>
           <div className="flex flex-wrap gap-3">
@@ -275,6 +295,7 @@ export default function PrePaymentRecords() {
                   setSelect((current) => ({
                     ...current,
                     advanceStaff: "",
+                    advanceGroup: "",
                   }));
                 }}
               >

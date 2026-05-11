@@ -3,6 +3,7 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import BigLoader from "../../loaders/bigLoader";
 import PermissionManager from "../../permissions/PermissionManager";
 import { normalizeUserPermissions } from "../../../config/navigation";
+import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 const buildEditState = (userDetails = {}) => ({
   userName: userDetails.userName || "",
@@ -13,6 +14,7 @@ const buildEditState = (userDetails = {}) => ({
   password: "",
   role: userDetails.role || "",
   department: userDetails.department || "",
+  staffGroupId: userDetails.staffGroupId || "",
   permissions: normalizeUserPermissions(
     userDetails.role || "",
     userDetails.permissions || []
@@ -28,6 +30,7 @@ export default function EditUserDetial() {
     setIsEdit,
     roles,
     departments,
+    staffGroups,
     bigLoader,
     _handleEditUser,
     userDetails,
@@ -38,6 +41,10 @@ export default function EditUserDetial() {
   const canDeleteUser = _hasAccess("action:user:delete");
 
   const [fields, setFields] = React.useState(() => buildEditState(userDetails));
+  const groupOptions = React.useMemo(
+    () => getGroupOptionsByDepartment(staffGroups, fields.department),
+    [fields.department, staffGroups]
+  );
 
   React.useEffect(() => {
     setFields(buildEditState(userDetails));
@@ -217,12 +224,36 @@ export default function EditUserDetial() {
                   <select
                     className="app-select"
                     value={fields.department}
-                    onChange={(e) => updateField("department", e.target.value)}
+                    onChange={(e) =>
+                      setFields((current) => ({
+                        ...current,
+                        department: e.target.value,
+                        staffGroupId: "",
+                      }))
+                    }
                   >
                     <option value="">Select department</option>
                     {departments.map((department) => (
                       <option key={department.value} value={department.value}>
                         {department.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="app-label">Group</label>
+                  <select
+                    className="app-select"
+                    value={fields.staffGroupId}
+                    onChange={(e) => updateField("staffGroupId", e.target.value)}
+                    disabled={!fields.department}
+                  >
+                    <option value="">
+                      {fields.department ? "No group" : "Select department first"}
+                    </option>
+                    {groupOptions.map((group) => (
+                      <option key={group.value} value={group.value}>
+                        {group.label}
                       </option>
                     ))}
                   </select>
@@ -296,6 +327,12 @@ export default function EditUserDetial() {
                 <p className="text-sm text-slate-500">Role</p>
                 <p className="mt-2 text-base font-semibold text-slate-900">
                   {userDetails.role}
+                </p>
+              </div>
+              <div className={infoCardClass}>
+                <p className="text-sm text-slate-500">Group</p>
+                <p className="mt-2 text-base font-semibold text-slate-900">
+                  {userDetails.staffGroupName || "-"}
                 </p>
               </div>
               <div className={infoCardClass}>

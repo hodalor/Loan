@@ -9,13 +9,16 @@ import {
   _createClearPublic,
   _createClearRecBalance,
   _createPreCollCallRecord,
+  _createStaffGroup,
   _createUser,
+  _deleteStaffGroup,
   _fetchDataHandler,
   _getCustomerById,
   _handleGrantLoan,
   _handleRejectLoan,
   _markManualDisbursement,
   _retryDisbursement,
+  _updateStaffGroup,
   _updateUser,
 } from "../../handlers";
 import { _sortAdmins, _sortCustomers, _sortLoans } from "../autoSort";
@@ -52,6 +55,7 @@ import _sortRankCase from "../autoSort/rankCase";
 import _getColRankRec from "../ranking/colRank";
 import _getColRankRecCase from "../ranking/colRankCase";
 import { hasPermission } from "../../config/navigation";
+import { getGroupsByDepartment } from "../staffGroups";
 
 const isSettledPaymentStatus = (status = "") =>
   ["Payed", "Paid"].includes(String(status || "").trim());
@@ -154,6 +158,9 @@ export default function GlobalContextProvider(props) {
     caseStatus: "",
     advanceStaff: "",
     collectionStaff: "",
+    reviewGroup: "",
+    advanceGroup: "",
+    collectionGroup: "",
     role: "",
     department: "",
     gender: "",
@@ -273,6 +280,7 @@ export default function GlobalContextProvider(props) {
   const [actionLoaders, setActionLoaders] = React.useState({});
 
   const [admins, setAdmins] = React.useState([]);
+  const [staffGroups, setStaffGroups] = React.useState([]);
 
   const [selectedCases, setSelectedCases] = React.useState([]);
 
@@ -541,6 +549,7 @@ export default function GlobalContextProvider(props) {
       const rawLoans = Array.isArray(payload.loans) ? payload.loans : [];
       const users = Array.isArray(payload.users) ? payload.users : [];
       const adminData = Array.isArray(payload.admins) ? payload.admins : [];
+      const groupData = Array.isArray(payload.staffGroups) ? payload.staffGroups : [];
       const tda = new Date();
 
       const [sortedCustomers, sortedAdmins] = await Promise.all([
@@ -638,6 +647,7 @@ export default function GlobalContextProvider(props) {
       setLoans(sortedLoans);
       setCustomers(sortedCustomers);
       setAdmins(sortedAdmins);
+      setStaffGroups(groupData);
       setInComingLoans(newLoans);
       setAssignedCases(assigned);
       setCompletedCases(completed);
@@ -1015,6 +1025,24 @@ export default function GlobalContextProvider(props) {
         collectionStaff: data.value,
       });
     }
+
+    if (data.field === "Review Group")
+      return setSelect({
+        ...select,
+        reviewGroup: data.value,
+      });
+
+    if (data.field === "Advance Group")
+      return setSelect({
+        ...select,
+        advanceGroup: data.value,
+      });
+
+    if (data.field === "Collection Group")
+      return setSelect({
+        ...select,
+        collectionGroup: data.value,
+      });
 
     if (data.field === "Case Status") {
       setFilterType(data.field);
@@ -1572,6 +1600,7 @@ export default function GlobalContextProvider(props) {
       gender: fields.gender,
       department: fields.department,
       permissions: Array.isArray(fields.permissions) ? fields.permissions : [],
+      staffGroupId: fields.staffGroupId || "",
     };
 
     const validation = await _createAdmin(data);
@@ -1685,6 +1714,7 @@ export default function GlobalContextProvider(props) {
       role: fields.role,
       department: fields.department,
       permissions: fields.permissions,
+      staffGroupId: fields.staffGroupId || "",
     };
 
     if (
@@ -1739,6 +1769,10 @@ export default function GlobalContextProvider(props) {
       role: fields.role === "" ? userDetails.role : fields.role,
       department:
         fields.department === "" ? userDetails.department : fields.department,
+      staffGroupId:
+        typeof fields.staffGroupId === "string"
+          ? fields.staffGroupId
+          : userDetails.staffGroupId || "",
       permissions: Array.isArray(fields.permissions)
         ? fields.permissions
         : userDetails.permissions || [],
@@ -1773,6 +1807,12 @@ export default function GlobalContextProvider(props) {
     oldData.role = fields.role === "" ? userDetails.role : fields.role;
     oldData.department =
       fields.department === "" ? userDetails.department : fields.department;
+    oldData.staffGroupId =
+      typeof fields.staffGroupId === "string"
+        ? fields.staffGroupId
+        : userDetails.staffGroupId || "";
+    oldData.staffGroupName =
+      staffGroups.find((group) => group._id === oldData.staffGroupId)?.name || "";
     oldData.permissions = Array.isArray(fields.permissions)
       ? fields.permissions
       : userDetails.permissions || [];
@@ -1859,6 +1899,191 @@ export default function GlobalContextProvider(props) {
       setBigLoader(false);
     });
   };
+
+  const _handleCreateStaffGroup = async (fields = {}) => {
+    if (!_hasAccess("action:user:create"))
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "You do not have permission to create staff groups",
+        open: true,
+      });
+
+    const payload = {
+      name: String(fields.name || "").trim(),
+      department: String(fields.department || "").trim(),
+      description: String(fields.description || "").trim(),
+      createdBy: user.userName || "",
+      updatedBy: user.userName || "",
+    };
+
+    if (!payload.name || !payload.department)
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "Please provide group name and department",
+        open: true,
+      });
+
+    setBigLoader(true);
+    const response = await _createStaffGroup(payload);
+    setBigLoader(false);
+
+    if (response.success === 0) {
+      return setAlerts({
+        ...alerts,
+        type: "error",
+        msg: response.message,
+        open: true,
+      });
+    }
+
+    setStaffGroups((current) =>
+      [...current, response.data].sort((a, b) =>
+        `${a.department}-${a.name}`.localeCompare(`${b.department}-${b.name}`)
+      )
+    );
+
+    setAlerts({
+      ...alerts,
+      type: "success",
+      msg: response.message,
+      open: true,
+    });
+
+    return true;
+  };
+
+  const _handleUpdateStaffGroup = async (fields = {}) => {
+    if (!_hasAccess("action:user:update"))
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "You do not have permission to update staff groups",
+        open: true,
+      });
+
+    if (!fields.groupId)
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "Select a group to update",
+        open: true,
+      });
+
+    setBigLoader(true);
+    const response = await _updateStaffGroup({
+      groupId: fields.groupId,
+      name: String(fields.name || "").trim(),
+      department: String(fields.department || "").trim(),
+      description: String(fields.description || "").trim(),
+      updatedBy: user.userName || "",
+    });
+    setBigLoader(false);
+
+    if (response.success === 0) {
+      return setAlerts({
+        ...alerts,
+        type: "error",
+        msg: response.message,
+        open: true,
+      });
+    }
+
+    setStaffGroups((current) =>
+      current
+        .map((group) => (group._id === response.data._id ? response.data : group))
+        .sort((a, b) => `${a.department}-${a.name}`.localeCompare(`${b.department}-${b.name}`))
+    );
+    setAdmins((current) =>
+      current.map((admin) =>
+        admin.staffGroupId === response.data._id
+          ? {
+              ...admin,
+              department: response.data.department,
+              staffGroupId: response.data._id,
+              staffGroupName: response.data.name,
+            }
+          : admin
+      )
+    );
+    if (userDetails.staffGroupId === response.data._id) {
+      setUserDetails((current) => ({
+        ...current,
+        department: response.data.department,
+        staffGroupId: response.data._id,
+        staffGroupName: response.data.name,
+      }));
+    }
+
+    setAlerts({
+      ...alerts,
+      type: "success",
+      msg: response.message,
+      open: true,
+    });
+
+    return true;
+  };
+
+  const _handleDeleteStaffGroup = async (groupId) => {
+    if (!_hasAccess("action:user:delete"))
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "You do not have permission to delete staff groups",
+        open: true,
+      });
+
+    if (!groupId)
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "Select a group to delete",
+        open: true,
+      });
+
+    setBigLoader(true);
+    const response = await _deleteStaffGroup(groupId);
+    setBigLoader(false);
+
+    if (response.success === 0) {
+      return setAlerts({
+        ...alerts,
+        type: "error",
+        msg: response.message,
+        open: true,
+      });
+    }
+
+    setStaffGroups((current) => current.filter((group) => group._id !== groupId));
+
+    setAlerts({
+      ...alerts,
+      type: "success",
+      msg: response.message,
+      open: true,
+    });
+
+    return true;
+  };
+
+  const _getGroupMembers = React.useCallback(
+    (department = "", roleValues = []) => {
+      const departmentGroups = getGroupsByDepartment(staffGroups, department);
+      const allowedRoles = new Set(Array.isArray(roleValues) ? roleValues : []);
+
+      return departmentGroups.map((group) => ({
+        ...group,
+        members: admins.filter(
+          (admin) =>
+            String(admin?.staffGroupId || "") === String(group.id || group._id || "") &&
+            (!allowedRoles.size || allowedRoles.has(admin.role))
+        ),
+      }));
+    },
+    [admins, staffGroups]
+  );
 
   const _logout = async () => {
     socket.emit("admin_off", {
@@ -3109,26 +3334,24 @@ export default function GlobalContextProvider(props) {
       });
 
     let casesSelected = [];
-    let oldAdmin = {};
 
     const actionKey = "precollection-reassign";
     setActionLoading(actionKey, true);
     try {
+      const personnelList = Array.isArray(data) ? data : [data];
+
+      if (personnelList.length === 0) {
+        return false;
+      }
+
       selectedCases.forEach((caseId) => {
         let loanCase = assignedPreColCases.filter((loan) => loan.ID === caseId);
         if (loanCase) casesSelected.push(loanCase);
       });
 
-      casesSelected.flat(1).forEach((cas) => {
-        let admin = admins.find((admin) => admin.userName === cas.preCollOfficer);
-
-        oldAdmin = admin;
-        cas.preCollOfficer = data.userName;
-      });
-
       const response = await emitWithAck(
         "re_assignPreTask",
-        { newAdmin: data, oldAdmin, casesSelected },
+        { personnelList, casesSelected },
         "Reassigning pre-collection cases took too long. Refresh to confirm the latest state."
       );
 
@@ -3674,26 +3897,24 @@ export default function GlobalContextProvider(props) {
       });
 
     let casesSelected = [];
-    let oldAdmin = {};
 
     const actionKey = "collection-reassign";
     setActionLoading(actionKey, true);
     try {
+      const personnelList = Array.isArray(data) ? data : [data];
+
+      if (personnelList.length === 0) {
+        return false;
+      }
+
       selectedCases.forEach((caseId) => {
         let loanCase = assignedColCases.filter((loan) => loan.ID === caseId);
         if (loanCase) casesSelected.push(loanCase);
       });
 
-      casesSelected.flat(1).forEach((cas) => {
-        let admin = admins.find((admin) => admin.userName === cas.collofficer);
-
-        oldAdmin = admin;
-        cas.collofficer = data.userName;
-      });
-
       const response = await emitWithAck(
         "reAssignColTask",
-        { newAdmin: data, oldAdmin, casesSelected },
+        { personnelList, casesSelected },
         "Reassigning collection cases took too long. Refresh to confirm the latest state."
       );
 
@@ -4485,6 +4706,7 @@ export default function GlobalContextProvider(props) {
         customers,
         loans,
         admins,
+        staffGroups,
         globalLoader,
         bootstrapLoading,
         personnelLoading,
@@ -4509,6 +4731,10 @@ export default function GlobalContextProvider(props) {
         userDetails,
         setUserDetails,
         _handleDelete,
+        _handleCreateStaffGroup,
+        _handleUpdateStaffGroup,
+        _handleDeleteStaffGroup,
+        _getGroupMembers,
         _logout,
         _handleSearchUsers,
         _resetSearchParams,

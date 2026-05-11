@@ -4,6 +4,7 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import EditUserDetial from "../../../components/modals/editUserMcontent";
 import AddUserDetial from "../../../components/modals/addUserMcontent";
+import { getDepartmentLabel, normalizeGroupCollection } from "../../../libs/staffGroups";
 
 export default function CreateUsers() {
   const {
@@ -16,15 +17,31 @@ export default function CreateUsers() {
     setUserDetails,
     inputs,
     departments,
+    staffGroups,
     _handleOnChange,
     _handleSelect,
+    _handleCreateStaffGroup,
+    _handleUpdateStaffGroup,
+    _handleDeleteStaffGroup,
     globalLoader,
     select,
     _hasAccess,
   } = React.useContext(GlobalContext);
   const canCreateUser = _hasAccess("action:user:create");
   const canToggleActive = _hasAccess("action:user:toggle-active");
+  const canEditUser = _hasAccess("action:user:update");
+  const canDeleteUser = _hasAccess("action:user:delete");
   const [pendingUserId, setPendingUserId] = React.useState("");
+  const [groupForm, setGroupForm] = React.useState({
+    groupId: "",
+    name: "",
+    department: "",
+    description: "",
+  });
+  const normalizedGroups = React.useMemo(
+    () => normalizeGroupCollection(staffGroups),
+    [staffGroups]
+  );
 
   const rows = React.useMemo(
     () =>
@@ -32,6 +49,7 @@ export default function CreateUsers() {
         ...admin,
         id: admin._id || admin.userId || index + 1,
         name: `${admin.firstName || ""} ${admin.lastName || ""}`.trim() || "-",
+        groupName: admin.staffGroupName || "-",
         onlineState: admin.isOnline ? "Online" : "Offline",
         activeState: admin.isActive ? "Active" : "Disabled",
       })),
@@ -68,6 +86,7 @@ export default function CreateUsers() {
     { key: "name", label: "Name" },
     { key: "phone", label: "Phone" },
     { key: "department", label: "Department" },
+    { key: "groupName", label: "Group" },
     { key: "role", label: "Role" },
     {
       key: "onlineState",
@@ -142,6 +161,43 @@ export default function CreateUsers() {
       ),
     },
   ];
+
+  const groupRows = React.useMemo(
+    () =>
+      normalizedGroups.map((group) => {
+        const members = rows.filter((row) => row.staffGroupId === group.id);
+        return {
+          ...group,
+          id: group.id,
+          departmentLabel: getDepartmentLabel(group.department),
+          memberCount: members.length,
+          members:
+            members
+              .map((member) => member.userName)
+              .filter(Boolean)
+              .join(", ") || "-",
+        };
+      }),
+    [normalizedGroups, rows]
+  );
+
+  const handleGroupEdit = (group) => {
+    setGroupForm({
+      groupId: group.id,
+      name: group.name || "",
+      department: group.department || "",
+      description: group.description || "",
+    });
+  };
+
+  const resetGroupForm = () => {
+    setGroupForm({
+      groupId: "",
+      name: "",
+      department: "",
+      description: "",
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -269,6 +325,146 @@ export default function CreateUsers() {
             dense
             pageSize={10}
             emptyMessage="No staff records found."
+          />
+        </div>
+      </section>
+
+      <section className="app-panel">
+        <div className="app-panel-header">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Staff Groups</h3>
+            <p className="text-sm text-slate-500">
+              Create department groups, assign staff to them, and keep delete protected until members are removed.
+            </p>
+          </div>
+          <div className="app-chip">{groupRows.length} groups</div>
+        </div>
+
+        <div className="app-panel-body space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <label className="app-label">Group Name</label>
+              <input
+                type="text"
+                className="app-input"
+                value={groupForm.name}
+                onChange={(event) =>
+                  setGroupForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="e.g. Group 1"
+              />
+            </div>
+            <div>
+              <label className="app-label">Department</label>
+              <select
+                className="app-select"
+                value={groupForm.department}
+                onChange={(event) =>
+                  setGroupForm((current) => ({
+                    ...current,
+                    department: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Select department</option>
+                {departments.map((department) => (
+                  <option key={department.value} value={department.value}>
+                    {department.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="xl:col-span-2">
+              <label className="app-label">Description</label>
+              <input
+                type="text"
+                className="app-input"
+                value={groupForm.description}
+                onChange={(event) =>
+                  setGroupForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="Optional note about what this group handles"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {canCreateUser || canEditUser ? (
+              <button
+                type="button"
+                className="app-btn-primary gap-2"
+                onClick={async () => {
+                  const response = groupForm.groupId
+                    ? await _handleUpdateStaffGroup(groupForm)
+                    : await _handleCreateStaffGroup(groupForm);
+
+                  if (response) resetGroupForm();
+                }}
+              >
+                <i className={`fa ${groupForm.groupId ? "fa-save" : "fa-plus"} text-xs`} />
+                {groupForm.groupId ? "Save Group" : "Create Group"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="app-btn-secondary gap-2"
+              onClick={resetGroupForm}
+            >
+              <i className="fa fa-undo text-xs" />
+              Clear
+            </button>
+          </div>
+
+          <SimpleDataTable
+            columns={[
+              { key: "name", label: "Group", cellClassName: "font-semibold text-slate-900" },
+              { key: "departmentLabel", label: "Department" },
+              { key: "memberCount", label: "Members" },
+              { key: "members", label: "Assigned Users" },
+              {
+                key: "actions",
+                label: "",
+                render: (row) => (
+                  <div className="flex items-center gap-2">
+                    {canEditUser ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleGroupEdit(row);
+                        }}
+                        aria-label={`Edit ${row.name}`}
+                      >
+                        <i className="fa fa-pencil text-xs" />
+                      </button>
+                    ) : null}
+                    {canDeleteUser ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-rose-200 text-rose-600 transition hover:bg-rose-50"
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          const response = await _handleDeleteStaffGroup(row.id);
+                          if (response) resetGroupForm();
+                        }}
+                        aria-label={`Delete ${row.name}`}
+                      >
+                        <i className="fa fa-trash-o text-xs" />
+                      </button>
+                    ) : null}
+                  </div>
+                ),
+              },
+            ]}
+            rows={groupRows}
+            rowKey="id"
+            dense
+            pageSize={8}
+            emptyMessage="No staff groups created yet."
           />
         </div>
       </section>

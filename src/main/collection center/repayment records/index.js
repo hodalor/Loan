@@ -3,6 +3,7 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import BasicSelect from "../../../components/inputs/select";
 import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
+import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 export default function CollectionPaymentRecords() {
   const {
@@ -12,6 +13,7 @@ export default function CollectionPaymentRecords() {
     globalLoader,
     customers,
     admins,
+    staffGroups,
     inputs,
     select,
     dateRange,
@@ -25,6 +27,10 @@ export default function CollectionPaymentRecords() {
         .filter((item) => item.role === "col-team-lead" || item.role === "col-personel")
         .map((off) => ({ label: off.userName, value: off.userName })),
     [admins]
+  );
+  const groupOptions = React.useMemo(
+    () => getGroupOptionsByDepartment(staffGroups, "collection"),
+    [staffGroups]
   );
 
   const isWithinDateRange = React.useCallback(
@@ -97,6 +103,7 @@ export default function CollectionPaymentRecords() {
     const normalizedLoanId = String(inputs.loanId || "").trim().toLowerCase();
     const normalizedPhone = String(inputs.phone || "").trim().toLowerCase();
     const normalizedOfficer = String(select.collectionStaff || "").trim().toLowerCase();
+    const normalizedGroup = String(select.collectionGroup || "").trim();
 
     return rows.filter((row) => {
       const matchesUserId =
@@ -111,10 +118,22 @@ export default function CollectionPaymentRecords() {
       const matchesOfficer =
         !normalizedOfficer ||
         String(row.collOfficer || "").trim().toLowerCase().includes(normalizedOfficer);
+      const matchedAdmin = admins.find(
+        (admin) => String(admin.userName || "") === String(row.collOfficer || "")
+      );
+      const matchesGroup =
+        !normalizedGroup || String(matchedAdmin?.staffGroupId || "") === normalizedGroup;
 
-      return matchesUserId && matchesLoanId && matchesPhone && matchesOfficer && isWithinDateRange(row.dp);
+      return (
+        matchesUserId &&
+        matchesLoanId &&
+        matchesPhone &&
+        matchesOfficer &&
+        matchesGroup &&
+        isWithinDateRange(row.dp)
+      );
     });
-  }, [inputs.loanId, inputs.phone, inputs.userId, isWithinDateRange, rows, select.collectionStaff]);
+  }, [admins, inputs.loanId, inputs.phone, inputs.userId, isWithinDateRange, rows, select.collectionGroup, select.collectionStaff]);
 
   const totalAmount = filteredRows.reduce(
     (sum, row) => sum + parseFloat(row.amountPaid || 0),
@@ -220,6 +239,10 @@ export default function CollectionPaymentRecords() {
               <BasicSelect data={officers} title="Collection Staff" />
             </div>
             <div>
+              <label className="app-label">Collection Group</label>
+              <BasicSelect data={groupOptions} title="Collection Group" />
+            </div>
+            <div>
               <label className="app-label">Date Range</label>
               <CustomDateRangeInputs />
             </div>
@@ -234,6 +257,7 @@ export default function CollectionPaymentRecords() {
                 _handleOnChange({ field: "loanId", value: "" });
                 _handleOnChange({ field: "phone", value: "" });
                 _handleSelect({ field: "Collection Staff", value: "" });
+                _handleSelect({ field: "Collection Group", value: "" });
                 _handleOnChange({ field: "dateRange", value: null });
               }}
             >

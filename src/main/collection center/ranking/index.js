@@ -12,6 +12,7 @@ import {
   getThisMonthRange,
   getTodayRange,
 } from "../../../libs/ranking/datePresets";
+import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 const TAB_ITEMS = [
   { id: "amount", label: "Amount Collected" },
@@ -27,65 +28,92 @@ const PAYMENT_FILTER_OPTIONS = [
 ];
 
 export default function CollectionRanking() {
-  const { loans, globalLoader, colPayRecs } = React.useContext(GlobalContext);
+  const { loans, admins, staffGroups, globalLoader, colPayRecs } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("amount");
   const [range, setRange] = React.useState(() => getDefaultDateRange(7));
   const [paymentFilter, setPaymentFilter] = React.useState("all");
+  const [groupFilter, setGroupFilter] = React.useState("");
 
   const [startDate, endDate] = range || [];
+  const groupOptions = React.useMemo(
+    () => getGroupOptionsByDepartment(staffGroups, "collection"),
+    [staffGroups]
+  );
+  const allowedUsers = React.useMemo(() => {
+    if (!groupFilter) return null;
+
+    return new Set(
+      admins
+        .filter((admin) => String(admin.staffGroupId || "") === String(groupFilter))
+        .map((admin) => String(admin.userName || "").trim())
+    );
+  }, [admins, groupFilter]);
+  const filteredColPayRecs = React.useMemo(() => {
+    if (!allowedUsers) return colPayRecs;
+    return colPayRecs.filter((item) => allowedUsers.has(String(item.collofficer || "").trim()));
+  }, [allowedUsers, colPayRecs]);
+  const filteredAssignedLoans = React.useMemo(() => {
+    if (!allowedUsers) {
+      return loans.filter((loan) => String(loan?.collofficer || "").trim());
+    }
+
+    return loans.filter((loan) =>
+      allowedUsers.has(String(loan?.collofficer || "").trim())
+    );
+  }, [allowedUsers, loans]);
 
   const amountTable = React.useMemo(
     () =>
       buildRankingTable({
-        data: colPayRecs,
+        data: filteredColPayRecs,
         startDate,
         endDate,
         officerField: "collofficer",
         mode: "amount",
         paymentFilter,
       }),
-    [colPayRecs, endDate, paymentFilter, startDate]
+    [endDate, filteredColPayRecs, paymentFilter, startDate]
   );
 
   const caseTable = React.useMemo(
     () =>
       buildRankingTable({
-        data: colPayRecs,
+        data: filteredColPayRecs,
         startDate,
         endDate,
         officerField: "collofficer",
         mode: "cases",
         paymentFilter,
       }),
-    [colPayRecs, endDate, paymentFilter, startDate]
+    [endDate, filteredColPayRecs, paymentFilter, startDate]
   );
 
   const amountPercentageTable = React.useMemo(
     () =>
       buildPercentageRankingTable({
-        assignedData: loans.filter((loan) => String(loan?.collofficer || "").trim()),
-        collectedData: colPayRecs,
+        assignedData: filteredAssignedLoans,
+        collectedData: filteredColPayRecs,
         startDate,
         endDate,
         officerField: "collofficer",
         mode: "amount",
         paymentFilter,
       }),
-    [colPayRecs, endDate, loans, paymentFilter, startDate]
+    [endDate, filteredAssignedLoans, filteredColPayRecs, paymentFilter, startDate]
   );
 
   const casePercentageTable = React.useMemo(
     () =>
       buildPercentageRankingTable({
-        assignedData: loans.filter((loan) => String(loan?.collofficer || "").trim()),
-        collectedData: colPayRecs,
+        assignedData: filteredAssignedLoans,
+        collectedData: filteredColPayRecs,
         startDate,
         endDate,
         officerField: "collofficer",
         mode: "cases",
         paymentFilter,
       }),
-    [colPayRecs, endDate, loans, paymentFilter, startDate]
+    [endDate, filteredAssignedLoans, filteredColPayRecs, paymentFilter, startDate]
   );
 
   const activeTable =
@@ -173,7 +201,7 @@ export default function CollectionRanking() {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_240px_240px_auto]">
             <div>
               <label className="app-label">Start Date</label>
               <input
@@ -195,6 +223,35 @@ export default function CollectionRanking() {
                   setRange(([currentStart]) => [currentStart, new Date(event.target.value)])
                 }
               />
+            </div>
+            <div>
+              <label className="app-label">Payment Filter</label>
+              <select
+                className="app-select"
+                value={paymentFilter}
+                onChange={(event) => setPaymentFilter(event.target.value)}
+              >
+                {PAYMENT_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="app-label">Group</label>
+              <select
+                className="app-select"
+                value={groupFilter}
+                onChange={(event) => setGroupFilter(event.target.value)}
+              >
+                <option value="">All Groups</option>
+                {groupOptions.map((group) => (
+                  <option key={group.value} value={group.value}>
+                    {group.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex items-end">
               <button
@@ -238,26 +295,10 @@ export default function CollectionRanking() {
             </button>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[260px_1fr]">
-            <div>
-              <label className="app-label">Payment Filter</label>
-              <select
-                className="app-select"
-                value={paymentFilter}
-                onChange={(event) => setPaymentFilter(event.target.value)}
-              >
-                {PAYMENT_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-end">
-              <p className="text-sm text-slate-500">
-                Use `Full Payments` on case views to rank fully settled collection cases only.
-              </p>
-            </div>
+          <div className="flex items-end">
+            <p className="text-sm text-slate-500">
+              Use `Full Payments` on case views to rank fully settled collection cases only.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-3 border-b border-slate-200">

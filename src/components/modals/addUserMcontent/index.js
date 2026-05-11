@@ -3,6 +3,7 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import BigLoader from "../../loaders/bigLoader";
 import PermissionManager from "../../permissions/PermissionManager";
 import { getDefaultPermissionsForRole } from "../../../config/navigation";
+import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 const initialFields = {
   userName: "",
@@ -14,13 +15,18 @@ const initialFields = {
   role: "",
   department: "",
   gender: "",
+  staffGroupId: "",
   permissions: [],
 };
 
 export default function AddUserDetial() {
-  const { roles, departments, genders, _handleCreateAdmin, bigLoader } =
+  const { roles, departments, genders, staffGroups, _handleCreateAdmin, bigLoader } =
     React.useContext(GlobalContext);
   const [fields, setFields] = React.useState(initialFields);
+  const groupOptions = React.useMemo(
+    () => getGroupOptionsByDepartment(staffGroups, fields.department),
+    [fields.department, staffGroups]
+  );
 
   const updateField = (field, value) => {
     setFields((current) => ({
@@ -168,12 +174,34 @@ export default function AddUserDetial() {
               <select
                 className="app-select"
                 value={fields.department}
-                onChange={(e) => updateField("department", e.target.value)}
+                onChange={(e) =>
+                  setFields((current) => ({
+                    ...current,
+                    department: e.target.value,
+                    staffGroupId: "",
+                  }))
+                }
               >
                 <option value="">Select department</option>
                 {departments.map((department) => (
                   <option key={department.value} value={department.value}>
                     {department.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="app-label">Group</label>
+              <select
+                className="app-select"
+                value={fields.staffGroupId}
+                onChange={(e) => updateField("staffGroupId", e.target.value)}
+                disabled={!fields.department}
+              >
+                <option value="">{fields.department ? "No group" : "Select department first"}</option>
+                {groupOptions.map((group) => (
+                  <option key={group.value} value={group.value}>
+                    {group.label}
                   </option>
                 ))}
               </select>
