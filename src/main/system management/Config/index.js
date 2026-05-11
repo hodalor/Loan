@@ -69,6 +69,7 @@ const buildCountryDraft = (country = {}) => ({
   code: country.code || "",
   name: country.name || "",
   locale: country.locale || "",
+  timeZone: country.timeZone || "",
   currencyCode: country.currencyCode || "",
   currencySymbol: country.currencySymbol || "",
   dialCode: country.dialCode || "",
@@ -416,6 +417,7 @@ export default function SystemConfig() {
       code,
       name,
       locale: String(countryDraft.locale || "").trim() || "en-US",
+      timeZone: String(countryDraft.timeZone || "").trim() || "UTC",
       currencyCode: String(countryDraft.currencyCode || "").trim().toUpperCase(),
       currencySymbol: String(countryDraft.currencySymbol || "").trim(),
       dialCode: String(countryDraft.dialCode || "").trim(),
@@ -906,8 +908,9 @@ export default function SystemConfig() {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <div className="mt-4 grid gap-3 md:grid-cols-5">
                       <MiniMetric title="Locale" value={activeCountry?.locale || "en-US"} />
+                      <MiniMetric title="Time Zone" value={activeCountry?.timeZone || "UTC"} />
                       <MiniMetric title="Currency" value={activeCountry?.currencyCode || "USD"} />
                       <MiniMetric title="Symbol" value={activeCountry?.currencySymbol || "$"} />
                       <MiniMetric title="Dial Code" value={activeCountry?.dialCode || "+1"} />
@@ -957,8 +960,8 @@ export default function SystemConfig() {
                                 ) : null}
                               </div>
                               <p className="mt-1 text-sm text-slate-500">
-                                {country.locale} · {country.currencyCode} ({country.currencySymbol}) ·{" "}
-                                {country.dialCode}
+                                {country.locale} · {country.timeZone || "UTC"} · {country.currencyCode} (
+                                {country.currencySymbol}) · {country.dialCode}
                               </p>
                             </div>
 
@@ -1045,6 +1048,16 @@ export default function SystemConfig() {
                         value={countryDraft.locale}
                         onChange={(e) => updateCountryDraftField("locale", e.target.value)}
                         placeholder="en-ZM"
+                      />
+                    </div>
+                    <div>
+                      <label className="app-label">Time Zone</label>
+                      <input
+                        className="app-input"
+                        disabled={!canSaveConfig}
+                        value={countryDraft.timeZone}
+                        onChange={(e) => updateCountryDraftField("timeZone", e.target.value)}
+                        placeholder="Africa/Lusaka"
                       />
                     </div>
                     <div>

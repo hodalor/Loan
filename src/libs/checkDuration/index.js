@@ -1,26 +1,34 @@
+import { getCalendarDayDifferenceByCountry } from "../countryTime";
+
 const isSettledPayment = (status = "") => ["Payed", "Paid"].includes(String(status || "").trim());
 const hasRecordedRepayment = (loan = {}) =>
   Number.parseFloat(loan?.amountPaid || 0) > 0 ||
   (Array.isArray(loan?.paymentRecords) && loan.paymentRecords.length > 0);
 
-const _getPreColLoans = async (loanData) => {
+const buildCustomerLookup = (customers = []) =>
+  new Map(
+    (Array.isArray(customers) ? customers : []).map((customer) => [
+      String(customer?.userId || ""),
+      customer,
+    ])
+  );
+
+const getLoanCountryProfile = (loan = {}, customerLookup = new Map()) =>
+  customerLookup.get(String(loan?.userId || "")) || {};
+
+const _getPreColLoans = async (loanData, customers = []) => {
   var loans = [];
+  const customerLookup = buildCustomerLookup(customers);
 
   if (loanData === undefined || loanData.length === 0) return (loans = []);
 
-  let tda = new Date();
-
   loanData.forEach((loan) => {
     if (loan.caseStatus !== "Completed") {
-      let loanDate = new Date(loan.dop);
-
-      let timeDiff = loanDate.getTime() - tda.getTime();
-
-      let diffDate = timeDiff / (1000 * 3600 * 24);
-
-      let dur = parseInt(diffDate);
-
-      let actDur = dur === -0 ? 0 : dur;
+      const actDur = getCalendarDayDifferenceByCountry(
+        loan.dop,
+        new Date(),
+        getLoanCountryProfile(loan, customerLookup)
+      );
 
       if (actDur >= 0 && actDur <= 2) {
         loan.dur = actDur;
@@ -32,24 +40,19 @@ const _getPreColLoans = async (loanData) => {
   return loans;
 };
 
-const _getColLoans = async (loanData) => {
+const _getColLoans = async (loanData, customers = []) => {
   var loans = [];
+  const customerLookup = buildCustomerLookup(customers);
 
   if (loanData === undefined || loanData.length === 0) return (loans = []);
 
-  let tda = new Date();
-
   loanData.forEach((loan) => {
     if (loan.caseStatus !== "Completed" && loan.loanStatus !== "Review") {
-      let loanDate = new Date(loan.dop);
-
-      let timeDiff = loanDate.getTime() - tda.getTime();
-
-      let diffDate = timeDiff / (1000 * 3600 * 24);
-
-      let dur = parseInt(diffDate);
-
-      let actDur = dur === -0 ? 0 : dur;
+      const actDur = getCalendarDayDifferenceByCountry(
+        loan.dop,
+        new Date(),
+        getLoanCountryProfile(loan, customerLookup)
+      );
 
       if (actDur < 0) {
         loan.dur = actDur;

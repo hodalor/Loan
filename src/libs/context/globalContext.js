@@ -440,6 +440,7 @@ export default function GlobalContextProvider(props) {
       countryName: customerData?.countryName || "",
       countryDialCode: customerData?.countryDialCode || "",
       locale: customerData?.locale || "",
+      timeZone: customerData?.timeZone || "",
       currencyCode: customerData?.currencyCode || "",
       currencySymbol: customerData?.currencySymbol || "",
       IDinfo: {
@@ -605,10 +606,10 @@ export default function GlobalContextProvider(props) {
 
       const [preColCases, prePaymentRec, colPaymentRec, colCases] =
         await Promise.all([
-          _getPreColLoans(sortedLoans),
+          _getPreColLoans(sortedLoans, sortedCustomers),
           _getPreColPayRecs(sortedLoans),
           _getColPayRecs(sortedLoans),
-          _getColLoans(sortedLoans),
+          _getColLoans(sortedLoans, sortedCustomers),
         ]);
 
       const assignedPreCol = preColCases.filter(

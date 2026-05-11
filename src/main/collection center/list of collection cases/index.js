@@ -7,6 +7,7 @@ import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector"
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import { _unassignColCases } from "../../../handlers";
+import { getCalendarDayDifferenceByCountry } from "../../../libs/countryTime";
 
 const TAB_ITEMS = [
   { id: "unassigned", label: "Unassigned Cases" },
@@ -61,23 +62,28 @@ export default function ListOfCollectionCases() {
     [customers]
   );
 
-  const calcPenaltyFromDates = (dpValue, dopValue, amount) => {
-    const dp = new Date(dpValue);
-    const dop = new Date(dopValue);
-    const timeDiff = dp.getTime() - dop.getTime();
-    const diffDate = timeDiff / (1000 * 3600 * 24);
-    const dur = parseInt(diffDate, 10);
-    return (2 / 100) * parseInt(amount, 10) * dur;
-  };
+  const getOverdueDays = React.useCallback(
+    (loan, compareDateValue = new Date()) => {
+      const customer = getCustomer(loan?.userId);
 
-  const calcCurrentPenalty = (loan) => {
-    const now = new Date();
-    const dop = new Date(loan.dop);
-    const timeDiff = now.getTime() - dop.getTime();
-    const diffDate = timeDiff / (1000 * 3600 * 24);
-    const dur = parseInt(diffDate, 10);
-    return (2 / 100) * parseInt(loan.amount, 10) * dur;
-  };
+      return Math.max(
+        0,
+        -getCalendarDayDifferenceByCountry(loan?.dop, compareDateValue, customer)
+      );
+    },
+    [getCustomer]
+  );
+
+  const getRemainingPrincipal = React.useCallback((loan) => {
+    const repaymentAmount = Number.parseFloat(loan?.repaymentAmount || 0);
+    const amountPaid = Number.parseFloat(loan?.amountPaid || 0);
+    return Math.max(repaymentAmount - amountPaid, 0);
+  }, []);
+
+  const calcPenaltyFromDays = React.useCallback((loan, overdueDays) => {
+    const remainingPrincipal = getRemainingPrincipal(loan);
+    return ((2 / 100) * remainingPrincipal) * Math.max(0, overdueDays);
+  }, [getRemainingPrincipal]);
 
   const buildRow = React.useCallback(
     (loan, mode) => {
@@ -87,16 +93,14 @@ export default function ListOfCollectionCases() {
           ? {}
           : loan.collCallRecords.slice(-1)[0];
       const loanType = customer?.loan?.loans?.length === 1 ? "First-Loan" : "Re-loan";
-      const penalty =
-        mode === "unassigned"
-          ? Math.max(0, -Number((2 / 100) * parseInt(loan.amount || 0, 10) * Number(loan.dur || 0)))
-          : mode === "completed"
-          ? calcPenaltyFromDates(loan.dp, loan.dop, loan.amount)
-          : calcCurrentPenalty(loan);
+      const overdueDays =
+        mode === "completed"
+          ? getOverdueDays(loan, loan.dp)
+          : Math.max(0, -Number(loan.dur || 0));
+      const penalty = calcPenaltyFromDays(loan, overdueDays);
       const repaymentAmount = parseFloat(loan.repaymentAmount || 0) + penalty;
       const amountPaid = parseFloat(loan.amountPaid || 0);
       const amountLeft = Math.max(repaymentAmount - amountPaid, 0);
-      const overdueDays = mode === "completed" ? parseInt((new Date(loan.dp) - new Date(loan.dop)) / (1000 * 3600 * 24), 10) : Math.max(0, -Number(loan.dur || 0));
 
       return {
         ...loan,
@@ -124,7 +128,7 @@ export default function ListOfCollectionCases() {
           callRecord && Object.keys(callRecord).length > 0 ? "Recorded Cases" : "Cases not recorded",
       };
     },
-    [getCustomer]
+    [calcPenaltyFromDays, getCustomer, getOverdueDays]
   );
 
   const unassignedRows = React.useMemo(
