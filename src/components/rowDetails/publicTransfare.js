@@ -10,6 +10,7 @@ const normalizeProofUrl = (value = "") => {
   const rawValue = String(value || "").trim();
 
   if (!rawValue) return "";
+  if (/^https?:\/\//i.test(rawValue)) return rawValue;
   if (!apiBaseUrl) return rawValue;
 
   const uploadIndex = rawValue.indexOf("/upload/");

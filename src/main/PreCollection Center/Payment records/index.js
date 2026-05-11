@@ -102,6 +102,7 @@ export default function PrePaymentRecords() {
               loan.preCollCallRecords.length === 0
                 ? {}
                 : loan.preCollCallRecords.slice(-1)[0];
+            const overallAmountPaid = parseFloat(loan.overallAmountPaid || loan.amountPaid || 0);
 
             return {
               ...loan,
@@ -112,8 +113,8 @@ export default function PrePaymentRecords() {
               amountLeft:
                 parseFloat(loan.repaymentAmount) +
                 _calcRep(loan) -
-                parseFloat(loan.amountPaid),
-              preCollOfficer: callRecord.preCollOfficer,
+                overallAmountPaid,
+              preCollOfficer: loan.preCollOfficer || callRecord.preCollOfficer,
             };
           }),
     [customers, prePayment]

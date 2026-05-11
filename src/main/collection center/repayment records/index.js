@@ -82,6 +82,7 @@ export default function CollectionPaymentRecords() {
             : loan.collCallRecords.slice(-1)[0];
         const repaymentAmount = parseFloat(loan.repaymentAmount || 0) + calcPenalty(loan);
         const amountPaid = parseFloat(loan.amountPaid || 0);
+        const overallAmountPaid = parseFloat(loan.overallAmountPaid || loan.amountPaid || 0);
 
         return {
           ...loan,
@@ -89,10 +90,10 @@ export default function CollectionPaymentRecords() {
           orderId: loan.ID,
           phone: customer?.phone || "",
           repAmount: repaymentAmount.toFixed(2),
-          amountLeft: `GHC${Math.max(repaymentAmount - amountPaid, 0).toFixed(2)}`,
+          amountLeft: `GHC${Math.max(repaymentAmount - overallAmountPaid, 0).toFixed(2)}`,
           dateApplied: loan.doa ? new Date(loan.doa).toLocaleDateString() : "-",
           datePaid: loan.dp ? new Date(loan.dp).toLocaleDateString() : "-",
-          collOfficer: callRecord.collOfficer || loan.collofficer || "-",
+          collOfficer: loan.collofficer || callRecord.collOfficer || "-",
         };
       }),
     [colPayRecs, customers]

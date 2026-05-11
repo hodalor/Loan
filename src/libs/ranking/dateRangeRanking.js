@@ -67,10 +67,13 @@ const isSettledPaymentStatus = (status = "") =>
   ["Paid", "Payed"].includes(String(status || "").trim());
 
 const getPaymentProgressType = (item = {}) => {
+  const departmentStatus = String(item?.departmentPaymentStatus || "").trim().toLowerCase();
   const repaymentAmount = toNumber(item?.repaymentAmount);
   const amountPaid = toNumber(item?.amountPaid);
 
   if (amountPaid <= 0) return "none";
+  if (departmentStatus === "full") return "full";
+  if (departmentStatus === "partial") return "partial";
   if (
     isSettledPaymentStatus(item?.paymentStatus) ||
     item?.caseStatus === "Completed" ||
