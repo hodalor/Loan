@@ -2158,6 +2158,121 @@ export default function GlobalContextProvider(props) {
     }
   };
 
+  const _handleSyncStaffGroupMembers = async ({
+    groupId = "",
+    memberUserIds = [],
+  } = {}) => {
+    if (!_hasAccess("action:user:update"))
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "You do not have permission to manage group members",
+        open: true,
+      });
+
+    const group = staffGroups.find(
+      (item) => String(item._id || item.id || "") === String(groupId || "")
+    );
+
+    if (!group)
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "Select a valid staff group",
+        open: true,
+      });
+
+    const nextMemberSet = new Set((Array.isArray(memberUserIds) ? memberUserIds : []).map(String));
+    const eligibleUsers = admins.filter((admin) => {
+      const sameDepartment =
+        String(admin.department || "").trim().toLowerCase() ===
+        String(group.department || "").trim().toLowerCase();
+      const canAppearInGroupEditor =
+        !String(admin.staffGroupId || "").trim() ||
+        String(admin.staffGroupId || "") === String(group._id || group.id || "");
+
+      return sameDepartment && canAppearInGroupEditor;
+    });
+
+    setBigLoader(true);
+
+    try {
+      for (const adminRecord of eligibleUsers) {
+        const shouldBelongToGroup = nextMemberSet.has(String(adminRecord.userId || ""));
+        const nextGroupId = shouldBelongToGroup ? String(group._id || group.id || "") : "";
+        const currentGroupId = String(adminRecord.staffGroupId || "");
+
+        if (currentGroupId === nextGroupId) continue;
+
+        const response = await _updateUser({
+          userName: adminRecord.userName,
+          firstName: adminRecord.firstName || "",
+          lastName: adminRecord.lastName || "",
+          phone: adminRecord.phone || "",
+          password: "",
+          email: adminRecord.email || "",
+          role: adminRecord.role || "",
+          department: adminRecord.department || "",
+          permissions: Array.isArray(adminRecord.permissions)
+            ? adminRecord.permissions
+            : [],
+          staffGroupId: nextGroupId,
+        });
+
+        if (response.success === 0) {
+          setAlerts({
+            ...alerts,
+            type: "error",
+            msg: response.message,
+            open: true,
+          });
+          return false;
+        }
+      }
+
+      const groupIdValue = String(group._id || group.id || "");
+      const sortedAdmins = await _sortAdmins(
+        admins.map((adminRecord) => {
+          const isEligible = eligibleUsers.some(
+            (eligible) => eligible.userId === adminRecord.userId
+          );
+
+          if (!isEligible) return adminRecord;
+
+          const shouldBelongToGroup = nextMemberSet.has(String(adminRecord.userId || ""));
+          return {
+            ...adminRecord,
+            staffGroupId: shouldBelongToGroup ? groupIdValue : "",
+            staffGroupName: shouldBelongToGroup ? group.name : "",
+          };
+        })
+      );
+
+      setAdmins(sortedAdmins);
+
+      if (nextMemberSet.has(String(user.userId || "")) || String(user.staffGroupId || "") === groupIdValue) {
+        const matchedCurrentUser = sortedAdmins.find(
+          (adminRecord) => adminRecord.userId === user.userId
+        );
+        if (matchedCurrentUser) {
+          setUser(matchedCurrentUser);
+          localStorage.setItem("user", JSON.stringify(matchedCurrentUser));
+        }
+      }
+
+      setAlerts({
+        ...alerts,
+        type: "success",
+        msg: "Group members updated successfully",
+        open: true,
+      });
+
+      return true;
+    } finally {
+      setBigLoader(false);
+    }
+  };
+
   const _getGroupMembers = React.useCallback(
     (department = "", roleValues = []) => {
       const departmentGroups = getGroupsByDepartment(staffGroups, department);
@@ -4825,6 +4940,7 @@ export default function GlobalContextProvider(props) {
         _handleUpdateStaffGroup,
         _handleDeleteStaffGroup,
         _handleAssignUsersToGroup,
+        _handleSyncStaffGroupMembers,
         _getGroupMembers,
         _logout,
         _handleSearchUsers,

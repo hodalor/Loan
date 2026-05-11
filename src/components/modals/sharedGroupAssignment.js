@@ -109,8 +109,8 @@ export default function SharedGroupAssignment({
   };
 
   return (
-    <div className="flex w-full max-w-[760px] flex-col p-4">
-      <div className="mb-3">
+    <div className="flex w-full max-w-[700px] flex-col p-3.5">
+      <div className="mb-2.5">
         <h3 className="text-sm font-semibold text-slate-900">Select Groups And Staff</h3>
         <p className="mt-1 text-xs text-slate-500">
           {isReassignMode
@@ -119,7 +119,7 @@ export default function SharedGroupAssignment({
         </p>
       </div>
 
-      <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="mb-2.5 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
         <input
           type="text"
           className="app-input !min-h-[40px] !py-2 text-sm"
@@ -137,12 +137,12 @@ export default function SharedGroupAssignment({
         </button>
       </div>
 
-      <div className="mb-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+      <div className="mb-2.5 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
         <span>{visibleGroups.length} group{visibleGroups.length === 1 ? "" : "s"} found</span>
         <span>{selectedPersonnel.length} staff selected</span>
       </div>
 
-      <div className="max-h-[68vh] space-y-3 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <div className="max-h-[60vh] space-y-2.5 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
         {visibleGroups.map((group) => {
           const members = group.members || [];
           const allSelected =
@@ -153,7 +153,7 @@ export default function SharedGroupAssignment({
             <div key={group.id} className="rounded-2xl border border-slate-200 bg-white">
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
                 onClick={() => toggleGroup(group.id)}
               >
                 <div>
@@ -179,7 +179,7 @@ export default function SharedGroupAssignment({
               </button>
 
               {expanded ? (
-                <div className="border-t border-slate-200 px-4 py-3">
+                <div className="border-t border-slate-200 px-3.5 py-3">
                   {members.length === 0 ? (
                     <p className="text-xs text-slate-500">No staff in this group yet.</p>
                   ) : (
@@ -253,7 +253,7 @@ export default function SharedGroupAssignment({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+      <div className="mt-2.5 flex items-center justify-between border-t border-slate-200 pt-3">
         <p className="text-xs text-slate-500">
           {isReassignMode
             ? "Use the group list to reassign all selected cases to chosen staff only."

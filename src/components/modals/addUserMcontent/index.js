@@ -44,14 +44,14 @@ export default function AddUserDetial() {
   };
 
   return (
-    <div className="relative w-[min(980px,92vw)]">
+    <div className="relative w-[min(860px,92vw)]">
       {bigLoader ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[24px] bg-slate-950/30 backdrop-blur-sm">
           <BigLoader />
         </div>
       ) : null}
 
-      <div className="border-b border-slate-200 px-6 py-5">
+      <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
@@ -71,8 +71,8 @@ export default function AddUserDetial() {
         </div>
       </div>
 
-      <div className="space-y-6 px-6 py-5">
-        <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+      <div className="space-y-5 px-5 py-4">
+        <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-slate-900">
               Profile Details
@@ -82,7 +82,7 @@ export default function AddUserDetial() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <div>
               <label className="app-label">User Name*</label>
               <input

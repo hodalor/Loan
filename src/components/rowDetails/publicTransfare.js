@@ -135,7 +135,7 @@ export default function PublicTransfare() {
   return (
     <div className="space-y-4">
       <section className="app-panel">
-        <div className="app-panel-body space-y-6">
+        <div className="app-panel-body space-y-5">
           <div>
             <h1 className="text-lg font-semibold text-slate-900">
               Public Transfer Review
@@ -145,24 +145,24 @@ export default function PublicTransfare() {
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {detailRows.map((item) => (
               <div
                 key={item.label}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5"
               >
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                   {item.label}
                 </p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">
+                <p className="mt-1.5 text-sm font-semibold text-slate-900">
                   {item.value ?? "-"}
                 </p>
               </div>
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+          <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)]">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900">Proof</p>
                 <button
@@ -176,14 +176,14 @@ export default function PublicTransfare() {
               </div>
               <button
                 type="button"
-                className="mt-4 flex min-h-[320px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
+                className="mt-3 flex min-h-[250px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-3 transition hover:border-blue-300 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:bg-slate-50"
                 onClick={handleOpenProofPreview}
                 disabled={!proofAuditUrl || proofLoadFailed}
               >
                 {proofAuditUrl && !proofLoadFailed ? (
                   <img
                     alt="Repayment proof"
-                    className="max-h-[280px] rounded-xl object-contain"
+                    className="max-h-[210px] rounded-xl object-contain"
                     src={proofAuditUrl}
                     onError={() => setProofLoadFailed(true)}
                   />
@@ -197,7 +197,7 @@ export default function PublicTransfare() {
               </button>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-soft">
               <div>
                 <label className="app-label">Upload Proof</label>
                 <UploadFile />
@@ -207,7 +207,7 @@ export default function PublicTransfare() {
                 </p>
               </div>
 
-              <div className="mt-5">
+              <div className="mt-4">
                 <p className="text-sm font-semibold text-slate-900">Audit Result</p>
                 <div className="mt-3 flex flex-wrap gap-3">
                   {["pass", "reject"].map((value) => (
@@ -247,7 +247,7 @@ export default function PublicTransfare() {
                 </div>
               ) : null}
 
-              <div className="mt-5 flex justify-end">
+              <div className="mt-4 flex justify-end">
                 <button
                   type="button"
                   className="app-btn-primary gap-2"

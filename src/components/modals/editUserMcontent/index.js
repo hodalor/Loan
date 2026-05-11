@@ -81,14 +81,14 @@ export default function EditUserDetial() {
   };
 
   return (
-    <div className="relative w-[min(980px,92vw)]">
+    <div className="relative w-[min(860px,92vw)]">
       {bigLoader ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[24px] bg-slate-950/30 backdrop-blur-sm">
           <BigLoader />
         </div>
       ) : null}
 
-      <div className="border-b border-slate-200 px-6 py-5">
+      <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-600">
@@ -126,10 +126,10 @@ export default function EditUserDetial() {
         </div>
       </div>
 
-      <div className="space-y-6 px-6 py-5">
+      <div className="space-y-5 px-5 py-4">
         {isEdit ? (
           <>
-            <section className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-4">
                 <h3 className="text-lg font-semibold text-slate-900">
                   Account Details
@@ -140,7 +140,7 @@ export default function EditUserDetial() {
                 </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div>
                   <label className="app-label">User Name</label>
                   <input
@@ -359,7 +359,7 @@ export default function EditUserDetial() {
             </section>
 
             <section className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
                 <div className="flex items-center gap-3">
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                     <i className="fa fa-shield text-lg" />
@@ -376,7 +376,7 @@ export default function EditUserDetial() {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-soft">
                 <p className="text-sm text-slate-500">Active Status</p>
                 <div className="mt-3 inline-flex rounded-full px-4 py-2 text-sm font-semibold text-white">
                   <span

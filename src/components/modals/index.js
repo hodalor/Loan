@@ -82,12 +82,12 @@ export default function MyModal(props) {
   const isOpen = Boolean(_renderModal());
   const modalSizeClassName =
     modalTitle === "assignModal" || modalTitle === "preColContent" || modalTitle === "colContent"
-      ? "max-w-[720px]"
+      ? "max-w-[680px]"
       : modalTitle === "callRecords"
       ? "max-w-2xl"
       : modalTitle === "imgContent"
       ? "max-w-5xl"
-      : "max-w-4xl";
+      : "max-w-[880px]";
 
   return (
     isOpen ? (
