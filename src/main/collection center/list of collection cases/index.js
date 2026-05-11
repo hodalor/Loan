@@ -314,6 +314,7 @@ export default function ListOfCollectionCases() {
   const unassignedColumns = [
     ...(user.role === "col-personel" || !canAssignCollection ? [] : [selectionColumn]),
     ...baseColumns,
+    { key: "overdueDays", label: "Overdue Days" },
     { key: "amountPaid", label: "Amount Paid" },
     { key: "overduePenalty", label: "Penalty" },
     { key: "amountPayable", label: "Amount Payable" },

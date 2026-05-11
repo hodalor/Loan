@@ -1,74 +1,61 @@
 import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
+import { buildRankingTable, getDefaultDateRange } from "../../../libs/ranking/dateRangeRanking";
+import {
+  getLastMonthRange,
+  getLastNDaysRange,
+  getThisMonthRange,
+  getTodayRange,
+} from "../../../libs/ranking/datePresets";
 
 const TAB_ITEMS = [
   { id: "amount", label: "Amount Collected" },
   { id: "cases", label: "Cases Collected" },
 ];
 
-const columns = [
-  { key: "rank", label: "Rank", cellClassName: "font-semibold text-slate-900" },
-  { key: "userName", label: "User Name", cellClassName: "font-semibold text-slate-900" },
-  { key: "monday", label: "Mon" },
-  { key: "tuesday", label: "Tue" },
-  { key: "wednesday", label: "Wed" },
-  { key: "thursday", label: "Thu" },
-  { key: "friday", label: "Fri" },
-  { key: "saturday", label: "Sat" },
-  { key: "sunday", label: "Sun" },
-  { key: "total", label: "Total" },
-];
-
 export default function PreCollectionRanking() {
-  const { preRank, globalLoader, preRankCase } = React.useContext(GlobalContext);
+  const { prePayment, globalLoader, preCompCases } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("amount");
+  const [range, setRange] = React.useState(() => getDefaultDateRange(7));
 
-  const amountRows = React.useMemo(
+  const [startDate, endDate] = range || [];
+
+  const amountTable = React.useMemo(
     () =>
-      (Array.isArray(preRank) ? preRank : []).map((rank, index) => ({
-        ...rank,
-        id: `${rank.userName || "pre"}-${index}`,
-        monday: rank.days?.mon || 0,
-        tuesday: rank.days?.tue || 0,
-        wednesday: rank.days?.wed || 0,
-        thursday: rank.days?.thu || 0,
-        friday: rank.days?.fri || 0,
-        saturday: rank.days?.sat || 0,
-        sunday: rank.days?.sun || 0,
-        total: rank.totalAmount || 0,
-        rank: index + 1,
-      })),
-    [preRank]
+      buildRankingTable({
+        data: prePayment,
+        startDate,
+        endDate,
+        officerField: "preCollOfficer",
+        mode: "amount",
+      }),
+    [endDate, prePayment, startDate]
   );
 
-  const caseRows = React.useMemo(
+  const caseTable = React.useMemo(
     () =>
-      (Array.isArray(preRankCase) ? preRankCase : []).map((rank, index) => ({
-        ...rank,
-        id: `${rank.userName || "pre-case"}-${index}`,
-        monday: rank.days?.mon || 0,
-        tuesday: rank.days?.tue || 0,
-        wednesday: rank.days?.wed || 0,
-        thursday: rank.days?.thu || 0,
-        friday: rank.days?.fri || 0,
-        saturday: rank.days?.sat || 0,
-        sunday: rank.days?.sun || 0,
-        total: rank.totalCases || 0,
-        rank: index + 1,
-      })),
-    [preRankCase]
+      buildRankingTable({
+        data: preCompCases,
+        startDate,
+        endDate,
+        officerField: "preCollOfficer",
+        mode: "cases",
+      }),
+    [endDate, preCompCases, startDate]
   );
 
-  const activeRows = activeTab === "amount" ? amountRows : caseRows;
+  const activeTable = activeTab === "amount" ? amountTable : caseTable;
+  const activeRows = activeTable.rows;
+  const activeColumns = activeTable.columns;
   const topPerformer = activeRows[0];
 
   const handleExport = () => {
     if (!activeRows.length) return;
 
-    const header = columns.map((column) => column.label).join(",");
+    const header = activeColumns.map((column) => column.label).join(",");
     const csvRows = activeRows.map((row) =>
-      columns
+      activeColumns
         .map((column) => `"${String(row[column.key] ?? "").replace(/"/g, '""')}"`)
         .join(",")
     );
@@ -84,6 +71,9 @@ export default function PreCollectionRanking() {
     URL.revokeObjectURL(url);
   };
 
+  const dateInputValue = (value) =>
+    value instanceof Date && !Number.isNaN(value.getTime()) ? value.toISOString().slice(0, 10) : "";
+
   return (
     <div className="space-y-4">
       <section className="app-panel">
@@ -91,7 +81,7 @@ export default function PreCollectionRanking() {
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Precollection Ranking</h3>
             <p className="text-sm text-slate-500">
-              Compact weekly performance ranking with export support.
+              Filter amount and case ranking by any date period.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -125,6 +115,71 @@ export default function PreCollectionRanking() {
             </div>
           </div>
 
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <div>
+              <label className="app-label">Start Date</label>
+              <input
+                type="date"
+                className="app-input"
+                value={dateInputValue(startDate)}
+                onChange={(event) =>
+                  setRange(([_, currentEnd]) => [new Date(event.target.value), currentEnd])
+                }
+              />
+            </div>
+            <div>
+              <label className="app-label">End Date</label>
+              <input
+                type="date"
+                className="app-input"
+                value={dateInputValue(endDate)}
+                onChange={(event) =>
+                  setRange(([currentStart]) => [currentStart, new Date(event.target.value)])
+                }
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="app-btn-secondary"
+                onClick={() => setRange(getDefaultDateRange(7))}
+              >
+                Last 7 Days
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="app-btn-secondary"
+              onClick={() => setRange(getTodayRange())}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              className="app-btn-secondary"
+              onClick={() => setRange(getLastNDaysRange(7))}
+            >
+              Last 7 Days
+            </button>
+            <button
+              type="button"
+              className="app-btn-secondary"
+              onClick={() => setRange(getThisMonthRange())}
+            >
+              This Month
+            </button>
+            <button
+              type="button"
+              className="app-btn-secondary"
+              onClick={() => setRange(getLastMonthRange())}
+            >
+              Last Month
+            </button>
+          </div>
+
           <div className="flex flex-wrap gap-3 border-b border-slate-200">
             {TAB_ITEMS.map((tab) => (
               <button
@@ -145,7 +200,7 @@ export default function PreCollectionRanking() {
           {globalLoader ? <div className="text-sm text-slate-500">Loading ranking...</div> : null}
 
           <SimpleDataTable
-            columns={columns}
+            columns={activeColumns}
             rows={activeRows}
             rowKey="id"
             dense
