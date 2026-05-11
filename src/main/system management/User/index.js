@@ -337,7 +337,7 @@ export default function CreateUsers() {
         .filter(Boolean)
     );
     setIsGroupEditing(false);
-  }, [selectedGroup?.id, rows]);
+  }, [selectedGroup, rows]);
 
   const handleGroupEdit = (group) => {
     setActiveTab("groups");
