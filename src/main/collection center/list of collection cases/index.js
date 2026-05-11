@@ -7,7 +7,7 @@ import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector"
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import { _unassignColCases } from "../../../handlers";
-import { getCalendarDayDifferenceByCountry } from "../../../libs/countryTime";
+import { formatMoney, getCollectionMetrics } from "../../../libs/collectionMetrics";
 
 const TAB_ITEMS = [
   { id: "unassigned", label: "Unassigned Cases" },
@@ -62,29 +62,6 @@ export default function ListOfCollectionCases() {
     [customers]
   );
 
-  const getOverdueDays = React.useCallback(
-    (loan, compareDateValue = new Date()) => {
-      const customer = getCustomer(loan?.userId);
-
-      return Math.max(
-        0,
-        -getCalendarDayDifferenceByCountry(loan?.dop, compareDateValue, customer)
-      );
-    },
-    [getCustomer]
-  );
-
-  const getRemainingPrincipal = React.useCallback((loan) => {
-    const repaymentAmount = Number.parseFloat(loan?.repaymentAmount || 0);
-    const amountPaid = Number.parseFloat(loan?.amountPaid || 0);
-    return Math.max(repaymentAmount - amountPaid, 0);
-  }, []);
-
-  const calcPenaltyFromDays = React.useCallback((loan, overdueDays) => {
-    const remainingPrincipal = getRemainingPrincipal(loan);
-    return ((2 / 100) * remainingPrincipal) * Math.max(0, overdueDays);
-  }, [getRemainingPrincipal]);
-
   const buildRow = React.useCallback(
     (loan, mode) => {
       const customer = getCustomer(loan.userId);
@@ -93,14 +70,9 @@ export default function ListOfCollectionCases() {
           ? {}
           : loan.collCallRecords.slice(-1)[0];
       const loanType = customer?.loan?.loans?.length === 1 ? "First-Loan" : "Re-loan";
+      const metrics = getCollectionMetrics(loan, customer);
       const overdueDays =
-        mode === "completed"
-          ? getOverdueDays(loan, loan.dp)
-          : Math.max(0, -Number(loan.dur || 0));
-      const penalty = calcPenaltyFromDays(loan, overdueDays);
-      const repaymentAmount = parseFloat(loan.repaymentAmount || 0) + penalty;
-      const amountPaid = parseFloat(loan.amountPaid || 0);
-      const amountLeft = Math.max(repaymentAmount - amountPaid, 0);
+        mode === "completed" ? metrics.overdueDays : Math.max(0, -Number(loan.dur || 0));
 
       return {
         ...loan,
@@ -111,13 +83,17 @@ export default function ListOfCollectionCases() {
         name: `${customer?.IDinfo?.firstName || ""} ${customer?.IDinfo?.middleName || ""} ${customer?.IDinfo?.lastName || ""}`
           .replace(/\s+/g, " ")
           .trim(),
+        timeZone: customer?.timeZone || "",
         loanType,
         paymentTerm: loan.duration || "-",
-        loanAmount: repaymentAmount.toFixed(2),
+        loanAmount: formatMoney(metrics.repaymentAmount),
+        repaymentAmount: metrics.repaymentAmount,
         dueDate: loan.dop ? new Date(loan.dop).toLocaleDateString() : "-",
         overdueDays,
-        amountPaid: amountPaid.toFixed(2),
-        amountLeft: amountLeft.toFixed(2),
+        amountPaid: formatMoney(metrics.amountPaid),
+        amountLeft: formatMoney(metrics.amountLeft),
+        overduePenalty: formatMoney(metrics.overduePenalty),
+        amountPayable: formatMoney(metrics.amountPayable),
         datePaid: loan.dp ? new Date(loan.dp).toLocaleDateString() : "-",
         lastCallDate: callRecord.callDate ? new Date(callRecord.callDate).toLocaleDateString() : "-",
         collOfficer: loan.collofficer || "-",
@@ -128,7 +104,7 @@ export default function ListOfCollectionCases() {
           callRecord && Object.keys(callRecord).length > 0 ? "Recorded Cases" : "Cases not recorded",
       };
     },
-    [calcPenaltyFromDays, getCustomer, getOverdueDays]
+    [getCustomer]
   );
 
   const unassignedRows = React.useMemo(
@@ -339,7 +315,8 @@ export default function ListOfCollectionCases() {
     ...(user.role === "col-personel" || !canAssignCollection ? [] : [selectionColumn]),
     ...baseColumns,
     { key: "amountPaid", label: "Amount Paid" },
-    { key: "overduePenalty", label: "Penalty", render: (row) => row.loanAmount - (row.repaymentAmount || 0) },
+    { key: "overduePenalty", label: "Penalty" },
+    { key: "amountPayable", label: "Amount Payable" },
     detailsColumn,
   ];
 
@@ -348,6 +325,8 @@ export default function ListOfCollectionCases() {
     ...baseColumns,
     { key: "overdueDays", label: "Overdue Days" },
     { key: "amountPaid", label: "Amount Paid" },
+    { key: "overduePenalty", label: "Penalty" },
+    { key: "amountPayable", label: "Amount Payable" },
     { key: "amountLeft", label: "Amount Left" },
     { key: "lastCallDate", label: "Last Call" },
     { key: "collOfficer", label: "Collection Staff" },
@@ -358,6 +337,8 @@ export default function ListOfCollectionCases() {
     ...baseColumns,
     { key: "overdueDays", label: "Overdue Days" },
     { key: "amountPaid", label: "Amount Paid" },
+    { key: "overduePenalty", label: "Penalty" },
+    { key: "amountPayable", label: "Amount Payable" },
     { key: "amountLeft", label: "Amount Left" },
     { key: "datePaid", label: "Date Completed" },
     { key: "collOfficer", label: "Collection Staff" },

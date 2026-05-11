@@ -2,16 +2,11 @@ import React from "react";
 import { GlobalContext } from "../../../../libs/context/globalContext";
 import SimpleDataTable from "../../SimpleDataTable";
 import { DetailSectionCard, DetailSectionHint } from "../DetailSectionCard";
+import { formatMoney, getCollectionMetrics } from "../../../../libs/collectionMetrics";
 
 export default function PaymentPlan() {
   const { loan } = React.useContext(GlobalContext);
-
-  const calcDateDiff = (loanItem) => {
-    const paidDate = new Date(loanItem.dp);
-    const dueDate = new Date(loanItem.dop);
-    const timeDiff = paidDate.getTime() - dueDate.getTime();
-    return parseInt(timeDiff / (1000 * 3600 * 24), 10);
-  };
+  const metrics = getCollectionMetrics(loan || {}, loan || {});
 
   const columns = [
     { key: "duration", label: "Loan Period" },
@@ -40,33 +35,12 @@ export default function PaymentPlan() {
               loan.dop === null || loan.dop === undefined
                 ? loan.loanStatus
                 : new Date(loan.dop).toLocaleDateString(),
-            overdueDays: loan.caseStatus === "Completed" ? calcDateDiff(loan) : -loan.dur,
-            repaymentAmount:
-              loan.repaymentAmount === undefined ? 0 : `GHC${loan.repaymentAmount}`,
-            amountPaid:
-              loan.amountPaid === null || loan.amountPaid === undefined
-                ? "GHS0.00"
-                : `GHC${loan.amountPaid}`,
-            remainingAmount:
-              loan.caseStatus === "Completed"
-                ? "GHC0.00"
-                : loan.amountPaid === "" || loan.amountPaid === undefined
-                ? `GHC${loan.repaymentAmount}`
-                : `GHC${(
-                    parseFloat(loan.repaymentAmount) -
-                    parseFloat(loan.amountPaid) +
-                    -(2 / 100) * parseInt(loan.amount, 10) * loan.dur
-                  ).toFixed(2)}`,
-            amountLeft:
-              loan.amountPaid === "" || loan.amountPaid === undefined
-                ? `GHC${loan.repaymentAmount}`
-                : `GHC${(
-                    parseFloat(loan.repaymentAmount) - parseFloat(loan.amountPaid)
-                  ).toFixed(2)}`,
-            overduePenalty:
-              loan.caseStatus === "Completed"
-                ? `GHC${-(2 / 100) * parseInt(loan.amount, 10) * -calcDateDiff(loan)}`
-                : `GHC${-(2 / 100) * parseInt(loan.amount, 10) * loan.dur}`,
+            overdueDays: metrics.overdueDays,
+            repaymentAmount: `GHS ${formatMoney(metrics.repaymentAmount)}`,
+            amountPaid: `GHS ${formatMoney(metrics.amountPaid)}`,
+            remainingAmount: `GHS ${formatMoney(metrics.amountPayable)}`,
+            amountLeft: `GHS ${formatMoney(metrics.amountLeft)}`,
+            overduePenalty: `GHS ${formatMoney(metrics.overduePenalty)}`,
           },
         ];
 
