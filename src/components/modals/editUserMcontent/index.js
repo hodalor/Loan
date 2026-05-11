@@ -108,22 +108,18 @@ export default function EditUserDetial() {
               <button
                 type="button"
                 onClick={handleToggleEdit}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex min-w-[92px] items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                {isEdit ? (
-                  <i className="fa fa-times text-sm" />
-                ) : (
-                  <i className="fa fa-pencil text-sm" />
-                )}
+                {isEdit ? "Cancel" : "Edit"}
               </button>
             ) : null}
             {canDeleteUser ? (
               <button
                 type="button"
                 onClick={_handleDelete}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-rose-200 text-rose-600 transition hover:bg-rose-50"
+                className="inline-flex min-w-[92px] items-center justify-center rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
               >
-                <i className="fa fa-trash-o text-sm" />
+                Delete
               </button>
             ) : null}
           </div>

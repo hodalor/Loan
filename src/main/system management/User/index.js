@@ -4,7 +4,11 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import EditUserDetial from "../../../components/modals/editUserMcontent";
 import AddUserDetial from "../../../components/modals/addUserMcontent";
-import { getDepartmentLabel, normalizeGroupCollection } from "../../../libs/staffGroups";
+import {
+  getDepartmentLabel,
+  getGroupOptionsByDepartment,
+  normalizeGroupCollection,
+} from "../../../libs/staffGroups";
 
 export default function CreateUsers() {
   const {
@@ -23,6 +27,7 @@ export default function CreateUsers() {
     _handleCreateStaffGroup,
     _handleUpdateStaffGroup,
     _handleDeleteStaffGroup,
+    _handleAssignUsersToGroup,
     globalLoader,
     select,
     _hasAccess,
@@ -32,6 +37,8 @@ export default function CreateUsers() {
   const canEditUser = _hasAccess("action:user:update");
   const canDeleteUser = _hasAccess("action:user:delete");
   const [pendingUserId, setPendingUserId] = React.useState("");
+  const [selectedUserIds, setSelectedUserIds] = React.useState([]);
+  const [bulkGroupId, setBulkGroupId] = React.useState("");
   const [groupForm, setGroupForm] = React.useState({
     groupId: "",
     name: "",
@@ -79,8 +86,76 @@ export default function CreateUsers() {
       return matchesUserName && matchesPhone && matchesDate && matchesDepartment;
     });
   }, [inputs.date, inputs.phone, inputs.userName, rows, select.department]);
+  const selectedUsers = React.useMemo(
+    () => rows.filter((row) => selectedUserIds.includes(row.userId)),
+    [rows, selectedUserIds]
+  );
+  const selectedDepartments = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedUsers
+            .map((row) => String(row.department || "").trim())
+            .filter(Boolean)
+        )
+      ),
+    [selectedUsers]
+  );
+  const selectedDepartment = selectedDepartments.length === 1 ? selectedDepartments[0] : "";
+  const canBulkAssign =
+    selectedUsers.length > 0 && selectedDepartments.length === 1 && Boolean(bulkGroupId);
+  const bulkGroupOptions = React.useMemo(
+    () => getGroupOptionsByDepartment(staffGroups, selectedDepartment),
+    [selectedDepartment, staffGroups]
+  );
+
+  React.useEffect(() => {
+    if (
+      bulkGroupId &&
+      !bulkGroupOptions.some((group) => String(group.value) === String(bulkGroupId))
+    ) {
+      setBulkGroupId("");
+    }
+  }, [bulkGroupId, bulkGroupOptions]);
+
+  const allFilteredSelected =
+    filteredRows.length > 0 &&
+    filteredRows.every((row) => selectedUserIds.includes(row.userId));
 
   const columns = [
+    {
+      key: "select",
+      label: (
+        <input
+          type="checkbox"
+          checked={allFilteredSelected}
+          onChange={(event) => {
+            if (event.target.checked) {
+              setSelectedUserIds(filteredRows.map((row) => row.userId));
+              return;
+            }
+
+            setSelectedUserIds([]);
+          }}
+          aria-label="Select all users"
+        />
+      ),
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedUserIds.includes(row.userId)}
+          onClick={(event) => event.stopPropagation()}
+          onChange={() =>
+            setSelectedUserIds((current) =>
+              current.includes(row.userId)
+                ? current.filter((item) => item !== row.userId)
+                : [...current, row.userId]
+            )
+          }
+          aria-label={`Select ${row.userName}`}
+        />
+      ),
+    },
     { key: "userId", label: "User ID", cellClassName: "font-semibold text-slate-900" },
     { key: "userName", label: "Username" },
     { key: "name", label: "Name" },
@@ -147,7 +222,7 @@ export default function CreateUsers() {
       render: (row) => (
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+          className="inline-flex min-w-[88px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
           onClick={(event) => {
             event.stopPropagation();
             setmodalTitle("userDetailsM");
@@ -156,7 +231,7 @@ export default function CreateUsers() {
           }}
           aria-label={`Open ${row.userName}`}
         >
-          <i className="fa fa-ellipsis-h text-xs" />
+          Manage
         </button>
       ),
     },
@@ -307,11 +382,68 @@ export default function CreateUsers() {
                 _handleOnChange({ field: "phone", value: "" });
                 _handleOnChange({ field: "date", value: "" });
                 _handleSelect({ field: "Departments", value: "" });
+                setSelectedUserIds([]);
+                setBulkGroupId("");
               }}
             >
               <i className="fa fa-undo text-xs" />
               Clear
             </button>
+          </div>
+
+          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Bulk Group Assignment</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Select users from one department only, then choose a group from that same department.
+              </p>
+              <p className="mt-2 text-xs text-slate-600">
+                {selectedUsers.length} selected
+                {selectedUsers.length > 0 && selectedDepartment
+                  ? `, department: ${getDepartmentLabel(selectedDepartment)}`
+                  : selectedDepartments.length > 1
+                  ? ", mixed departments selected"
+                  : ""}
+              </p>
+            </div>
+            <div>
+              <label className="app-label">Target Group</label>
+              <select
+                className="app-select"
+                value={bulkGroupId}
+                onChange={(event) => setBulkGroupId(event.target.value)}
+                disabled={!selectedDepartment}
+              >
+                <option value="">
+                  {selectedDepartment ? "Select group" : "Select one department only"}
+                </option>
+                {bulkGroupOptions.map((group) => (
+                  <option key={group.value} value={group.value}>
+                    {group.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="app-btn-primary gap-2"
+                disabled={!canBulkAssign}
+                onClick={async () => {
+                  const response = await _handleAssignUsersToGroup({
+                    userIds: selectedUsers.map((row) => row.userId),
+                    staffGroupId: bulkGroupId,
+                  });
+
+                  if (response) {
+                    setSelectedUserIds([]);
+                    setBulkGroupId("");
+                  }
+                }}
+              >
+                Assign To Group
+              </button>
+            </div>
           </div>
 
           {globalLoader ? (
@@ -422,6 +554,7 @@ export default function CreateUsers() {
             columns={[
               { key: "name", label: "Group", cellClassName: "font-semibold text-slate-900" },
               { key: "departmentLabel", label: "Department" },
+              { key: "description", label: "Description" },
               { key: "memberCount", label: "Members" },
               { key: "members", label: "Assigned Users" },
               {
@@ -432,20 +565,20 @@ export default function CreateUsers() {
                     {canEditUser ? (
                       <button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                        className="inline-flex min-w-[70px] items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                         onClick={(event) => {
                           event.stopPropagation();
                           handleGroupEdit(row);
                         }}
                         aria-label={`Edit ${row.name}`}
                       >
-                        <i className="fa fa-pencil text-xs" />
+                        Edit
                       </button>
                     ) : null}
                     {canDeleteUser ? (
                       <button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-rose-200 text-rose-600 transition hover:bg-rose-50"
+                        className="inline-flex min-w-[78px] items-center justify-center rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
                         onClick={async (event) => {
                           event.stopPropagation();
                           const response = await _handleDeleteStaffGroup(row.id);
@@ -453,7 +586,7 @@ export default function CreateUsers() {
                         }}
                         aria-label={`Delete ${row.name}`}
                       >
-                        <i className="fa fa-trash-o text-xs" />
+                        Delete
                       </button>
                     ) : null}
                   </div>

@@ -2068,6 +2068,96 @@ export default function GlobalContextProvider(props) {
     return true;
   };
 
+  const _handleAssignUsersToGroup = async ({ userIds = [], staffGroupId = "" } = {}) => {
+    if (!_hasAccess("action:user:update"))
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "You do not have permission to assign users to groups",
+        open: true,
+      });
+
+    const targetUsers = admins.filter((admin) => userIds.includes(admin.userId));
+    const group = staffGroups.find(
+      (item) => String(item._id || item.id || "") === String(staffGroupId || "")
+    );
+
+    if (!targetUsers.length || !group)
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "Select users and a valid group",
+        open: true,
+      });
+
+    setBigLoader(true);
+
+    try {
+      for (const adminRecord of targetUsers) {
+        const response = await _updateUser({
+          userName: adminRecord.userName,
+          firstName: adminRecord.firstName || "",
+          lastName: adminRecord.lastName || "",
+          phone: adminRecord.phone || "",
+          password: "",
+          email: adminRecord.email || "",
+          role: adminRecord.role || "",
+          department: group.department,
+          permissions: Array.isArray(adminRecord.permissions)
+            ? adminRecord.permissions
+            : [],
+          staffGroupId: String(group._id || group.id || ""),
+        });
+
+        if (response.success === 0) {
+          setAlerts({
+            ...alerts,
+            type: "error",
+            msg: response.message,
+            open: true,
+          });
+          return false;
+        }
+      }
+
+      const groupIdValue = String(group._id || group.id || "");
+      const nextAdmins = admins.map((adminRecord) =>
+        userIds.includes(adminRecord.userId)
+          ? {
+              ...adminRecord,
+              department: group.department,
+              staffGroupId: groupIdValue,
+              staffGroupName: group.name,
+            }
+          : adminRecord
+      );
+      const sortedAdmins = await _sortAdmins(nextAdmins);
+      setAdmins(sortedAdmins);
+
+      if (userIds.includes(user.userId)) {
+        const currentUser = {
+          ...user,
+          department: group.department,
+          staffGroupId: groupIdValue,
+          staffGroupName: group.name,
+        };
+        setUser(currentUser);
+        localStorage.setItem("user", JSON.stringify(currentUser));
+      }
+
+      setAlerts({
+        ...alerts,
+        type: "success",
+        msg: "Users assigned to group successfully",
+        open: true,
+      });
+
+      return true;
+    } finally {
+      setBigLoader(false);
+    }
+  };
+
   const _getGroupMembers = React.useCallback(
     (department = "", roleValues = []) => {
       const departmentGroups = getGroupsByDepartment(staffGroups, department);
@@ -4734,6 +4824,7 @@ export default function GlobalContextProvider(props) {
         _handleCreateStaffGroup,
         _handleUpdateStaffGroup,
         _handleDeleteStaffGroup,
+        _handleAssignUsersToGroup,
         _getGroupMembers,
         _logout,
         _handleSearchUsers,
