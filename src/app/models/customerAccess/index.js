@@ -50,6 +50,11 @@ const customerAccessSchema = new mongoose.Schema(
       required: false,
       default: "",
     },
+    timeZone: {
+      type: String,
+      required: false,
+      default: "",
+    },
     currencyCode: {
       type: String,
       required: false,

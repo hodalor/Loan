@@ -174,6 +174,10 @@ const countryConfigSchema = new mongoose.Schema(
       type: String,
       default: "en-US",
     },
+    timeZone: {
+      type: String,
+      default: "UTC",
+    },
     currencyCode: {
       type: String,
       default: "USD",

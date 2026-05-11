@@ -130,6 +130,7 @@ const buildCountryProfile = (country = {}) => ({
   code: String(country.code || "").trim().toUpperCase(),
   name: String(country.name || "").trim(),
   locale: String(country.locale || "en-US").trim(),
+  timeZone: String(country.timeZone || "UTC").trim(),
   currencyCode: String(country.currencyCode || "USD").trim(),
   currencySymbol: String(country.currencySymbol || "$").trim(),
   dialCode: String(country.dialCode || "+1").trim(),
@@ -1049,6 +1050,7 @@ const buildProfilePayload = ({
     countryDialCode:
       countryProfile.dialCode || existingUser?.countryDialCode || access?.countryDialCode || "",
     locale: countryProfile.locale || existingUser?.locale || access?.locale || "",
+    timeZone: countryProfile.timeZone || existingUser?.timeZone || access?.timeZone || "UTC",
     currencyCode:
       countryProfile.currencyCode || existingUser?.currencyCode || access?.currencyCode || "",
     currencySymbol:
@@ -1295,6 +1297,7 @@ router.post("/auth/set-pin", async (req, res) => {
           countryName: countryProfile.name || existingUser?.countryName || "",
           countryDialCode: countryProfile.dialCode || existingUser?.countryDialCode || "",
           locale: countryProfile.locale || existingUser?.locale || "",
+          timeZone: countryProfile.timeZone || existingUser?.timeZone || "UTC",
           currencyCode: countryProfile.currencyCode || existingUser?.currencyCode || "",
           currencySymbol: countryProfile.currencySymbol || existingUser?.currencySymbol || "",
         },
@@ -2186,6 +2189,7 @@ router.post("/application/save-draft", async (req, res) => {
           countryName: countryProfile.name,
           countryDialCode: countryProfile.dialCode,
           locale: countryProfile.locale,
+          timeZone: countryProfile.timeZone,
           currencyCode: countryProfile.currencyCode,
           currencySymbol: countryProfile.currencySymbol,
         },
@@ -2276,6 +2280,7 @@ router.post(
         existingUser.countryName = profile.countryName;
         existingUser.countryDialCode = profile.countryDialCode;
         existingUser.locale = profile.locale;
+        existingUser.timeZone = profile.timeZone;
         existingUser.currencyCode = profile.currencyCode;
         existingUser.currencySymbol = profile.currencySymbol;
         existingUser.isActive = profile.isActive;

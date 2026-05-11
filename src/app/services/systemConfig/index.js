@@ -91,6 +91,7 @@ const DEFAULT_COUNTRIES = [
     code: "ZM",
     name: "Zambia",
     locale: "en-ZM",
+    timeZone: "Africa/Lusaka",
     currencyCode: "ZMW",
     currencySymbol: "K",
     dialCode: "+260",
@@ -126,6 +127,7 @@ const DEFAULT_COUNTRIES = [
     code: "GH",
     name: "Ghana",
     locale: "en-GH",
+    timeZone: "Africa/Accra",
     currencyCode: "GHS",
     currencySymbol: "GHS",
     dialCode: "+233",
@@ -168,6 +170,7 @@ const DEFAULT_COUNTRIES = [
     code: "NG",
     name: "Nigeria",
     locale: "en-NG",
+    timeZone: "Africa/Lagos",
     currencyCode: "NGN",
     currencySymbol: "NGN",
     dialCode: "+234",
@@ -407,6 +410,7 @@ const sanitizeCountries = (items = []) => {
         code,
         name,
         locale: String(item?.locale || fallbackCountry.locale || "en-US").trim(),
+        timeZone: String(item?.timeZone || fallbackCountry.timeZone || "UTC").trim(),
         currencyCode: String(item?.currencyCode || fallbackCountry.currencyCode || "USD").trim(),
         currencySymbol: String(
           item?.currencySymbol || fallbackCountry.currencySymbol || "$"

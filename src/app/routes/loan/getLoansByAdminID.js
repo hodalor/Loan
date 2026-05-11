@@ -2,6 +2,7 @@ const express = require("express");
 const Loans = require("../../models/loans");
 const Admins = require("../../models/admin");
 const Users = require("../../models/users");
+const { getCalendarDayDifferenceByCountry } = require("../../../libs/countryTime");
 
 const router = express.Router();
 const ADMIN_PROJECTION = "-password -logData -casesAssigned -__v";
@@ -16,6 +17,7 @@ const USER_SUMMARY_PROJECTION = [
   "countryName",
   "countryDialCode",
   "locale",
+  "timeZone",
   "currencyCode",
   "currencySymbol",
   "IDinfo.firstName",
@@ -30,59 +32,74 @@ const USER_SUMMARY_PROJECTION = [
   "loan.loans.ID",
 ].join(" ");
 const PAYMENT_STATUSES = ["Payed", "Paid"];
+const isSettledPaymentStatus = (status = "") =>
+  PAYMENT_STATUSES.includes(String(status || "").trim());
+const hasRecordedRepayment = (loan = {}) =>
+  Number.parseFloat(loan?.amountPaid || 0) > 0 ||
+  (Array.isArray(loan?.paymentRecords) && loan.paymentRecords.length > 0);
+const buildUserLookup = (users = []) =>
+  new Map((Array.isArray(users) ? users : []).map((user) => [String(user?.userId || ""), user]));
+const getLoanDueDifference = (loan = {}, userLookup = new Map()) =>
+  getCalendarDayDifferenceByCountry(
+    loan?.dop,
+    new Date(),
+    userLookup.get(String(loan?.userId || "")) || {}
+  );
 
-const getTodayRange = () => {
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+const filterPreCollectionLoans = (loans = [], users = [], userName = "") => {
+  const userLookup = buildUserLookup(users);
 
-  const startOfThreeDays = new Date(startOfToday);
-  startOfThreeDays.setDate(startOfThreeDays.getDate() + 3);
+  return (Array.isArray(loans) ? loans : []).filter((loan) => {
+    const dueDifference = getLoanDueDifference(loan, userLookup);
+    const officerMatches = userName ? loan?.preCollOfficer === userName : true;
+    const colCallRec = Array.isArray(loan?.collCallRecords) ? loan.collCallRecords.length : 0;
+    const preCallRec = Array.isArray(loan?.preCollCallRecords) ? loan.preCollCallRecords.length : 0;
+    const clearanceType = loan?.clearanceRecord?.recordType;
 
-  return { startOfToday, startOfThreeDays };
+    if (
+      officerMatches &&
+      loan?.caseStatus !== "Completed" &&
+      dueDifference >= 0 &&
+      dueDifference <= 2
+    ) {
+      return true;
+    }
+
+    return (
+      officerMatches &&
+      colCallRec === 0 &&
+      preCallRec !== 0 &&
+      (isSettledPaymentStatus(loan?.paymentStatus) || hasRecordedRepayment(loan)) &&
+      clearanceType !== "balance"
+    );
+  });
 };
 
-const buildPreCollectionFilter = (userName = "") => {
-  const { startOfToday, startOfThreeDays } = getTodayRange();
-  const officerFilter = userName ? { preCollOfficer: userName } : {};
+const filterCollectionLoans = (loans = [], users = [], userName = "") => {
+  const userLookup = buildUserLookup(users);
 
-  return {
-    $or: [
-      {
-        ...officerFilter,
-        dop: { $gte: startOfToday, $lt: startOfThreeDays },
-        caseStatus: { $ne: "Completed" },
-      },
-      {
-        ...officerFilter,
-        "preCollCallRecords.0": { $exists: true },
-        "collCallRecords.0": { $exists: false },
-        paymentStatus: { $in: PAYMENT_STATUSES },
-        "clearanceRecord.recordType": { $ne: "balance" },
-      },
-    ],
-  };
-};
+  return (Array.isArray(loans) ? loans : []).filter((loan) => {
+    const dueDifference = getLoanDueDifference(loan, userLookup);
+    const officerMatches = userName ? loan?.collofficer === userName : true;
+    const colCallRec = Array.isArray(loan?.collCallRecords) ? loan.collCallRecords.length : 0;
+    const clearanceType = loan?.clearanceRecord?.recordType;
 
-const buildCollectionFilter = (userName = "") => {
-  const { startOfToday } = getTodayRange();
-  const officerFilter = userName ? { collofficer: userName } : {};
+    if (
+      officerMatches &&
+      loan?.caseStatus !== "Completed" &&
+      loan?.loanStatus !== "Review" &&
+      dueDifference < 0
+    ) {
+      return true;
+    }
 
-  return {
-    $or: [
-      {
-        ...officerFilter,
-        dop: { $lt: startOfToday },
-        caseStatus: { $ne: "Completed" },
-        loanStatus: { $ne: "Review" },
-      },
-      {
-        ...officerFilter,
-        "collCallRecords.0": { $exists: true },
-        paymentStatus: { $in: PAYMENT_STATUSES },
-        "clearanceRecord.recordType": { $ne: "balance" },
-      },
-    ],
-  };
+    return (
+      officerMatches &&
+      colCallRec !== 0 &&
+      (isSettledPaymentStatus(loan?.paymentStatus) || hasRecordedRepayment(loan)) &&
+      clearanceType !== "balance"
+    );
+  });
 };
 
 const findAdmins = () => Admins.find().select(ADMIN_PROJECTION).sort({ createdAt: -1 }).lean();
@@ -119,11 +136,12 @@ router.get("/getData/:id", async (req, res) => {
     }
 
     if (role === "pre-team-lead") {
-      const [admins, users, loans] = await Promise.all([
+      const [admins, users, allLoans] = await Promise.all([
         findAdmins(),
         findUsers(),
-        findLoans(buildPreCollectionFilter()),
+        findLoans(),
       ]);
+      const loans = filterPreCollectionLoans(allLoans, users);
 
       return res.status(200).json({
         success: 1,
@@ -132,11 +150,12 @@ router.get("/getData/:id", async (req, res) => {
     }
 
     if (role === "col-team-lead") {
-      const [admins, users, loans] = await Promise.all([
+      const [admins, users, allLoans] = await Promise.all([
         findAdmins(),
         findUsers(),
-        findLoans(buildCollectionFilter()),
+        findLoans(),
       ]);
+      const loans = filterCollectionLoans(allLoans, users);
 
       return res.status(200).json({
         success: 1,
@@ -157,10 +176,11 @@ router.get("/getData/:id", async (req, res) => {
     }
 
     if (role === "pre-personel") {
-      const [users, loans] = await Promise.all([
+      const [users, allLoans] = await Promise.all([
         findUsers(),
-        findLoans(buildPreCollectionFilter(user.userName)),
+        findLoans(),
       ]);
+      const loans = filterPreCollectionLoans(allLoans, users, user.userName);
 
       return res.status(200).json({
         success: 1,
@@ -169,10 +189,11 @@ router.get("/getData/:id", async (req, res) => {
     }
 
     if (role === "col-personel") {
-      const [users, loans] = await Promise.all([
+      const [users, allLoans] = await Promise.all([
         findUsers(),
-        findLoans(buildCollectionFilter(user.userName)),
+        findLoans(),
       ]);
+      const loans = filterCollectionLoans(allLoans, users, user.userName);
 
       return res.status(200).json({
         success: 1,

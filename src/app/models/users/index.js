@@ -511,6 +511,12 @@ const userSchema = new mongoose.Schema(
       unique: false,
       default: "",
     },
+    timeZone: {
+      type: String,
+      required: false,
+      unique: false,
+      default: "",
+    },
     currencyCode: {
       type: String,
       required: false,
