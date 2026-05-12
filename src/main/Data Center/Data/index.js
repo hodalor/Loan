@@ -389,13 +389,31 @@ export default function RecoveryDataCenter() {
     [activeTab, endDate, filteredLoans, offsetRange.end, startDate, visibleStartOffset]
   );
 
-  const totalBaseAmount = React.useMemo(
+  const cohortLoans = React.useMemo(
     () =>
-      (Array.isArray(loans) ? loans : []).reduce(
-        (sum, loan) => sum + toNumber(loan?.repaymentAmount),
-        0
+      filteredLoans.filter((loan) => {
+        const dueDate = toStartOfDay(loan?.dop);
+        const repaymentAmount = toNumber(loan?.repaymentAmount);
+        return (
+          dueDate &&
+          dueDate >= toStartOfDay(startDate) &&
+          dueDate <= toEndOfDay(endDate) &&
+          repaymentAmount > 0
+        );
+      }),
+    [endDate, filteredLoans, startDate]
+  );
+
+  const summaryTotals = React.useMemo(
+    () =>
+      cohortLoans.reduce(
+        (totals, loan) => ({
+          principal: totals.principal + toNumber(loan?.amount),
+          repayment: totals.repayment + toNumber(loan?.repaymentAmount),
+        }),
+        { principal: 0, repayment: 0 }
       ),
-    [loans]
+    [cohortLoans]
   );
 
   const handleExport = () => {
@@ -444,7 +462,7 @@ export default function RecoveryDataCenter() {
         </div>
 
         <div className="app-panel-body space-y-4">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 View
@@ -461,10 +479,18 @@ export default function RecoveryDataCenter() {
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Base Repayment
+                Loan Amount Base
               </div>
               <div className="mt-2 text-base font-semibold text-slate-900">
-                GHC{formatAmount(totalBaseAmount)}
+                GHC{formatAmount(summaryTotals.principal)}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Repayment Target
+              </div>
+              <div className="mt-2 text-base font-semibold text-slate-900">
+                GHC{formatAmount(summaryTotals.repayment)}
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
