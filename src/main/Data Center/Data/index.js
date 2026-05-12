@@ -187,9 +187,15 @@ const buildRecoveryRows = ({
       offsets.forEach((offset) => {
         const thresholdDate = new Date(cohort.dueDate);
         thresholdDate.setDate(thresholdDate.getDate() + offset);
-        thresholdDate.setHours(23, 59, 59, 999);
+        const thresholdDayStart = toStartOfDay(thresholdDate);
+        const thresholdDayEnd = toEndOfDay(thresholdDate);
 
-        if (today && thresholdDate > toEndOfDay(today)) {
+        if (!thresholdDayStart || !thresholdDayEnd) {
+          row[`day_${offset}`] = "";
+          return;
+        }
+
+        if (today && thresholdDayEnd > toEndOfDay(today)) {
           row[`day_${offset}`] = "";
           return;
         }
@@ -198,13 +204,13 @@ const buildRecoveryRows = ({
         let hasVisibleLoan = false;
 
         cohort.loans.forEach((loan) => {
-          if (thresholdDate < loan.grantDate) {
+          if (thresholdDayStart < loan.grantDate) {
             return;
           }
 
           hasVisibleLoan = true;
           loan.paymentEvents.forEach((event) => {
-            if (event.paidDate <= thresholdDate) {
+            if (event.paidDate >= thresholdDayStart && event.paidDate <= thresholdDayEnd) {
               cohortRecoveredAtOffset += event.amountPaid;
             }
           });
