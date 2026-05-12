@@ -40,6 +40,12 @@ const parseDisplayValue = (value = "") => toNumber(String(value).replace("%", ""
 
 const formatDayLabel = (offset) => `DAY${offset >= 0 ? offset : offset}`;
 
+const isPercentMode = (mode = "") =>
+  mode === "percentage" || mode === "remainingPercentage";
+
+const isRemainingMode = (mode = "") =>
+  mode === "remainingAmount" || mode === "remainingPercentage";
+
 const getHeatmapStyle = (value = "", mode = "percentage") => {
   if (value === "" || value === "-") {
     return "bg-transparent text-slate-400";
@@ -47,7 +53,7 @@ const getHeatmapStyle = (value = "", mode = "percentage") => {
 
   const numericValue = parseDisplayValue(value);
   const ratio =
-    mode === "percentage"
+    isPercentMode(mode)
       ? Math.max(0, Math.min(1, numericValue / 100))
       : Math.max(0, Math.min(1, numericValue / 1000));
 
@@ -161,8 +167,20 @@ const buildRecoveryRows = ({
   const columns = [
     { key: "dueDateLabel", label: "Due Date", cellClassName: "font-semibold text-slate-900" },
     {
-      key: mode === "percentage" ? "totalRecovery" : "totalRecovered",
-      label: mode === "percentage" ? "Total Recovery" : "Total Collected",
+      key: isRemainingMode(mode)
+        ? isPercentMode(mode)
+          ? "totalRemaining"
+          : "totalRemainingAmount"
+        : isPercentMode(mode)
+          ? "totalRecovery"
+          : "totalRecovered",
+      label: isRemainingMode(mode)
+        ? isPercentMode(mode)
+          ? "Total Remaining"
+          : "Total Amount Remaining"
+        : isPercentMode(mode)
+          ? "Total Recovery"
+          : "Total Collected",
       cellClassName: "font-semibold text-slate-900",
     },
     ...offsets.map((offset) => ({
@@ -182,6 +200,15 @@ const buildRecoveryRows = ({
             ? formatPercent((cohort.totalRecovered / cohort.totalRepayment) * 100)
             : formatPercent(0),
         totalRecovered: formatAmount(cohort.totalRecovered),
+        totalRemaining:
+          cohort.totalRepayment > 0
+            ? formatPercent(
+                (Math.max(cohort.totalRepayment - cohort.totalRecovered, 0) / cohort.totalRepayment) * 100
+              )
+            : formatPercent(0),
+        totalRemainingAmount: formatAmount(
+          Math.max(cohort.totalRepayment - cohort.totalRecovered, 0)
+        ),
       };
 
       offsets.forEach((offset) => {
@@ -221,14 +248,33 @@ const buildRecoveryRows = ({
           return;
         }
 
-        row[`day_${offset}`] =
-          mode === "percentage"
+        if (isRemainingMode(mode)) {
+          let cumulativeRecoveredToOffset = 0;
+
+          cohort.loans.forEach((loan) => {
+            if (thresholdDayStart < loan.grantDate) return;
+
+            loan.paymentEvents.forEach((event) => {
+              if (event.paidDate <= thresholdDayEnd) {
+                cumulativeRecoveredToOffset += event.amountPaid;
+              }
+            });
+          });
+
+          const remainingAmount = Math.max(cohort.totalRepayment - cumulativeRecoveredToOffset, 0);
+          row[`day_${offset}`] = isPercentMode(mode)
             ? formatPercent(
-                cohort.totalRepayment > 0
-                  ? (cohortRecoveredAtOffset / cohort.totalRepayment) * 100
-                  : 0
+                cohort.totalRepayment > 0 ? (remainingAmount / cohort.totalRepayment) * 100 : 0
               )
-            : formatAmount(cohortRecoveredAtOffset);
+            : formatAmount(remainingAmount);
+          return;
+        }
+
+        row[`day_${offset}`] = isPercentMode(mode)
+          ? formatPercent(
+              cohort.totalRepayment > 0 ? (cohortRecoveredAtOffset / cohort.totalRepayment) * 100 : 0
+            )
+          : formatAmount(cohortRecoveredAtOffset);
       });
 
       return row;
@@ -404,7 +450,13 @@ export default function RecoveryDataCenter() {
                 View
               </div>
               <div className="mt-2 text-base font-semibold text-slate-900">
-                {activeTab === "percentage" ? "Recovery Percentage" : "Recovery Amount"}
+                {activeTab === "percentage"
+                  ? "Recovery Percentage"
+                  : activeTab === "amount"
+                    ? "Recovery Amount"
+                    : activeTab === "remainingPercentage"
+                      ? "Remaining Percentage"
+                      : "Remaining Amount"}
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -529,8 +581,10 @@ export default function RecoveryDataCenter() {
 
           <div className="flex flex-wrap gap-3 border-b border-slate-200">
             {[
-              { id: "percentage", label: "Percentage" },
-              { id: "amount", label: "Amount" },
+              { id: "percentage", label: "Recovered %" },
+              { id: "amount", label: "Recovered Amount" },
+              { id: "remainingPercentage", label: "Remaining %" },
+              { id: "remainingAmount", label: "Remaining Amount" },
             ].map((tab) => (
               <button
                 key={tab.id}
