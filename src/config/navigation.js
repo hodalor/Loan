@@ -153,6 +153,19 @@ const rawNavigationItems = [
     ],
   },
   {
+    key: "data-center",
+    label: "Data Center",
+    icon: "fa fa-bar-chart",
+    roles: ["super-admin", "admin", "rv-team-lead", "pre-team-lead", "col-team-lead"],
+    children: [
+      {
+        label: "Data",
+        path: "/data-center-data",
+        roles: ["super-admin", "admin", "rv-team-lead", "pre-team-lead", "col-team-lead"],
+      },
+    ],
+  },
+  {
     key: "system",
     label: "System Management",
     icon: "fa fa-cogs",

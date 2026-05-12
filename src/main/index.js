@@ -35,6 +35,7 @@ import LendingRecords from "./Data Center/Business data/Lending records";
 import RepaymentRecords from "./Data Center/Business data/Repayment records";
 import ExtensionRecords from "./Data Center/Business data/Extension records";
 import ChineseWorld from "./Data Center/Business data/chinese word";
+import RecoveryDataCenter from "./Data Center/Data";
 import { AuthContext } from "../libs/context/authContext";
 import Auth from "../auth";
 import Balance from "../components/rowDetails/balance";
@@ -189,6 +190,7 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
             <Route path="/repayment-records" component={RepaymentRecords} />
             <Route path="/extension-records" component={ExtensionRecords} />
             <Route path="/chinese-word" component={ChineseWorld} />
+            <Route path="/data-center-data" component={RecoveryDataCenter} />
             <Route path="/order-lending2" component={OrderLending2} />
             <Route
               path="/manual-payment-pool"
