@@ -36,8 +36,39 @@ const formatDueDateLabel = (value) => {
 
 const formatAmount = (value = 0) => toNumber(value).toFixed(2);
 const formatPercent = (value = 0) => `${toNumber(value).toFixed(2)}%`;
+const parseDisplayValue = (value = "") => toNumber(String(value).replace("%", ""));
 
 const formatDayLabel = (offset) => `DAY${offset >= 0 ? offset : offset}`;
+
+const getHeatmapStyle = (value = "", mode = "percentage") => {
+  if (value === "" || value === "-") {
+    return "bg-transparent text-slate-400";
+  }
+
+  const numericValue = parseDisplayValue(value);
+  const ratio =
+    mode === "percentage"
+      ? Math.max(0, Math.min(1, numericValue / 100))
+      : Math.max(0, Math.min(1, numericValue / 1000));
+
+  if (ratio <= 0) return "bg-slate-100 text-slate-500";
+  if (ratio < 0.2) return "bg-emerald-50 text-emerald-700";
+  if (ratio < 0.4) return "bg-emerald-100 text-emerald-700";
+  if (ratio < 0.6) return "bg-emerald-200 text-emerald-800";
+  if (ratio < 0.8) return "bg-emerald-400 text-white";
+  return "bg-emerald-500 text-white";
+};
+
+const getLoanOfficerPool = (loan = {}) =>
+  [
+    loan?.preCollOfficer,
+    loan?.collofficer,
+    loan?.officer,
+    loan?.loanOfficer,
+    loan?.userName,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 
 const getPaymentEvents = (loan = {}) => {
   const events = (Array.isArray(loan.paymentRecords) ? loan.paymentRecords : [])
@@ -201,7 +232,7 @@ const buildRecoveryRows = ({
 };
 
 export default function RecoveryDataCenter() {
-  const { loans, globalLoader } = React.useContext(GlobalContext);
+  const { loans, globalLoader, user, admins, staffGroups, _hasAccess } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("percentage");
   const [range, setRange] = React.useState(() => {
     const endDate = toStartOfDay(new Date());
@@ -213,20 +244,97 @@ export default function RecoveryDataCenter() {
     start: -1,
     end: 30,
   });
+  const [selectedGroupId, setSelectedGroupId] = React.useState("all");
+  const [selectedStaff, setSelectedStaff] = React.useState("all");
 
   const [startDate, endDate] = range;
+  const canViewEarlyWindow = _hasAccess ? _hasAccess("action:data:early-window") : false;
+  const visibleStartOffset = canViewEarlyWindow
+    ? Number(offsetRange.start)
+    : Math.max(Number(offsetRange.start), -1);
+
+  const groupOptions = React.useMemo(
+    () =>
+      [{ id: "all", groupName: "All Groups" }].concat(
+        (Array.isArray(staffGroups) ? staffGroups : []).map((group) => ({
+          id: String(group._id || group.id || ""),
+          groupName: group.groupName || "Unnamed Group",
+          members: Array.isArray(group.memberUsers) ? group.memberUsers : [],
+        }))
+      ),
+    [staffGroups]
+  );
+
+  const selectedGroup = React.useMemo(
+    () =>
+      groupOptions.find((group) => group.id === selectedGroupId) || groupOptions[0] || { id: "all" },
+    [groupOptions, selectedGroupId]
+  );
+
+  const staffOptions = React.useMemo(() => {
+    const allAdmins = Array.isArray(admins) ? admins : [];
+    const selectedGroupMembers =
+      selectedGroupId === "all"
+        ? allAdmins
+        : allAdmins.filter((admin) =>
+            (selectedGroup?.members || []).some(
+              (member) =>
+                String(member?._id || member?.id || member) === String(admin?._id || admin?.id || "")
+            )
+          );
+
+    return [{ id: "all", userName: "All Staff" }].concat(
+      selectedGroupMembers.map((admin) => ({
+        id: String(admin?._id || admin?.id || ""),
+        userName: admin?.userName || admin?.firstName || "Staff",
+      }))
+    );
+  }, [admins, selectedGroup?.members, selectedGroupId]);
+
+  const selectedStaffOption = React.useMemo(
+    () =>
+      staffOptions.find((member) => member.id === selectedStaff) || staffOptions[0] || { id: "all" },
+    [selectedStaff, staffOptions]
+  );
+
+  const filteredLoans = React.useMemo(() => {
+    let nextLoans = Array.isArray(loans) ? loans : [];
+
+    if (selectedGroupId !== "all") {
+      const groupMemberNames = new Set(
+        (selectedGroup?.members || [])
+          .map((member) => String(member?.userName || member?.name || "").trim())
+          .filter(Boolean)
+      );
+
+      nextLoans = nextLoans.filter((loan) =>
+        getLoanOfficerPool(loan).some((name) => groupMemberNames.has(name))
+      );
+    }
+
+    if (selectedStaff !== "all") {
+      const staffName = String(selectedStaffOption?.userName || "").trim();
+      nextLoans = nextLoans.filter((loan) => getLoanOfficerPool(loan).includes(staffName));
+    }
+
+    if (!canViewEarlyWindow && user?.role) {
+      return nextLoans;
+    }
+
+    return nextLoans;
+  }, [canViewEarlyWindow, loans, selectedGroup?.members, selectedGroupId, selectedStaff, selectedStaffOption?.userName, user?.role]);
 
   const matrix = React.useMemo(
     () =>
       buildRecoveryRows({
-        loans,
+        loans: filteredLoans,
         startDate,
         endDate,
-        startOffset: Number(offsetRange.start),
+        startOffset: visibleStartOffset,
         endOffset: Number(offsetRange.end),
         mode: activeTab,
       }),
-    [activeTab, endDate, loans, offsetRange.end, offsetRange.start, startDate]
+    [activeTab, endDate, filteredLoans, offsetRange.end, startDate, visibleStartOffset]
   );
 
   const totalBaseAmount = React.useMemo(
@@ -379,6 +487,40 @@ export default function RecoveryDataCenter() {
             </div>
           </div>
 
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="app-label">Group Filter</label>
+              <select
+                className="app-input"
+                value={selectedGroupId}
+                onChange={(event) => {
+                  setSelectedGroupId(event.target.value);
+                  setSelectedStaff("all");
+                }}
+              >
+                {groupOptions.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.groupName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="app-label">Staff Filter</label>
+              <select
+                className="app-input"
+                value={selectedStaff}
+                onChange={(event) => setSelectedStaff(event.target.value)}
+              >
+                {staffOptions.map((staff) => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.userName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-3 border-b border-slate-200">
             {[
               { id: "percentage", label: "Percentage" },
@@ -403,11 +545,35 @@ export default function RecoveryDataCenter() {
             The matrix groups loans by due date, starts counting from the granted date, keeps future days blank,
             and shows recovery progression into overdue days.
           </p>
+          {!canViewEarlyWindow && Number(offsetRange.start) < -1 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Early recovery columns before DAY-1 are hidden for your access level. Super admins can assign this
+              visibility with the <span className="font-semibold">View Early Recovery Window</span> permission.
+            </div>
+          ) : null}
 
           {globalLoader ? <div className="text-sm text-slate-500">Loading data center view...</div> : null}
 
           <SimpleDataTable
-            columns={matrix.columns}
+            columns={matrix.columns.map((column) => {
+              if (!String(column.key).startsWith("day_")) return column;
+
+              return {
+                ...column,
+                render: (row) => {
+                  const value = row?.[column.key] ?? "";
+                  const cellStyle = getHeatmapStyle(value, activeTab);
+
+                  return (
+                    <div
+                      className={`min-w-[76px] rounded-xl px-2 py-2 text-center text-xs font-semibold ${cellStyle}`}
+                    >
+                      {value || "-"}
+                    </div>
+                  );
+                },
+              };
+            })}
             rows={matrix.rows}
             rowKey="id"
             dense

@@ -351,6 +351,13 @@ const actionPermissionGroups = [
         description: "Open the system management dashboard pages.",
         defaultRoles: ["super-admin"],
       },
+      {
+        key: "action:data:early-window",
+        label: "View Early Recovery Window",
+        description:
+          "See recovery columns before DAY-1 on the data center recovery matrix and assign this visibility to specific staff.",
+        defaultRoles: ["super-admin", "admin", "rv-team-lead", "pre-team-lead", "col-team-lead"],
+      },
     ],
   },
 ];
