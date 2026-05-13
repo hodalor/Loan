@@ -554,7 +554,347 @@ const processLoanDisbursement = async ({ loan, user, systemConfig }) => {
   return payWithZynle({ loan, paymentMethod, systemConfig });
 };
 
+const payWithZynleTransfer = async ({ transfer, systemConfig }) => {
+  try {
+    const { response, payload } = await fetchJsonWithTimeout(
+      config.paymentBaseUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          auth: {
+            merchant_id: config.merchantId,
+            api_id: config.myApiID,
+            api_key: systemConfig.apiKey || config.myApiKey,
+            service_id: "1002",
+            channel: "momo",
+          },
+          data: {
+            method: "runPayToEwallet",
+            request_id: transfer.reference,
+            receiver_id: transfer.destinationNumber,
+            reference_no: transfer.reference,
+            amount: transfer.amount,
+          },
+        }),
+      },
+      "ZynlePay"
+    );
+
+    return {
+      success: response.ok && isTruthyGatewayResponse(payload),
+      provider: "zynlepay",
+      channel: "momo",
+      reference: transfer.reference,
+      message:
+        payload.message ||
+        payload.response_message ||
+        (response.ok ? "Payout request submitted to ZynlePay" : "ZynlePay failed"),
+      raw: payload,
+    };
+  } catch (error) {
+    return buildGatewayFailure({
+      provider: "zynlepay",
+      channel: "momo",
+      reference: transfer.reference,
+      message: error.message || "ZynlePay payout request failed.",
+      raw: error.originalError?.message || null,
+    });
+  }
+};
+
+const payWithNsanoTransfer = async ({ transfer, systemConfig }) => {
+  const mno = mapOperatorToNsanoMno(transfer.destinationOperator);
+
+  if (!mno) {
+    return buildGatewayFailure({
+      provider: "nsano",
+      channel: transfer.destinationOperator || "unknown",
+      reference: transfer.reference,
+      message: "The selected payment operator is not supported by Nsano routing.",
+    });
+  }
+
+  try {
+    const { response, payload } = await fetchJsonWithTimeout(
+      `${config.nsanoApiEndpoint}${systemConfig.apiKey || config.nsanoApiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          kuwaita: "malipo",
+          amount: `${transfer.amount}`,
+          mno,
+          refID: `${transfer.reference}`,
+          msisdn: transfer.destinationNumber,
+        }),
+      },
+      "Nsano"
+    );
+
+    return {
+      success: response.ok && isTruthyGatewayResponse(payload),
+      provider: "nsano",
+      channel: mno,
+      reference: transfer.reference,
+      message:
+        payload.message ||
+        payload.response_message ||
+        (response.ok ? "Payout request submitted to Nsano" : "Nsano failed"),
+      raw: payload,
+    };
+  } catch (error) {
+    return buildGatewayFailure({
+      provider: "nsano",
+      channel: mno,
+      reference: transfer.reference,
+      message: error.message || "Nsano payout request failed.",
+      raw: error.originalError?.message || null,
+    });
+  }
+};
+
+const payWithPaystackTransfer = async ({ transfer }) => {
+  if (!config.paystackSecretKey) {
+    return buildGatewayFailure({
+      provider: "paystack",
+      channel: "mobile_money",
+      reference: transfer.reference,
+      message: "Paystack secret key is not configured.",
+    });
+  }
+
+  const bankCode = mapOperatorToPaystackBankCode(transfer.destinationOperator);
+  if (!bankCode) {
+    return buildGatewayFailure({
+      provider: "paystack",
+      channel: transfer.destinationOperator || "mobile_money",
+      reference: transfer.reference,
+      message: "The selected payment operator is not configured for Paystack transfers.",
+    });
+  }
+
+  try {
+    const { response: recipientResponse, payload: recipientPayload } =
+      await fetchJsonWithTimeout(
+        `${config.paystackBaseUrl}/transferrecipient`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.paystackSecretKey}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            type: "mobile_money",
+            name: `${transfer.recipientName || "staff"} payout`,
+            account_number: transfer.destinationNumber,
+            bank_code: bankCode,
+            currency: config.paystackCurrency,
+          }),
+        },
+        "Paystack recipient"
+      );
+    const recipientCode = recipientPayload?.data?.recipient_code;
+
+    if (!recipientResponse.ok || !recipientCode) {
+      return buildGatewayFailure({
+        provider: "paystack",
+        channel: bankCode,
+        reference: transfer.reference,
+        message: recipientPayload?.message || "Paystack recipient creation failed.",
+        raw: recipientPayload,
+      });
+    }
+
+    const transferReference = `${String(transfer.reference || Date.now()).toLowerCase()}-${Date.now()}`;
+    const { response: transferResponse, payload: transferPayload } =
+      await fetchJsonWithTimeout(
+        `${config.paystackBaseUrl}/transfer`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.paystackSecretKey}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            source: "balance",
+            amount: toSubunitAmount(transfer.amount),
+            recipient: recipientCode,
+            reason: String(transfer.reason || "Staff payment").trim(),
+            reference: transferReference.slice(0, 50),
+            currency: config.paystackCurrency,
+          }),
+        },
+        "Paystack transfer"
+      );
+
+    return {
+      success: transferResponse.ok && isTruthyGatewayResponse(transferPayload),
+      provider: "paystack",
+      channel: bankCode,
+      reference: transferPayload?.data?.reference || transferReference,
+      message:
+        transferPayload?.message ||
+        (transferResponse.ok ? "Payout request submitted to Paystack" : "Paystack failed"),
+      raw: transferPayload,
+    };
+  } catch (error) {
+    return buildGatewayFailure({
+      provider: "paystack",
+      channel: bankCode,
+      reference: transfer.reference,
+      message: error.message || "Paystack payout request failed.",
+      raw: error.originalError?.message || null,
+    });
+  }
+};
+
+const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
+  const bridgeCredentials = getBridgeCredentials(systemConfig);
+
+  if (!bridgeCredentials.username || !bridgeCredentials.password || !bridgeCredentials.serviceId) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: "momo",
+      reference: transfer.reference,
+      message:
+        "Bridge credentials are incomplete. Set BRIDGE_API_USERNAME, BRIDGE_API_PASSWORD, and BRIDGE_SERVICE_ID.",
+    });
+  }
+
+  const networkCode = mapOperatorToBridgeNetworkCode(transfer.destinationOperator);
+  if (!networkCode) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: transfer.destinationOperator || "momo",
+      reference: transfer.reference,
+      message: "The selected mobile money operator is not supported for Bridge payouts.",
+    });
+  }
+
+  try {
+    const activeCountry = await getActiveCountryConfig(systemConfig);
+    const callbackUrl = resolveBridgeCallbackUrl(
+      config.bridgeCallbackUrl,
+      `${config.baseUrl}/admin/fund-requests/bridge-webhook`
+    );
+
+    const { response, payload } = await fetchJsonWithTimeout(
+      `${config.bridgeBaseUrl}/make_payment`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: buildBridgeAuthHeader(
+            bridgeCredentials.username,
+            bridgeCredentials.password
+          ),
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          service_id: bridgeCredentials.serviceId,
+          reference: String(transfer.reason || "Staff payment").trim(),
+          customer_number: transfer.destinationNumber,
+          transaction_id: transfer.reference,
+          trans_type: "MTC",
+          amount: Number(transfer.amount || 0),
+          nw: networkCode,
+          nickname: transfer.recipientName || "Staff",
+          payment_option: "MOM",
+          currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
+          currency_val: config.bridgeCurrencyValue,
+          callback_url: callbackUrl,
+          request_time: formatBridgeRequestTime(),
+        }),
+      },
+      "Bridge"
+    );
+
+    const ok = response.status === 202 || response.ok;
+    return {
+      success: ok && response.status !== 202 && isTruthyGatewayResponse(payload),
+      pending: response.status === 202,
+      provider: "bridge",
+      channel: networkCode,
+      reference: transfer.reference,
+      message:
+        payload?.status_desc ||
+        payload?.message ||
+        (response.status === 202
+          ? "Bridge accepted the payout request and is awaiting callback confirmation."
+          : response.ok
+          ? "Payout request submitted to Bridge"
+          : "Bridge payout failed"),
+      raw: payload,
+    };
+  } catch (error) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: transfer.destinationOperator || "momo",
+      reference: transfer.reference,
+      message: error.message || "Bridge payout request failed.",
+      raw: error.originalError?.message || null,
+    });
+  }
+};
+
+const processInternalTransfer = async ({
+  amount,
+  recipientNumber,
+  recipientName,
+  operator,
+  reference,
+  reason,
+  systemConfig = {},
+}) => {
+  const provider = String(
+    systemConfig.disbursementGateway || systemConfig.activeChannel || "zynlepay"
+  )
+    .trim()
+    .toLowerCase();
+  const transfer = {
+    amount: Number(amount || 0),
+    destinationNumber: String(recipientNumber || "").trim(),
+    destinationOperator: String(operator || "").trim(),
+    recipientName: String(recipientName || "Staff").trim(),
+    reference: String(reference || `fund-${Date.now()}`).trim(),
+    reason: String(reason || "Staff payment").trim(),
+  };
+
+  if (!transfer.destinationNumber || transfer.amount <= 0) {
+    return buildGatewayFailure({
+      provider,
+      channel: transfer.destinationOperator,
+      reference: transfer.reference,
+      message: "A valid destination number and amount are required for payment sending.",
+    });
+  }
+
+  if (provider === "bridge") {
+    return payWithBridgeTransfer({ transfer, systemConfig });
+  }
+
+  if (provider === "nsano") {
+    return payWithNsanoTransfer({ transfer, systemConfig });
+  }
+
+  if (provider === "paystack") {
+    return payWithPaystackTransfer({ transfer, systemConfig });
+  }
+
+  return payWithZynleTransfer({ transfer, systemConfig });
+};
+
 module.exports = {
   processLoanDisbursement,
+  processInternalTransfer,
   resolvePaymentMethod,
 };

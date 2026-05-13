@@ -15,6 +15,8 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       firstName,
       lastName,
       phone,
+      salaryNumber,
+      salaryOperator,
       email,
       department,
       permissions,
@@ -87,6 +89,8 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
     user.firstName = firstName;
     user.lastName = lastName;
     user.phone = phone;
+    user.salaryNumber = String(salaryNumber || "").trim();
+    user.salaryOperator = String(salaryOperator || "").trim();
     user.email = email;
     user.department = department;
     user.staffGroupId = staffGroupId ? String(staffGroupId) : "";

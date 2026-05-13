@@ -117,6 +117,7 @@ app.use("/admin", admin.login);
 app.use("/admin", admin.systemConfig);
 app.use("/admin", admin.staffGroups);
 app.use("/admin", admin.systemLogs);
+app.use("/admin", admin.fundRequests);
 app.use('/upload', express.static('upload'));
 
 var bdy = {}

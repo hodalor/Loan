@@ -6,6 +6,7 @@ const login = require("./login");
 const systemConfig = require("./systemConfig");
 const staffGroups = require("./staffGroups");
 const systemLogs = require("./systemLogs");
+const fundRequests = require("./fundRequests");
 
 module.exports = {
   login,
@@ -16,4 +17,5 @@ module.exports = {
   systemConfig,
   staffGroups,
   systemLogs,
+  fundRequests,
 };
