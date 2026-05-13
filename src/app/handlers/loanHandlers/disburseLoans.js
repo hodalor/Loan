@@ -51,13 +51,15 @@ const _disburseLoans = async (data) => {
     results.push({
       loanId: loan.ID,
       success: payoutResult.success,
+      pending: Boolean(payoutResult.pending),
       message: payoutResult.message,
       provider: payoutResult.provider,
     });
   }
 
   return {
-    success: results.length > 0 && results.every((item) => item.success),
+    success:
+      results.length > 0 && results.every((item) => item.success || item.pending),
     results,
   };
 };

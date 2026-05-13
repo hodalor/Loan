@@ -325,11 +325,16 @@ io.on("connection", (socket) => {
 
   socket.on("disburse_loans", async (data, callBack) => {
     let res = await _disburseLoans(data);
+    const hasPending = Array.isArray(res.results)
+      ? res.results.some((item) => item.pending)
+      : false;
 
     callBack({
       success: res.success,
       message: res.success
-        ? "Selected loans were disbursed successfully"
+        ? hasPending
+          ? "Selected loans were submitted successfully and some are awaiting gateway callbacks"
+          : "Selected loans were disbursed successfully"
         : "Some disbursements failed and need review",
       data: res.results,
     });

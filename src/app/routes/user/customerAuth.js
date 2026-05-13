@@ -317,9 +317,15 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
   let statusKey = "not-applied";
   let title = "No active loan";
   let message = "You can apply for a new loan.";
+  const payoutStatus = `${loan.payoutStatus || ""}`.toLowerCase();
   const isAwaitingDisbursement =
     loan.loanStatus === "Granted" &&
-    (!loan.isDisbursed || `${loan.payoutStatus || ""}`.toLowerCase() === "pending-manual");
+    (!loan.isDisbursed &&
+      (payoutStatus === "" ||
+        payoutStatus === "pending" ||
+        payoutStatus === "pending-manual" ||
+        payoutStatus === "processing" ||
+        payoutStatus === "verified"));
 
   if (loan.loanStatus === "Review") {
     statusKey = "review";
@@ -333,7 +339,7 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
     statusKey = "awaiting-disbursement";
     title = "Loan approved, awaiting disbursement";
     message =
-      "Your loan has been approved and is waiting for manual disbursement confirmation.";
+      "Your loan has been approved and the disbursement is still waiting for final confirmation.";
   } else if (loan.loanStatus === "Granted" && loan.paymentStatus === "Paid") {
     statusKey = "paid";
     title = "Loan fully paid";

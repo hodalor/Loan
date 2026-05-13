@@ -129,6 +129,8 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
       systemConfig.disbursementMode === "automatic"
         ? payoutResult.success
           ? "Loan granted and disbursed successfully"
+          : payoutResult.pending
+          ? `Loan granted and disbursement request accepted: ${payoutResult.message}`
           : `Loan granted, but automatic disbursement failed: ${payoutResult.message}`
         : "Loan granted and moved to manual disbursement";
 

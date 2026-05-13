@@ -65,9 +65,11 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
     });
 
     return res.status(200).json({
-      success: payoutResult.success ? 1 : 0,
+      success: payoutResult.success || payoutResult.pending ? 1 : 0,
       message: payoutResult.success
         ? "Loan disbursement retried successfully"
+        : payoutResult.pending
+        ? payoutResult.message || "Loan disbursement retry accepted and is awaiting callback."
         : payoutResult.message,
       data: {
         loanId: loan.ID,
