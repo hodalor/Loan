@@ -156,7 +156,7 @@ export const payCustomerLoan = async (payload) => {
   } catch (error) {
     return {
       success: 0,
-      message: "Unable to process repayment.",
+      message: "Payment failed. Try later.",
     };
   }
 };
@@ -175,7 +175,7 @@ export const extendCustomerLoan = async (payload) => {
   } catch (error) {
     return {
       success: 0,
-      message: "Unable to process loan extension.",
+      message: "Payment failed. Try later.",
     };
   }
 };
@@ -194,7 +194,7 @@ export const verifyPaystackPortalTransaction = async (payload) => {
   } catch (error) {
     return {
       success: 0,
-      message: "Unable to verify the gateway transaction.",
+      message: "Payment failed. Try later.",
     };
   }
 };

@@ -55,6 +55,9 @@ const residenceTypes = ["Family house", "Rented", "Owned", "Hostel", "Other"];
 const maritalStatuses = ["Single", "Married", "Divorced", "Widowed"];
 const idTypes = ["National ID", "Passport", "Voter Card", "Driver License"];
 const workHoursOptions = ["Full time", "Part time", "Shift", "Flexible"];
+const PAYMENT_PENDING_MESSAGE = "Continue to make payment.";
+const PAYMENT_FAILED_MESSAGE = "Payment failed. Try later.";
+const PAYMENT_SUCCESS_MESSAGE = "Payment completed successfully.";
 let runtimeLocale = "en-ZM";
 let runtimeCurrencySymbol = "K";
 const buildDefaultPortalContent = () => ({
@@ -991,15 +994,12 @@ function App() {
   const applyVerifiedPortalTransaction = useCallback(
     async (response, fallbackType) => {
       if (!response || response.success === 0) {
-        showMessage("error", response?.message || "Could not verify the payment.");
+        showMessage("error", PAYMENT_FAILED_MESSAGE);
         return false;
       }
 
       if (response.success === 2) {
-        showMessage(
-          "info",
-          response.message || "Payment is still pending. Please wait a moment and try again."
-        );
+        showMessage("info", PAYMENT_PENDING_MESSAGE);
         return false;
       }
 
@@ -1032,7 +1032,7 @@ function App() {
           activeLoan?.repaymentOptions || [],
           response.data?.transaction?.methodKey || pendingGatewayTransaction?.methodKey || ""
         ),
-        note: response.message,
+        note: PAYMENT_SUCCESS_MESSAGE,
         balance:
           receiptType === "Extension"
             ? undefined
@@ -1051,7 +1051,7 @@ function App() {
       setExtensionSummaryData(null);
       setPendingGatewayTransaction(null);
       setActiveTab("home");
-      showMessage("success", response.message || "Payment completed successfully.");
+      showMessage("success", PAYMENT_SUCCESS_MESSAGE);
       return true;
     },
     [
@@ -1173,7 +1173,7 @@ function App() {
       }
 
       if (response.success === 0 && response.status !== "pending") {
-        showMessage("error", response.message || "The payment could not be verified.");
+        showMessage("error", PAYMENT_FAILED_MESSAGE);
         setPendingGatewayTransaction(null);
       }
     };
@@ -1214,7 +1214,7 @@ function App() {
       }
 
       if (response.success === 0 && response.status !== "pending") {
-        showMessage("error", response.message || "The payment could not be verified.");
+        showMessage("error", PAYMENT_FAILED_MESSAGE);
         setPendingGatewayTransaction(null);
       }
     };
@@ -1768,7 +1768,7 @@ function App() {
     setLifecycleLoading(false);
 
     if (response.success === 0) {
-      showMessage("error", response.message || "Could not complete repayment.");
+      showMessage("error", PAYMENT_FAILED_MESSAGE);
       return;
     }
 
@@ -1783,17 +1783,11 @@ function App() {
       if (response.data?.checkoutUrl) {
         window.open(response.data.checkoutUrl, "_blank", "noopener,noreferrer");
       }
-      showMessage(
-        "info",
-        response.message ||
-          (response.data?.checkoutUrl
-            ? "Complete the payment in the opened window. The app will verify it automatically."
-            : "Approve the payment on your phone. The app will verify it automatically.")
-      );
+      showMessage("info", PAYMENT_PENDING_MESSAGE);
       return;
     }
 
-    showMessage("success", response.message || "Repayment completed successfully.");
+    showMessage("success", PAYMENT_SUCCESS_MESSAGE);
     setTransactionReceipt({
       type: "Repayment",
       amount: repaymentSummaryData?.amount || 0,
@@ -1801,7 +1795,7 @@ function App() {
       date: new Date().toISOString(),
       status: "Completed",
       method: getRepaymentMethodLabel(activeLoan?.repaymentOptions || [], repaymentDraft.methodKey),
-      note: response.message,
+      note: PAYMENT_SUCCESS_MESSAGE,
       balance: response.data?.activeLoan?.totalDue || 0,
       level: response.data?.offer?.levelLabel || "",
     });
@@ -1828,7 +1822,7 @@ function App() {
     setLifecycleLoading(false);
 
     if (response.success === 0) {
-      showMessage("error", response.message || "Could not complete extension.");
+      showMessage("error", PAYMENT_FAILED_MESSAGE);
       return;
     }
 
@@ -1843,17 +1837,11 @@ function App() {
       if (response.data?.checkoutUrl) {
         window.open(response.data.checkoutUrl, "_blank", "noopener,noreferrer");
       }
-      showMessage(
-        "info",
-        response.message ||
-          (response.data?.checkoutUrl
-            ? "Complete the payment in the opened window. The app will verify it automatically."
-            : "Approve the payment on your phone. The app will verify it automatically.")
-      );
+      showMessage("info", PAYMENT_PENDING_MESSAGE);
       return;
     }
 
-    showMessage("success", response.message || "Extension completed successfully.");
+    showMessage("success", PAYMENT_SUCCESS_MESSAGE);
     setTransactionReceipt({
       type: "Extension",
       amount: extensionSummaryData?.extension?.feeAmount || 0,
@@ -1861,7 +1849,7 @@ function App() {
       date: new Date().toISOString(),
       status: "Completed",
       method: getRepaymentMethodLabel(activeLoan?.repaymentOptions || [], extensionDraft.methodKey),
-      note: response.message,
+      note: PAYMENT_SUCCESS_MESSAGE,
       newDueDate:
         response.data?.activeLoan?.dueDate || extensionSummaryData?.extension?.extendedDueDate,
     });
