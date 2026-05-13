@@ -258,6 +258,17 @@ const findGatewayTransactionByReference = async (reference = "") => {
     (await GatewayTransactions.findOne({ reference: String(reference || "").trim() }))
   );
 };
+const findLoanRecordByBusinessId = async (loanId = "") => {
+  const normalizedLoanId = normalizeTransactionReference(loanId);
+
+  if (!normalizedLoanId) return null;
+
+  return (
+    (await Loans.findOne({ ID: normalizedLoanId })) ||
+    (await Loans.findOne({ loanId: normalizedLoanId })) ||
+    (await Loans.findById(normalizedLoanId).catch(() => null))
+  );
+};
 const toSubunitAmount = (amount = 0) => Math.round(Number(amount || 0) * 100);
 const sanitizePortalTransaction = (transaction = {}) => ({
   provider: transaction.provider || "paystack",
@@ -946,7 +957,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
   if (transaction.transactionType === "repayment") {
     const payAmount = toMoney(transaction.amount || 0);
-    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
+    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
 
     if (!globalLoan) {
       throw new Error("Loan record not found.");
@@ -979,7 +990,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
       throw new Error("The selected extension option is no longer available.");
     }
 
-    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
+    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
     if (!globalLoan) {
       throw new Error("Loan record not found.");
     }
@@ -2185,7 +2196,7 @@ router.post("/portal/pay-loan", async (req, res) => {
       });
     }
 
-    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
+    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
     if (!globalLoan) {
       await logSystemEvent({
         level: "error",
@@ -2216,7 +2227,7 @@ router.post("/portal/pay-loan", async (req, res) => {
       amt: payAmount,
     });
     const loanResult = await _payLoan({
-      id: globalLoan.loanId,
+      id: activeLoanView.loanId || globalLoan.ID || globalLoan.loanId || globalLoan._id,
       payAmount,
     });
 
@@ -2491,7 +2502,7 @@ router.post("/portal/extend-loan", async (req, res) => {
       });
     }
 
-    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
+    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
     if (!globalLoan) {
       await logSystemEvent({
         level: "error",
