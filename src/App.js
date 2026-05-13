@@ -1772,18 +1772,23 @@ function App() {
       return;
     }
 
-    if (response.data?.checkoutUrl) {
+    if (response.success === 2) {
       setPendingGatewayTransaction({
         reference: response.data.reference || "",
         type: "repayment",
         amount: repaymentSummaryData?.amount || 0,
         methodKey: repaymentDraft.methodKey,
+        provider: response.data?.provider || "",
       });
-      window.open(response.data.checkoutUrl, "_blank", "noopener,noreferrer");
+      if (response.data?.checkoutUrl) {
+        window.open(response.data.checkoutUrl, "_blank", "noopener,noreferrer");
+      }
       showMessage(
         "info",
         response.message ||
-          "Complete the Paystack payment in the opened window. The app will verify it automatically."
+          (response.data?.checkoutUrl
+            ? "Complete the payment in the opened window. The app will verify it automatically."
+            : "Approve the payment on your phone. The app will verify it automatically.")
       );
       return;
     }
@@ -1827,18 +1832,23 @@ function App() {
       return;
     }
 
-    if (response.data?.checkoutUrl) {
+    if (response.success === 2) {
       setPendingGatewayTransaction({
         reference: response.data.reference || "",
         type: "extension",
         amount: extensionSummaryData?.extension?.feeAmount || 0,
         methodKey: extensionDraft.methodKey,
+        provider: response.data?.provider || "",
       });
-      window.open(response.data.checkoutUrl, "_blank", "noopener,noreferrer");
+      if (response.data?.checkoutUrl) {
+        window.open(response.data.checkoutUrl, "_blank", "noopener,noreferrer");
+      }
       showMessage(
         "info",
         response.message ||
-          "Complete the Paystack payment in the opened window. The app will verify it automatically."
+          (response.data?.checkoutUrl
+            ? "Complete the payment in the opened window. The app will verify it automatically."
+            : "Approve the payment on your phone. The app will verify it automatically.")
       );
       return;
     }

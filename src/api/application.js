@@ -165,7 +165,7 @@ export const extendCustomerLoan = async (payload) => {
 
 export const verifyPaystackPortalTransaction = async (payload) => {
   try {
-    const response = await fetch(`${CUSTOMER_API_BASE}/portal/paystack/verify`, {
+    const response = await fetch(`${CUSTOMER_API_BASE}/portal/gateway/verify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -177,7 +177,7 @@ export const verifyPaystackPortalTransaction = async (payload) => {
   } catch (error) {
     return {
       success: 0,
-      message: "Unable to verify the Paystack transaction.",
+      message: "Unable to verify the gateway transaction.",
     };
   }
 };
