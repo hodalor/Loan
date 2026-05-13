@@ -6,10 +6,13 @@ const isLocalHost = () => {
   return ["localhost", "127.0.0.1"].includes(window.location.hostname);
 };
 
-const defaultApiBaseUrl = isLocalHost() ? "http://localhost:9000" : "";
+const hostedApiBaseUrl = "https://loan-htqt.onrender.com";
+const configuredApiBaseUrl =
+  process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_BASE_URL;
+const defaultApiBaseUrl = isLocalHost() ? "http://localhost:9000" : hostedApiBaseUrl;
 
 const apiBaseUrl = trimTrailingSlash(
-  process.env.REACT_APP_API_BASE_URL || defaultApiBaseUrl
+  configuredApiBaseUrl || defaultApiBaseUrl
 );
 
 const dataBaseUrl = `${apiBaseUrl}/loans/`;
