@@ -268,7 +268,7 @@ const sanitizePortalTransaction = (transaction = {}) => ({
   amount: Number(transaction.amount || 0),
   currency: transaction.currency || config.paystackCurrency || "GHS",
   methodKey: transaction.methodKey || "",
-  loanId: transaction.loanId || "",
+  loanId: normalizeTransactionReference(transaction.loanId || ""),
   checkoutUrl: transaction.checkoutUrl || "",
   verifiedAt: transaction.verifiedAt || null,
   processedAt: transaction.processedAt || null,
@@ -401,7 +401,7 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
       : [];
 
   return {
-    loanId: loan.ID || loan.loanId || "",
+    loanId: normalizeTransactionReference(loan.ID || loan.loanId || ""),
     statusKey,
     status: loan.loanStatus || "Not applied",
     title,
@@ -693,7 +693,7 @@ const initializeBridgeCharge = async ({
         processed: false,
         phone: sanitizePhone(user.phone || ""),
         userId: user.userId || "",
-        loanId: loanId || "",
+        loanId: normalizeTransactionReference(loanId || ""),
         methodKey: "mobile-money",
         amount: toMoney(amount),
         currency: activeCountry?.currencyCode || config.bridgeCurrencyCode,
@@ -819,7 +819,7 @@ const initializePaystackCharge = async ({
         processed: false,
         phone: sanitizePhone(user.phone || ""),
         userId: user.userId || "",
-        loanId: loanId || "",
+        loanId: normalizeTransactionReference(loanId || ""),
         methodKey,
         amount: toMoney(amount),
         currency: config.paystackCurrency,
@@ -938,8 +938,9 @@ const applyPortalGatewayTransaction = async (transaction) => {
   const currentUserData = user.toObject();
   const globalLoans = await Loans.find({ userId: user.userId }).lean();
   const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
+  const transactionLoanId = normalizeTransactionReference(transaction.loanId || "");
 
-  if (!activeLoanView || activeLoanView.loanId !== transaction.loanId) {
+  if (!activeLoanView || activeLoanView.loanId !== transactionLoanId) {
     throw new Error("Loan details changed before this payment could be applied.");
   }
 
@@ -959,7 +960,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
       amt: payAmount,
     });
     const loanResult = await _payLoan({
-      id: globalLoan.loanId,
+      id: activeLoanView.loanId || globalLoan.ID || globalLoan.loanId || globalLoan._id,
       payAmount,
     });
 

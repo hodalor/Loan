@@ -1,8 +1,18 @@
 const Loans = require("../../models/loans");
 
+const normalizeLoanIdentifier = (value = "") => String(value || "").trim();
+
 const _payLoan = async ({ id, payAmount }) => {
   try {
-    const loan = await Loans.findOne({ loanId: id.toString() });
+    const normalizedId = normalizeLoanIdentifier(id);
+    if (!normalizedId) return false;
+
+    const loan =
+      (await Loans.findOne({ loanId: normalizedId })) ||
+      (await Loans.findOne({ ID: normalizedId })) ||
+      (await Loans.findById(normalizedId).catch(() => null));
+
+    if (!loan) return false;
 
     let rep =
       loan.repaymentAmount === "" || loan.repaymentAmount === undefined
