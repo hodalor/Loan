@@ -19,16 +19,19 @@ const _handleLogin = async (data) => {
     if (contentType.includes("application/json")) {
       let res = await reqs.json();
       resp = res;
+      if (!reqs.ok) {
+        resp = {
+          ...res,
+          success: 0,
+          message: "Login failed. Try later.",
+        };
+      }
     } else {
       const textResponse = await reqs.text();
 
       resp = {
         success: 0,
-        message: reqs.ok
-          ? "Login failed. The server returned an unexpected response."
-          : reqs.status === 503
-          ? "Login service is unavailable right now. The API is suspended or offline."
-          : `Login failed with status ${reqs.status}.`,
+        message: "Login failed. Try later.",
         details: textResponse,
       };
     }
@@ -36,15 +39,14 @@ const _handleLogin = async (data) => {
     if (!reqs.ok && !resp.message) {
       resp = {
         success: 0,
-        message: `Login failed with status ${reqs.status}.`,
+        message: "Login failed. Try later.",
       };
     }
   } catch (error) {
     console.log(error);
     resp = {
       success: 0,
-      message:
-        "Cannot reach the login server. Check the API URL or your internet connection.",
+      message: "Login failed. Try later.",
     };
   }
 

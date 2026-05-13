@@ -52,6 +52,8 @@ import ReviewLoanDetails from "./Credit audit center/rvLoanDetails";
 import CollectionLoanDetails from "./collection center/colLoanDetails";
 import PreLoanDetails from "./PreCollection Center/preColLoanDetails";
 import SystemConfig from "./system management/Config";
+import AuditLogs from "./system management/Audit Logs";
+import ErrorLogs from "./system management/Error Logs";
 import SystemDocs from "./system management/Docs";
 
 function GuardedRoute({ component: Component, allow, ...rest }) {
@@ -103,6 +105,16 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
               path="/system-config"
               component={SystemConfig}
               allow={canOpenPath("/system-config")}
+            />
+            <GuardedRoute
+              path="/system-audit-logs"
+              component={AuditLogs}
+              allow={canOpenPath("/system-audit-logs")}
+            />
+            <GuardedRoute
+              path="/system-error-logs"
+              component={ErrorLogs}
+              allow={canOpenPath("/system-error-logs")}
             />
             <GuardedRoute
               path="/system-docs"

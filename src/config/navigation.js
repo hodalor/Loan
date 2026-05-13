@@ -190,6 +190,18 @@ const rawNavigationItems = [
         roles: ["super-admin"],
       },
       {
+        label: "Audit Logs",
+        path: "/system-audit-logs",
+        icon: "fa fa-clipboard",
+        roles: ["super-admin"],
+      },
+      {
+        label: "Error Logs",
+        path: "/system-error-logs",
+        icon: "fa fa-exclamation-triangle",
+        roles: ["super-admin"],
+      },
+      {
         label: "Docs",
         path: "/system-docs",
         icon: "fa fa-book",
