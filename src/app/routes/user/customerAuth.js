@@ -248,6 +248,16 @@ const isTruthyGatewayResponse = (response = {}) => {
 const isPendingGatewayResponse = (response = {}) =>
   `${response.response_code || response.status || ""}`.toLowerCase() === "990" ||
   `${response.message || response.response_message || ""}`.toLowerCase().includes("pending");
+const findGatewayTransactionByReference = async (reference = "") => {
+  const normalizedReference = normalizeTransactionReference(reference);
+
+  if (!normalizedReference) return null;
+
+  return (
+    (await GatewayTransactions.findOne({ reference: normalizedReference })) ||
+    (await GatewayTransactions.findOne({ reference: String(reference || "").trim() }))
+  );
+};
 const toSubunitAmount = (amount = 0) => Math.round(Number(amount || 0) * 100);
 const sanitizePortalTransaction = (transaction = {}) => ({
   provider: transaction.provider || "paystack",
@@ -265,13 +275,13 @@ const sanitizePortalTransaction = (transaction = {}) => ({
   failureReason: transaction.failureReason || "",
 });
 const getPaystackReferenceFromPayload = (payload = {}) =>
-  String(
+  normalizeTransactionReference(
     payload?.data?.reference ||
       payload?.reference ||
       payload?.trxref ||
       payload?.event?.data?.reference ||
       ""
-  ).trim();
+  );
 const getPaystackVerificationUrl = (reference = "") =>
   `${config.paystackBaseUrl}/transaction/verify/${encodeURIComponent(reference)}`;
 const mergeLoanCollections = (user = {}, globalLoans = []) => {
@@ -472,6 +482,36 @@ const formatBridgeRequestTime = (value = new Date()) => {
 const buildBridgeAuthHeader = (username = "", password = "") =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 const normalizeGatewayKey = (value = "") => String(value || "").trim().toLowerCase();
+const normalizeTransactionReference = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, "");
+const getBridgeWebhookReference = (payload = {}) =>
+  normalizeTransactionReference(
+    payload?.transaction_id ||
+      payload?.trans_ref ||
+      payload?.client_ref ||
+      payload?.reference ||
+      payload?.collection_trans_id ||
+      payload?.trans_id ||
+      ""
+  );
+const getBridgeWebhookStatus = (payload = {}) =>
+  String(
+    payload?.status ||
+      payload?.status_code ||
+      payload?.trans_status ||
+      payload?.code ||
+      ""
+  ).trim();
+const getBridgeWebhookMessage = (payload = {}) =>
+  String(
+    payload?.status_desc ||
+      payload?.response_message ||
+      payload?.message ||
+      payload?.description ||
+      ""
+  ).trim();
 const getBridgeCredentials = (systemConfig = {}) => ({
   username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
   password: String(systemConfig.apiSecret || config.bridgeApiPassword || "").trim(),
@@ -595,10 +635,9 @@ const initializeBridgeCharge = async ({
     };
   }
 
-  const reference = `${referencePrefix}-${Date.now()}-${String(user.userId || "customer").toLowerCase()}`.slice(
-    0,
-    80
-  );
+  const reference = normalizeTransactionReference(
+    `${referencePrefix}-${Date.now()}-${String(user.userId || "customer").toLowerCase()}`
+  ).slice(0, 80);
   const callbackUrl = resolveBridgeCallbackUrl(
     req,
     config.bridgeCallbackUrl || systemConfig.callbackUrl,
@@ -838,7 +877,7 @@ const verifyPaystackCharge = async (reference) => {
 };
 const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
   const event = webhookEvent || transaction?.rawWebhookEvent || null;
-  const callbackStatus = String(event?.status || "").trim();
+  const callbackStatus = getBridgeWebhookStatus(event);
   const normalizedTransactionStatus = String(transaction?.status || "").trim().toLowerCase();
 
   if (callbackStatus === "000" || normalizedTransactionStatus === "success") {
@@ -846,8 +885,7 @@ const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
       success: true,
       pending: false,
       message:
-        String(event?.status_desc || "").trim() ||
-        String(event?.message || "").trim() ||
+        getBridgeWebhookMessage(event) ||
         "Bridge payment completed successfully.",
       raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
     };
@@ -861,8 +899,7 @@ const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
       success: false,
       pending: true,
       message:
-        String(event?.status_desc || "").trim() ||
-        String(event?.message || "").trim() ||
+        getBridgeWebhookMessage(event) ||
         "Bridge payment is still pending.",
       raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
     };
@@ -877,8 +914,7 @@ const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
       success: false,
       pending: false,
       message:
-        String(event?.status_desc || "").trim() ||
-        String(event?.message || "").trim() ||
+        getBridgeWebhookMessage(event) ||
         transaction?.failureReason ||
         "Bridge payment failed.",
       raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
@@ -989,7 +1025,8 @@ const applyPortalGatewayTransaction = async (transaction) => {
   return summary;
 };
 const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null }) => {
-  const transaction = await GatewayTransactions.findOne({ reference });
+  const normalizedReference = normalizeTransactionReference(reference);
+  const transaction = await findGatewayTransactionByReference(normalizedReference);
 
   if (!transaction) {
     await logSystemEvent({
@@ -1001,6 +1038,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
       message: "Portal gateway verification could not find the transaction reference.",
       metadata: {
         reference,
+        normalizedReference,
       },
     });
     return {
@@ -1026,7 +1064,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   const verification =
     String(transaction.provider || "").trim() === "bridge"
       ? await verifyBridgeCharge(transaction, webhookEvent)
-      : await verifyPaystackCharge(reference);
+      : await verifyPaystackCharge(normalizedReference);
   await GatewayTransactions.updateOne(
     { _id: transaction._id },
     {
@@ -1057,7 +1095,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
           ? "Portal gateway payment is still pending."
           : "Portal gateway verification failed."),
       metadata: {
-        reference,
+        reference: normalizedReference,
         provider: transaction.provider,
         transactionType: transaction.transactionType,
         phone: transaction.phone,
@@ -1089,7 +1127,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   );
 
   if (!claimedTransaction) {
-    const latestTransaction = await GatewayTransactions.findOne({ reference });
+    const latestTransaction = await findGatewayTransactionByReference(normalizedReference);
     const summary = latestTransaction?.phone
       ? await buildPortalSummaryData(latestTransaction.phone)
       : null;
@@ -1123,7 +1161,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
       }
     );
 
-    const latestTransaction = await GatewayTransactions.findOne({ reference }).lean();
+    const latestTransaction = await findGatewayTransactionByReference(normalizedReference);
 
     await logSystemEvent({
       level: "info",
@@ -1136,7 +1174,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
           ? "Portal extension payment completed successfully."
           : "Portal repayment completed successfully.",
       metadata: {
-        reference,
+        reference: normalizedReference,
         provider: claimedTransaction.provider,
         transactionType: claimedTransaction.transactionType,
         phone: claimedTransaction.phone,
@@ -2604,7 +2642,7 @@ const handlePortalGatewayVerification = async (req, res) => {
   try {
     const reference =
       getPaystackReferenceFromPayload(req.body) ||
-      String(req.body?.reference || "").trim();
+      normalizeTransactionReference(req.body?.reference || "");
 
     if (!reference) {
       await logSystemEvent({
@@ -2653,17 +2691,32 @@ router.post("/portal/paystack/verify", handlePortalGatewayVerification);
 
 router.post("/portal/bridge/webhook", async (req, res) => {
   try {
-    const reference = String(req.body?.transaction_id || "").trim();
+    const reference = getBridgeWebhookReference(req.body);
     if (!reference) {
       return res.sendStatus(200);
     }
 
-    const transaction = await GatewayTransactions.findOne({ reference });
+    const transaction = await findGatewayTransactionByReference(reference);
     if (!transaction) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.bridgeWebhook",
+        action: "webhook",
+        status: "failed",
+        message: "Bridge portal webhook could not match the callback reference to a stored transaction.",
+        metadata: {
+          reference,
+          bridgeReference: req.body?.trans_ref || req.body?.transaction_id || "",
+          bridgeStatus: getBridgeWebhookStatus(req.body),
+        },
+        details: req.body,
+      });
       return res.sendStatus(200);
     }
 
-    const bridgeStatus = String(req.body?.status || "").trim();
+    const bridgeStatus = getBridgeWebhookStatus(req.body);
+    const bridgeMessage = getBridgeWebhookMessage(req.body);
     await GatewayTransactions.updateOne(
       { _id: transaction._id },
       {
@@ -2680,7 +2733,7 @@ router.post("/portal/bridge/webhook", async (req, res) => {
           failureReason:
             bridgeStatus === "000"
               ? ""
-              : String(req.body?.status_desc || req.body?.message || "").trim(),
+              : bridgeMessage,
         },
       }
     );
@@ -2708,8 +2761,7 @@ router.post("/portal/bridge/webhook", async (req, res) => {
       message:
         bridgeStatus === "000"
           ? "Bridge portal webhook confirmed a successful transaction."
-          : String(req.body?.status_desc || req.body?.message || "Bridge portal webhook received.")
-              .trim(),
+          : bridgeMessage || "Bridge portal webhook received.",
       metadata: {
         reference,
         bridgeStatus,
