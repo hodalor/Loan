@@ -1,5 +1,22 @@
-const CUSTOMER_API_BASE =
-  process.env.REACT_APP_CUSTOMER_AUTH_BASEURL || "http://localhost:9000/users";
+const trimTrailingSlash = (value = "") => String(value || "").replace(/\/+$/, "");
+const isLocalHost = () => {
+  if (typeof window === "undefined") return false;
+
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+};
+const normalizeCustomerApiBase = (value = "") => {
+  const trimmed = trimTrailingSlash(value);
+  return /\/users$/i.test(trimmed) ? trimmed : `${trimmed}/users`;
+};
+const hostedCustomerApiBase = "https://loan-htqt.onrender.com/users";
+const configuredCustomerApiBase =
+  process.env.REACT_APP_CUSTOMER_AUTH_BASEURL ||
+  process.env.REACT_APP_API_BASE_URL ||
+  process.env.REACT_APP_BASE_URL;
+const CUSTOMER_API_BASE = normalizeCustomerApiBase(
+  configuredCustomerApiBase ||
+    (isLocalHost() ? "http://localhost:9000/users" : hostedCustomerApiBase)
+);
 
 export const saveApplicationDraft = async (payload) => {
   try {
