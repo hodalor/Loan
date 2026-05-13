@@ -269,6 +269,27 @@ const findLoanRecordByBusinessId = async (loanId = "") => {
     (await Loans.findById(normalizedLoanId).catch(() => null))
   );
 };
+const ensureLoanLedgerRecord = async ({ userId = "", loanId = "", sourceLoan = null }) => {
+  const normalizedLoanId = normalizeTransactionReference(loanId || sourceLoan?.ID || "");
+  if (!normalizedLoanId) return null;
+
+  const existingLoan = await findLoanRecordByBusinessId(normalizedLoanId);
+  if (existingLoan) return existingLoan;
+  if (!sourceLoan) return null;
+
+  const draftLoan = {
+    ...sourceLoan,
+    userId: String(userId || sourceLoan.userId || "").trim(),
+    ID: normalizedLoanId,
+    loanId: normalizeTransactionReference(sourceLoan.loanId || normalizedLoanId),
+  };
+
+  delete draftLoan._id;
+  delete draftLoan.__v;
+
+  const createdLoan = new Loans(draftLoan);
+  return createdLoan.save();
+};
 const toSubunitAmount = (amount = 0) => Math.round(Number(amount || 0) * 100);
 const sanitizePortalTransaction = (transaction = {}) => ({
   provider: transaction.provider || "paystack",
@@ -328,6 +349,17 @@ const getCurrentPortalLoan = (user = {}, globalLoans = []) => {
     null
   );
 };
+const getLoanByBusinessId = (loans = [], loanId = "") => {
+  const normalizedLoanId = normalizeTransactionReference(loanId);
+  if (!normalizedLoanId) return null;
+
+  return (
+    (Array.isArray(loans) ? loans : []).find(
+      (loan) =>
+        normalizeTransactionReference(loan?.ID || loan?.loanId || loan?._id) === normalizedLoanId
+    ) || null
+  );
+};
 const startOfDay = (dateValue) => {
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return null;
@@ -341,8 +373,7 @@ const getDayDifference = (futureDateValue) => {
 
   return Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 };
-const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => {
-  const loan = getCurrentPortalLoan(user, globalLoans);
+const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
   if (!loan) return null;
 
   const lifecycleConfig = buildLifecycleConfig(systemConfig);
@@ -434,6 +465,10 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
     allowPartialRepayment: lifecycleConfig.allowPartialRepayment,
     extensionOptions,
   };
+};
+const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => {
+  const loan = getCurrentPortalLoan(user, globalLoans);
+  return buildPortalLoanView(loan, systemConfig);
 };
 const getRepaymentSourceAccount = ({
   user = {},
@@ -948,30 +983,36 @@ const applyPortalGatewayTransaction = async (transaction) => {
   const systemConfig = await getSystemConfig();
   const currentUserData = user.toObject();
   const globalLoans = await Loans.find({ userId: user.userId }).lean();
-  const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
+  const loanHistory = getUserLoanHistory(currentUserData, globalLoans);
   const transactionLoanId = normalizeTransactionReference(transaction.loanId || "");
+  const sourceLoan = getLoanByBusinessId(loanHistory, transactionLoanId);
+  const targetLoanView = buildPortalLoanView(sourceLoan, systemConfig);
 
-  if (!activeLoanView || activeLoanView.loanId !== transactionLoanId) {
-    throw new Error("Loan details changed before this payment could be applied.");
+  if (!targetLoanView || targetLoanView.loanId !== transactionLoanId) {
+    throw new Error("Loan record not found.");
   }
 
   if (transaction.transactionType === "repayment") {
     const payAmount = toMoney(transaction.amount || 0);
-    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
+    const globalLoan = await ensureLoanLedgerRecord({
+      userId: user.userId,
+      loanId: targetLoanView.loanId,
+      sourceLoan,
+    });
 
     if (!globalLoan) {
       throw new Error("Loan record not found.");
     }
 
     const userResult = await _clearLoan({
-      ID: activeLoanView.loanId,
+      ID: targetLoanView.loanId,
       dp: new Date(),
       userId: user.userId,
-      clear: payAmount >= toMoney(activeLoanView.totalDue || 0),
+      clear: payAmount >= toMoney(targetLoanView.totalDue || 0),
       amt: payAmount,
     });
     const loanResult = await _payLoan({
-      id: activeLoanView.loanId || globalLoan.ID || globalLoan.loanId || globalLoan._id,
+      id: targetLoanView.loanId || globalLoan.ID || globalLoan.loanId || globalLoan._id,
       payAmount,
     });
 
@@ -983,21 +1024,25 @@ const applyPortalGatewayTransaction = async (transaction) => {
   if (transaction.transactionType === "extension") {
     const extensionKey = String(transaction.context?.extensionKey || "").trim();
     const extensionOption =
-      (activeLoanView.extensionOptions || []).find((item) => item.key === extensionKey) ||
+      (targetLoanView.extensionOptions || []).find((item) => item.key === extensionKey) ||
       transaction.context?.extensionOption;
 
     if (!extensionOption) {
       throw new Error("The selected extension option is no longer available.");
     }
 
-    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
+    const globalLoan = await ensureLoanLedgerRecord({
+      userId: user.userId,
+      loanId: targetLoanView.loanId,
+      sourceLoan,
+    });
     if (!globalLoan) {
       throw new Error("Loan record not found.");
     }
 
     const nextDueDate = new Date(extensionOption.extendedDueDate);
     const extensionRecord = {
-      loanId: activeLoanView.loanId,
+      loanId: targetLoanView.loanId,
       extPeriod: extensionOption.label,
       extHandlingFee: `${toMoney(extensionOption.feeAmount || 0)}`,
       extExpDate: nextDueDate,
@@ -1016,7 +1061,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
     const savedLoan = await globalLoan.save();
     const savedUserExtension = await _createExt({
-      ID: activeLoanView.loanId,
+      ID: targetLoanView.loanId,
       dop: nextDueDate,
       userId: user.userId,
       extRecord: extensionRecord,
@@ -2073,6 +2118,7 @@ router.post("/portal/pay-loan", async (req, res) => {
 
     const currentUserData = user.toObject();
     const globalLoans = await Loans.find({ userId: user.userId }).lean();
+    const activeSourceLoan = getCurrentPortalLoan(currentUserData, globalLoans);
     const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
     if (!activeLoanView || !activeLoanView.canMakePayment) {
       await logSystemEvent({
@@ -2196,7 +2242,11 @@ router.post("/portal/pay-loan", async (req, res) => {
       });
     }
 
-    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
+    const globalLoan = await ensureLoanLedgerRecord({
+      userId: user.userId,
+      loanId: activeLoanView.loanId,
+      sourceLoan: activeSourceLoan,
+    });
     if (!globalLoan) {
       await logSystemEvent({
         level: "error",
@@ -2375,6 +2425,7 @@ router.post("/portal/extend-loan", async (req, res) => {
 
     const currentUserData = user.toObject();
     const globalLoans = await Loans.find({ userId: user.userId }).lean();
+    const activeSourceLoan = getCurrentPortalLoan(currentUserData, globalLoans);
     const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
     if (!activeLoanView || !activeLoanView.canExtend) {
       await logSystemEvent({
@@ -2502,7 +2553,11 @@ router.post("/portal/extend-loan", async (req, res) => {
       });
     }
 
-    const globalLoan = await findLoanRecordByBusinessId(activeLoanView.loanId);
+    const globalLoan = await ensureLoanLedgerRecord({
+      userId: user.userId,
+      loanId: activeLoanView.loanId,
+      sourceLoan: activeSourceLoan,
+    });
     if (!globalLoan) {
       await logSystemEvent({
         level: "error",
