@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const config = require("../../../config");
+const { getActiveCountryConfig } = require("../systemConfig");
 
 const DEFAULT_GATEWAY_TIMEOUT_MS = 15000;
 
@@ -38,14 +39,66 @@ const buildGatewayFailure = ({
   reference,
   message,
   raw = null,
+  pending = false,
 }) => ({
   success: false,
+  pending,
   provider,
   channel,
   reference,
   message,
   raw,
 });
+
+const formatBridgeRequestTime = (value = new Date()) => {
+  const date = new Date(value);
+  const pad = (item) => String(item).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+const buildBridgeAuthHeader = (username = "", password = "") =>
+  `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+
+const getBridgeCredentials = (systemConfig = {}) => ({
+  username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
+  password: String(systemConfig.apiSecret || config.bridgeApiPassword || "").trim(),
+  serviceId: Number.parseInt(
+    String(config.bridgeServiceId || "").trim(),
+    10
+  ),
+});
+
+const mapOperatorToBridgeNetworkCode = (operator = "") => {
+  const normalized = normalizeOperator(operator);
+
+  if (normalized.includes("mtn")) return "MTN";
+  if (
+    normalized.includes("telecel") ||
+    normalized.includes("vodafone") ||
+    normalized.includes("vod")
+  ) {
+    return "VOD";
+  }
+  if (normalized.includes("airtel") || normalized.includes("tigo")) return "AIR";
+
+  return "";
+};
+
+const getDisplayName = (user = {}, loan = {}) => {
+  const parts = [
+    user?.IDinfo?.firstName,
+    user?.IDinfo?.middleName,
+    user?.IDinfo?.lastName,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  if (parts.length > 0) return parts.join(" ");
+  return String(user?.userId || loan?.userId || "Customer").trim();
+};
 
 const fetchJsonWithTimeout = async (url, options = {}, providerName = "Gateway") => {
   const timeoutMs = getGatewayTimeoutMs();
@@ -361,13 +414,102 @@ const payWithPaystack = async ({ loan, paymentMethod }) => {
   }
 };
 
+const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
+  const bridgeCredentials = getBridgeCredentials(systemConfig);
+  const networkCode = mapOperatorToBridgeNetworkCode(paymentMethod?.operator);
+  const activeCountry = getActiveCountryConfig(systemConfig);
+
+  if (!bridgeCredentials.username || !bridgeCredentials.password || !bridgeCredentials.serviceId) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: "momo",
+      reference: loan.ID,
+      message:
+        "Bridge credentials are incomplete. Set BRIDGE_API_USERNAME, BRIDGE_API_PASSWORD, and BRIDGE_SERVICE_ID.",
+    });
+  }
+
+  if (!networkCode) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: paymentMethod?.operator || "unknown",
+      reference: loan.ID,
+      message: "The selected payment operator is not supported by Bridge routing.",
+    });
+  }
+
+  try {
+    const transactionId = `bridge-payout-${String(loan.ID || Date.now())}-${Date.now()}`.slice(
+      0,
+      80
+    );
+    const callbackUrl =
+      String(config.bridgeCallbackUrl || systemConfig.callbackUrl || "").trim() ||
+      "http://localhost:5000/loans/bridge/webhook";
+    const { response, payload } = await fetchJsonWithTimeout(
+      `${config.bridgeBaseUrl}/make_payment`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: buildBridgeAuthHeader(
+            bridgeCredentials.username,
+            bridgeCredentials.password
+          ),
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          service_id: bridgeCredentials.serviceId,
+          reference: `Loan disbursement ${loan.ID || ""}`.trim(),
+          customer_number: paymentMethod.method,
+          transaction_id: transactionId,
+          trans_type: "MTC",
+          amount: Number(loan.amount || 0),
+          nw: networkCode,
+          nickname: getDisplayName(user, loan),
+          payment_option: "MOM",
+          currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
+          currency_val: config.bridgeCurrencyValue,
+          callback_url: callbackUrl,
+          request_time: formatBridgeRequestTime(),
+        }),
+      },
+      "Bridge"
+    );
+    const accepted = response.ok && `${payload?.response_code || ""}` === "202";
+
+    return {
+      success: false,
+      pending: accepted,
+      provider: "bridge",
+      channel: networkCode,
+      reference: transactionId,
+      message: accepted
+        ? payload?.response_message || "Bridge payout accepted and is awaiting callback."
+        : payload?.response_message || "Bridge payout request failed.",
+      raw: payload,
+    };
+  } catch (error) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: networkCode,
+      reference: loan.ID,
+      message: error.message || "Bridge payout request failed.",
+      raw: error.originalError?.message || null,
+    });
+  }
+};
+
 const processLoanDisbursement = async ({ loan, user, systemConfig }) => {
   const paymentMethod = resolvePaymentMethod(user, loan);
+  const disbursementGateway = String(
+    systemConfig.disbursementGateway || systemConfig.activeChannel || ""
+  ).trim();
 
   if (!paymentMethod) {
     return {
       success: false,
-      provider: systemConfig.activeChannel,
+      provider: disbursementGateway || systemConfig.activeChannel,
       channel: "",
       reference: loan.ID,
       message: "Customer payment method could not be resolved for disbursement.",
@@ -375,11 +517,15 @@ const processLoanDisbursement = async ({ loan, user, systemConfig }) => {
     };
   }
 
-  if (systemConfig.activeChannel === "nsano") {
+  if (disbursementGateway === "bridge") {
+    return payWithBridge({ loan, user, paymentMethod, systemConfig });
+  }
+
+  if (disbursementGateway === "nsano") {
     return payWithNsano({ loan, paymentMethod, systemConfig });
   }
 
-  if (systemConfig.activeChannel === "paystack") {
+  if (disbursementGateway === "paystack") {
     return payWithPaystack({ loan, paymentMethod, systemConfig });
   }
 

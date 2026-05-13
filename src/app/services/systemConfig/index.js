@@ -1,6 +1,6 @@
 const SystemConfig = require("../../models/systemConfig");
 
-const SUPPORTED_CHANNELS = ["zynlepay", "nsano", "paystack"];
+const SUPPORTED_CHANNELS = ["zynlepay", "nsano", "paystack", "bridge"];
 const DEFAULT_LOAN_TERMS = [
   {
     key: "1-day",
@@ -155,6 +155,13 @@ const DEFAULT_COUNTRIES = [
         channel: "nsano",
         isEnabled: true,
       },
+      {
+        key: "bridge",
+        label: "Bridge",
+        type: "gateway",
+        channel: "bridge",
+        isEnabled: true,
+      },
     ],
     mobileMoneyNetworks: [
       { key: "mtn-gh", label: "MTN MoMo", type: "mobile-money", isEnabled: true },
@@ -239,8 +246,10 @@ const DEFAULT_CONFIG = {
   autoRepaymentPosting: false,
   requireGatewayApprovalCheck: true,
   gatewayProvider: "zynlepay",
+  collectionGateway: "zynlepay",
   activeChannel: "zynlepay",
-  implementedChannels: ["zynlepay", "nsano", "paystack"],
+  disbursementGateway: "zynlepay",
+  implementedChannels: ["zynlepay", "nsano", "paystack", "bridge"],
   gatewayAccountName: "Pathway Main Float",
   callbackUrl: "",
   settlementAccount: "",
@@ -512,13 +521,23 @@ const sanitizeIncomingConfig = (payload = {}) => {
       ? [...new Set(normalizedChannels)]
       : DEFAULT_CONFIG.implementedChannels;
 
-  if (!nextConfig.implementedChannels.includes(nextConfig.gatewayProvider)) {
-    nextConfig.gatewayProvider = nextConfig.implementedChannels[0];
+  nextConfig.collectionGateway = String(
+    nextConfig.collectionGateway || nextConfig.gatewayProvider || DEFAULT_CONFIG.collectionGateway
+  ).trim();
+  nextConfig.disbursementGateway = String(
+    nextConfig.disbursementGateway || nextConfig.activeChannel || DEFAULT_CONFIG.disbursementGateway
+  ).trim();
+
+  if (!nextConfig.implementedChannels.includes(nextConfig.collectionGateway)) {
+    nextConfig.collectionGateway = nextConfig.implementedChannels[0];
   }
 
-  if (!nextConfig.implementedChannels.includes(nextConfig.activeChannel)) {
-    nextConfig.activeChannel = nextConfig.gatewayProvider;
+  if (!nextConfig.implementedChannels.includes(nextConfig.disbursementGateway)) {
+    nextConfig.disbursementGateway = nextConfig.collectionGateway;
   }
+
+  nextConfig.gatewayProvider = nextConfig.collectionGateway;
+  nextConfig.activeChannel = nextConfig.disbursementGateway;
 
   nextConfig.autoRepaymentPosting = Boolean(nextConfig.autoRepaymentPosting);
   nextConfig.requireGatewayApprovalCheck = Boolean(

@@ -327,13 +327,21 @@ const systemConfigSchema = new mongoose.Schema(
       type: String,
       default: "zynlepay",
     },
+    collectionGateway: {
+      type: String,
+      default: "zynlepay",
+    },
     activeChannel: {
+      type: String,
+      default: "zynlepay",
+    },
+    disbursementGateway: {
       type: String,
       default: "zynlepay",
     },
     implementedChannels: {
       type: [String],
-      default: ["zynlepay", "nsano", "paystack"],
+      default: ["zynlepay", "nsano", "paystack", "bridge"],
     },
     gatewayAccountName: {
       type: String,

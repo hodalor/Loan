@@ -37,7 +37,8 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
 
     let payoutResult = {
       success: false,
-      provider: systemConfig.activeChannel,
+      pending: false,
+      provider: systemConfig.disbursementGateway || systemConfig.activeChannel,
       channel: "",
       reference: ID,
       message: "Loan approved and queued for manual disbursement.",
@@ -71,7 +72,7 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
       disbursementProvider:
         systemConfig.disbursementMode === "automatic"
           ? payoutResult.provider
-          : systemConfig.activeChannel,
+          : systemConfig.disbursementGateway || systemConfig.activeChannel,
       disbursementChannel:
         systemConfig.disbursementMode === "automatic"
           ? payoutResult.channel
@@ -80,6 +81,8 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
         systemConfig.disbursementMode === "automatic"
           ? payoutResult.success
             ? "success"
+            : payoutResult.pending
+            ? "pending"
             : "failed"
           : "pending-manual",
       payoutReference: payoutResult.reference || ID,
@@ -137,6 +140,7 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
         payoutStatus: loanUpdate.payoutStatus,
         payoutMessage: payoutResult.message,
         activeChannel: systemConfig.activeChannel,
+        disbursementGateway: systemConfig.disbursementGateway || systemConfig.activeChannel,
       },
     });
   } catch (error) {

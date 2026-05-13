@@ -413,6 +413,36 @@ const buildGatewayPollUrl = (req, systemConfig = {}) => {
     return `${req.protocol}://${req.get("host")}/`;
   }
 };
+const formatBridgeRequestTime = (value = new Date()) => {
+  const date = new Date(value);
+  const pad = (item) => String(item).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+const buildBridgeAuthHeader = (username = "", password = "") =>
+  `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+const getBridgeCredentials = (systemConfig = {}) => ({
+  username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
+  password: String(systemConfig.apiSecret || config.bridgeApiPassword || "").trim(),
+  serviceId: Number.parseInt(String(config.bridgeServiceId || "").trim(), 10),
+});
+const mapOperatorToBridgeNetworkCode = (operator = "") => {
+  const normalized = String(operator || "").trim().toLowerCase();
+
+  if (normalized.includes("mtn")) return "MTN";
+  if (
+    normalized.includes("telecel") ||
+    normalized.includes("vodafone") ||
+    normalized.includes("vod")
+  ) {
+    return "VOD";
+  }
+  if (normalized.includes("airtel") || normalized.includes("tigo")) return "AIR";
+
+  return "";
+};
 const runCollectionCharge = async ({
   amount,
   senderId,
@@ -452,6 +482,128 @@ const runCollectionCharge = async ({
       payload?.response?.sender_id ||
       payload?.sender_id ||
       senderId,
+  };
+};
+const initializeBridgeCharge = async ({
+  req,
+  user,
+  amount,
+  systemConfig,
+  referencePrefix,
+  transactionType,
+  loanId,
+  context = {},
+}) => {
+  const sourceAccount = getRepaymentSourceAccount(user);
+  const bridgeCredentials = getBridgeCredentials(systemConfig);
+  const networkCode = mapOperatorToBridgeNetworkCode(sourceAccount?.operator);
+  const activeCountry = getActiveCountryConfig(systemConfig);
+
+  if (!bridgeCredentials.username || !bridgeCredentials.password || !bridgeCredentials.serviceId) {
+    return {
+      success: false,
+      message:
+        "Bridge credentials are incomplete. Set BRIDGE_API_USERNAME, BRIDGE_API_PASSWORD, and BRIDGE_SERVICE_ID.",
+    };
+  }
+
+  if (!sourceAccount?.method) {
+    return {
+      success: false,
+      message: "No repayment account is linked to this customer profile.",
+    };
+  }
+
+  if (!networkCode) {
+    return {
+      success: false,
+      message: "The selected mobile money operator is not supported by Bridge.",
+    };
+  }
+
+  const reference = `${referencePrefix}-${Date.now()}-${String(user.userId || "customer").toLowerCase()}`.slice(
+    0,
+    80
+  );
+  const callbackUrl =
+    String(config.bridgeCallbackUrl || systemConfig.callbackUrl || "").trim() ||
+    `${req.protocol}://${req.get("host")}/users/portal/bridge/webhook`;
+
+  const response = await fetch(`${config.bridgeBaseUrl}/make_payment`, {
+    method: "POST",
+    headers: {
+      Authorization: buildBridgeAuthHeader(
+        bridgeCredentials.username,
+        bridgeCredentials.password
+      ),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      service_id: bridgeCredentials.serviceId,
+      reference: `${transactionType === "extension" ? "Loan extension" : "Loan repayment"} ${loanId || ""}`.trim(),
+      customer_number: sourceAccount.method,
+      transaction_id: reference,
+      trans_type: "CTM",
+      amount: toMoney(amount),
+      nw: networkCode,
+      nickname: user?.IDinfo?.firstName || user?.userId || "Customer",
+      payment_option: "MOM",
+      currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
+      currency_val: config.bridgeCurrencyValue,
+      callback_url: callbackUrl,
+      request_time: formatBridgeRequestTime(),
+    }),
+  });
+  const payload = await response.json();
+  const accepted = response.ok && `${payload?.response_code || ""}` === "202";
+
+  if (!accepted) {
+    return {
+      success: false,
+      message:
+        payload?.response_message || payload?.message || "Bridge could not initialize the payment.",
+      raw: payload,
+    };
+  }
+
+  await GatewayTransactions.findOneAndUpdate(
+    { reference },
+    {
+      $set: {
+        provider: "bridge",
+        reference,
+        transactionType,
+        status: "pending",
+        processed: false,
+        phone: sanitizePhone(user.phone || ""),
+        userId: user.userId || "",
+        loanId: loanId || "",
+        methodKey: "mobile-money",
+        amount: toMoney(amount),
+        currency: activeCountry?.currencyCode || config.bridgeCurrencyCode,
+        checkoutUrl: "",
+        context,
+        rawInitializeResponse: payload,
+        failureReason: "",
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    }
+  );
+
+  return {
+    success: false,
+    pending: true,
+    provider: "bridge",
+    message:
+      payload?.response_message ||
+      "Bridge payment request submitted. Approve the prompt on the customer's phone.",
+    raw: payload,
+    reference,
   };
 };
 const pollGatewayFeedback = async ({ req, senderId, systemConfig }) => {
@@ -608,6 +760,62 @@ const verifyPaystackCharge = async (reference) => {
     raw: payload,
   };
 };
+const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
+  const event = webhookEvent || transaction?.rawWebhookEvent || null;
+  const callbackStatus = String(event?.status || "").trim();
+  const normalizedTransactionStatus = String(transaction?.status || "").trim().toLowerCase();
+
+  if (callbackStatus === "000" || normalizedTransactionStatus === "success") {
+    return {
+      success: true,
+      pending: false,
+      message:
+        String(event?.status_desc || "").trim() ||
+        String(event?.message || "").trim() ||
+        "Bridge payment completed successfully.",
+      raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
+    };
+  }
+
+  if (
+    callbackStatus === "002" ||
+    ["pending", "processing", "queued"].includes(normalizedTransactionStatus)
+  ) {
+    return {
+      success: false,
+      pending: true,
+      message:
+        String(event?.status_desc || "").trim() ||
+        String(event?.message || "").trim() ||
+        "Bridge payment is still pending.",
+      raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
+    };
+  }
+
+  if (
+    callbackStatus === "001" ||
+    callbackStatus === "003" ||
+    normalizedTransactionStatus === "failed"
+  ) {
+    return {
+      success: false,
+      pending: false,
+      message:
+        String(event?.status_desc || "").trim() ||
+        String(event?.message || "").trim() ||
+        transaction?.failureReason ||
+        "Bridge payment failed.",
+      raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
+    };
+  }
+
+  return {
+    success: false,
+    pending: true,
+    message: "Bridge payment is still awaiting callback confirmation.",
+    raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
+  };
+};
 const applyPortalGatewayTransaction = async (transaction) => {
   const user = await User.findOne({ phone: transaction.phone });
   if (!user) {
@@ -728,7 +936,10 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
     };
   }
 
-  const verification = await verifyPaystackCharge(reference);
+  const verification =
+    String(transaction.provider || "").trim() === "bridge"
+      ? await verifyBridgeCharge(transaction, webhookEvent)
+      : await verifyPaystackCharge(reference);
   await GatewayTransactions.updateOne(
     { _id: transaction._id },
     {
@@ -858,7 +1069,8 @@ const processCustomerGatewayCharge = async ({
   context = {},
 }) => {
   if (
-    (systemConfig.gatewayProvider === "paystack" ||
+    (systemConfig.collectionGateway === "paystack" ||
+      systemConfig.gatewayProvider === "paystack" ||
       systemConfig.activeChannel === "paystack") &&
     (methodKey === "mobile-money" || methodKey === "card")
   ) {
@@ -877,8 +1089,25 @@ const processCustomerGatewayCharge = async ({
   if (methodKey !== "mobile-money") {
     return {
       success: false,
-      message: "Card payments are only available when Paystack is the active gateway.",
+      message:
+        "Card payments are only available when Paystack is the selected collection gateway.",
     };
+  }
+
+  if (
+    systemConfig.collectionGateway === "bridge" ||
+    systemConfig.gatewayProvider === "bridge"
+  ) {
+    return initializeBridgeCharge({
+      req,
+      user,
+      amount,
+      systemConfig,
+      referencePrefix,
+      transactionType,
+      loanId,
+      context,
+    });
   }
 
   const sourceAccount = getRepaymentSourceAccount(user);
@@ -1657,6 +1886,10 @@ router.post("/portal/pay-loan", async (req, res) => {
           success: 2,
           message: gatewayResult.message,
           data: {
+            provider:
+              gatewayResult.provider ||
+              systemConfig.collectionGateway ||
+              systemConfig.gatewayProvider,
             checkoutUrl: gatewayResult.checkoutUrl,
             reference: gatewayResult.reference,
             activeLoan: activeLoanView,
@@ -1800,6 +2033,10 @@ router.post("/portal/extend-loan", async (req, res) => {
           success: 2,
           message: gatewayResult.message,
           data: {
+            provider:
+              gatewayResult.provider ||
+              systemConfig.collectionGateway ||
+              systemConfig.gatewayProvider,
             checkoutUrl: gatewayResult.checkoutUrl,
             reference: gatewayResult.reference,
             activeLoan: activeLoanView,
@@ -1897,9 +2134,11 @@ router.post("/portal/extend-loan", async (req, res) => {
   }
 });
 
-router.post("/portal/paystack/verify", async (req, res) => {
+const handlePortalGatewayVerification = async (req, res) => {
   try {
-    const reference = getPaystackReferenceFromPayload(req.body);
+    const reference =
+      getPaystackReferenceFromPayload(req.body) ||
+      String(req.body?.reference || "").trim();
 
     if (!reference) {
       return res.status(400).json({
@@ -1919,6 +2158,57 @@ router.post("/portal/paystack/verify", async (req, res) => {
       success: 0,
       message: "Internal error: code(500)!",
     });
+  }
+};
+
+router.post("/portal/gateway/verify", handlePortalGatewayVerification);
+router.post("/portal/paystack/verify", handlePortalGatewayVerification);
+
+router.post("/portal/bridge/webhook", async (req, res) => {
+  try {
+    const reference = String(req.body?.transaction_id || "").trim();
+    if (!reference) {
+      return res.sendStatus(200);
+    }
+
+    const transaction = await GatewayTransactions.findOne({ reference });
+    if (!transaction) {
+      return res.sendStatus(200);
+    }
+
+    const bridgeStatus = String(req.body?.status || "").trim();
+    await GatewayTransactions.updateOne(
+      { _id: transaction._id },
+      {
+        $set: {
+          rawWebhookEvent: req.body,
+          status:
+            bridgeStatus === "000"
+              ? "success"
+              : bridgeStatus === "002"
+              ? "pending"
+              : bridgeStatus === "001" || bridgeStatus === "003"
+              ? "failed"
+              : transaction.status,
+          failureReason:
+            bridgeStatus === "000"
+              ? ""
+              : String(req.body?.status_desc || req.body?.message || "").trim(),
+        },
+      }
+    );
+
+    if (bridgeStatus === "000") {
+      await finalizePortalGatewayTransaction({
+        reference,
+        webhookEvent: req.body,
+      });
+    }
+
+    return res.sendStatus(200);
+  } catch (error) {
+    console.log(error);
+    return res.sendStatus(200);
   }
 });
 

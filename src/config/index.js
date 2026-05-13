@@ -16,6 +16,13 @@ module.exports = {
   paystackMtnBankCode: process.env.PAYSTACK_MTN_BANK_CODE,
   paystackAirtelBankCode: process.env.PAYSTACK_AIRTEL_BANK_CODE,
   paystackZamtelBankCode: process.env.PAYSTACK_ZAMTEL_BANK_CODE,
+  bridgeBaseUrl: process.env.BRIDGE_BASE_URL || "https://api.bridgeagw.com",
+  bridgeApiUsername: process.env.BRIDGE_API_USERNAME,
+  bridgeApiPassword: process.env.BRIDGE_API_PASSWORD,
+  bridgeServiceId: process.env.BRIDGE_SERVICE_ID,
+  bridgeCallbackUrl: process.env.BRIDGE_CALLBACK_URL,
+  bridgeCurrencyCode: process.env.BRIDGE_CURRENCY_CODE || "GHS",
+  bridgeCurrencyValue: process.env.BRIDGE_CURRENCY_VALUE || "1",
   database: process.env.MONGO_URI,
   server: {
     port: process.env.PORT,

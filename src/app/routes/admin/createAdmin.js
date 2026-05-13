@@ -20,6 +20,7 @@ router.post("/createAdmin", async (req, res) => {
       department,
       permissions,
       staffGroupId,
+      managedStaffGroupIds,
     } = req.body;
 
     const user = await Admins.findOne({ userName });
@@ -45,6 +46,13 @@ router.post("/createAdmin", async (req, res) => {
       });
 
     let staffGroupName = "";
+    const normalizedManagedGroupIds = [
+      ...new Set(
+        (Array.isArray(managedStaffGroupIds) ? managedStaffGroupIds : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      ),
+    ];
     if (staffGroupId) {
       const group = await StaffGroups.findById(staffGroupId).lean();
 
@@ -61,6 +69,28 @@ router.post("/createAdmin", async (req, res) => {
         });
 
       staffGroupName = group.name;
+    }
+
+    if (normalizedManagedGroupIds.length > 0) {
+      const managedGroups = await StaffGroups.find({
+        _id: { $in: normalizedManagedGroupIds },
+      }).lean();
+
+      if (managedGroups.length !== normalizedManagedGroupIds.length)
+        return res.status(400).json({
+          success: 0,
+          message: "One or more managed groups could not be found",
+        });
+
+      const invalidGroup = managedGroups.find(
+        (group) => String(group.department || "").trim() !== String(department || "").trim()
+      );
+
+      if (invalidGroup)
+        return res.status(400).json({
+          success: 0,
+          message: "Managed groups must belong to the chosen department",
+        });
     }
 
     const generatedID = await _generateString(6);
@@ -83,6 +113,7 @@ router.post("/createAdmin", async (req, res) => {
       permissions: Array.isArray(permissions) ? permissions : [],
       staffGroupId: staffGroupId ? String(staffGroupId) : "",
       staffGroupName,
+      managedStaffGroupIds: normalizedManagedGroupIds,
     });
 
     const savedUser = await userData.save();

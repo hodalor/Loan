@@ -19,6 +19,7 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       department,
       permissions,
       staffGroupId,
+      managedStaffGroupIds,
     } = req.body;
 
     const user = await Admins.findOne({ userName });
@@ -35,6 +36,13 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
     }
 
     let staffGroupName = "";
+    const normalizedManagedGroupIds = [
+      ...new Set(
+        (Array.isArray(managedStaffGroupIds) ? managedStaffGroupIds : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      ),
+    ];
     if (staffGroupId) {
       const group = await StaffGroups.findById(staffGroupId).lean();
 
@@ -53,6 +61,28 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       staffGroupName = group.name;
     }
 
+    if (normalizedManagedGroupIds.length > 0) {
+      const managedGroups = await StaffGroups.find({
+        _id: { $in: normalizedManagedGroupIds },
+      }).lean();
+
+      if (managedGroups.length !== normalizedManagedGroupIds.length)
+        return res.status(400).json({
+          success: 0,
+          message: "One or more managed groups could not be found",
+        });
+
+      const invalidGroup = managedGroups.find(
+        (group) => String(group.department || "").trim() !== String(department || "").trim()
+      );
+
+      if (invalidGroup)
+        return res.status(400).json({
+          success: 0,
+          message: "Managed groups must belong to the chosen department",
+        });
+    }
+
     user.role = role;
     user.firstName = firstName;
     user.lastName = lastName;
@@ -61,6 +91,7 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
     user.department = department;
     user.staffGroupId = staffGroupId ? String(staffGroupId) : "";
     user.staffGroupName = staffGroupName;
+    user.managedStaffGroupIds = normalizedManagedGroupIds;
     user.permissions = Array.isArray(permissions) ? permissions : user.permissions;
 
     let updatedUser = await user.save();

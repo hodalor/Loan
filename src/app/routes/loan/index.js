@@ -22,6 +22,7 @@ const getLoansByAdminID = require("./getLoansByAdminID");
 const retryDisbursement = require("./retryDisbursement");
 const manualDisbursement = require("./manualDisbursement");
 const adminExtension = require("./adminExtension");
+const bridgeWebhook = require("./bridgeWebhook");
 
 module.exports = {
   grantLoan,
@@ -48,4 +49,5 @@ module.exports = {
   retryDisbursement,
   manualDisbursement,
   adminExtension,
+  bridgeWebhook,
 };

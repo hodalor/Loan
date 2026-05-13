@@ -24,7 +24,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
     const selectedChannel =
       channel && systemConfig.implementedChannels.includes(channel)
         ? channel
-        : systemConfig.activeChannel;
+        : systemConfig.disbursementGateway || systemConfig.activeChannel;
 
     const user = await Users.findOne({ userId: loan.userId });
     const payoutResult = await processLoanDisbursement({
@@ -32,6 +32,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
       user,
       systemConfig: {
         ...systemConfig,
+        disbursementGateway: selectedChannel,
         activeChannel: selectedChannel,
       },
     });
@@ -39,7 +40,11 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
     loan.isDisbursed = payoutResult.success;
     loan.disbursementProvider = selectedChannel;
     loan.disbursementChannel = payoutResult.channel || selectedChannel;
-    loan.payoutStatus = payoutResult.success ? "success" : "failed";
+    loan.payoutStatus = payoutResult.success
+      ? "success"
+      : payoutResult.pending
+      ? "pending"
+      : "failed";
     loan.payoutReference = payoutResult.reference || loan.ID;
     loan.payoutMessage = payoutResult.message;
 

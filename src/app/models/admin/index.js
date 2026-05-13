@@ -88,6 +88,11 @@ const adminSchema = new mongoose.Schema(
       required: false,
       default: "",
     },
+    managedStaffGroupIds: {
+      type: [String],
+      required: false,
+      default: [],
+    },
     isActive: {
       type: Boolean,
       required: true,

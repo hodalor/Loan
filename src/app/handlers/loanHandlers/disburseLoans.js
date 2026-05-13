@@ -24,7 +24,11 @@ const _disburseLoans = async (data) => {
     loan.disbursementMode = "manual";
     loan.disbursementProvider = payoutResult.provider;
     loan.disbursementChannel = payoutResult.channel || "manual-queue";
-    loan.payoutStatus = payoutResult.success ? "success" : "failed";
+    loan.payoutStatus = payoutResult.success
+      ? "success"
+      : payoutResult.pending
+      ? "pending"
+      : "failed";
     loan.payoutReference = payoutResult.reference;
     loan.payoutMessage = payoutResult.message;
 
