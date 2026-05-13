@@ -26,6 +26,12 @@
   justify-content: flex-start;
 }
 
+.hero-panel-auth {
+  width: min(100%, 420px);
+  margin: 0 auto;
+  justify-content: flex-start;
+}
+
 .brand-inline {
   display: flex;
   align-items: center;
@@ -362,6 +368,10 @@
     padding: 10px 14px;
   }
 
+  .hero-panel-auth {
+    width: min(100%, 420px);
+  }
+
   .hero-panel h1 {
     font-size: 19px;
   }
@@ -394,6 +404,10 @@
   }
 
   .hero-panel {
+    justify-content: flex-start;
+  }
+
+  .hero-panel-auth {
     justify-content: flex-start;
   }
 }

@@ -1960,7 +1960,9 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-stage">
-        <header className={`hero-panel ${screen === "portal" ? "hero-panel-wide" : ""}`}>
+        <header
+          className={`hero-panel ${screen === "portal" ? "hero-panel-wide" : "hero-panel-auth"}`}
+        >
           <div className="brand-inline">
             {brandLogoUrl ? (
               <img src={brandLogoUrl} alt={brandName} className="brand-mark brand-mark-image" />
