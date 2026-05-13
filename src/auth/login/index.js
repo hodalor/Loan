@@ -29,7 +29,7 @@ export default function Login() {
             className="h-12 w-12 rounded-2xl object-cover"
           />
           <h2 className="text-[28px] font-semibold leading-none text-slate-900">
-            Pathway Loans
+            QUICK MULA
           </h2>
         </div>
 
