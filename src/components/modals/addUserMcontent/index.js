@@ -10,6 +10,8 @@ const initialFields = {
   firstName: "",
   lastName: "",
   phone: "",
+  salaryNumber: "",
+  salaryOperator: "",
   email: "",
   password: "",
   role: "",
@@ -28,6 +30,14 @@ export default function AddUserDetial() {
     () => getGroupOptionsByDepartment(staffGroups, fields.department),
     [fields.department, staffGroups]
   );
+  const payoutOperatorOptions = [
+    { value: "MTN", label: "MTN" },
+    { value: "AIRTEL", label: "Airtel" },
+    { value: "ZAMTEL", label: "Zamtel" },
+    { value: "TELECEL", label: "Telecel" },
+    { value: "VODAFONE", label: "Vodafone" },
+    { value: "AIRTELTIGO", label: "AirtelTigo" },
+  ];
 
   const updateField = (field, value) => {
     setFields((current) => ({
@@ -125,6 +135,31 @@ export default function AddUserDetial() {
                 value={fields.phone}
                 onChange={(e) => updateField("phone", e.target.value)}
               />
+            </div>
+            <div>
+              <label className="app-label">Salary Number*</label>
+              <input
+                type="text"
+                className="app-input"
+                placeholder="Mobile money salary number"
+                value={fields.salaryNumber}
+                onChange={(e) => updateField("salaryNumber", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="app-label">Salary Operator*</label>
+              <select
+                className="app-select"
+                value={fields.salaryOperator}
+                onChange={(e) => updateField("salaryOperator", e.target.value)}
+              >
+                <option value="">Select operator</option>
+                {payoutOperatorOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="app-label">Email*</label>

@@ -8,6 +8,8 @@ const _createAdmin = async (data) => {
     password,
     email,
     phone,
+    salaryNumber,
+    salaryOperator,
     role,
     department,
     gender,
@@ -28,6 +30,8 @@ const _createAdmin = async (data) => {
     password === "" ||
     email === "" ||
     phone === "" ||
+    salaryNumber === "" ||
+    salaryOperator === "" ||
     role === "" ||
     department === "" ||
     gender === ""

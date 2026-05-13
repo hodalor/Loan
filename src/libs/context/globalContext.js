@@ -1593,6 +1593,8 @@ export default function GlobalContextProvider(props) {
       firstName: fields.firstName,
       lastName: fields.lastName,
       phone: fields.phone,
+      salaryNumber: fields.salaryNumber,
+      salaryOperator: fields.salaryOperator,
       password: fields.password,
       email: fields.email,
       userName: fields.userName,
@@ -1712,6 +1714,8 @@ export default function GlobalContextProvider(props) {
       firstName: fields.firstName,
       lastName: fields.lastName,
       phone: fields.phone,
+      salaryNumber: fields.salaryNumber,
+      salaryOperator: fields.salaryOperator,
       password: fields.password,
       email: fields.email,
       role: fields.role,
@@ -1727,6 +1731,8 @@ export default function GlobalContextProvider(props) {
       data.firstName === "" &&
       data.lastName === "" &&
       data.phone === "" &&
+      data.salaryNumber === "" &&
+      data.salaryOperator === "" &&
       data.password === "" &&
       data.email === "" &&
       data.role === "" &&
@@ -1770,6 +1776,10 @@ export default function GlobalContextProvider(props) {
         fields.firstName === "" ? userDetails.firstName : fields.firstName,
       lastName: fields.lastName === "" ? userDetails.lastName : fields.lastName,
       phone: fields.phone === "" ? userDetails.phone : fields.phone,
+      salaryNumber:
+        fields.salaryNumber === "" ? userDetails.salaryNumber || "" : fields.salaryNumber,
+      salaryOperator:
+        fields.salaryOperator === "" ? userDetails.salaryOperator || "" : fields.salaryOperator,
       password: fields.password.trim() === "" ? "" : fields.password,
       email: fields.email === "" ? userDetails.email : fields.email,
       role: fields.role === "" ? userDetails.role : fields.role,
@@ -1812,6 +1822,10 @@ export default function GlobalContextProvider(props) {
     oldData.lastName =
       fields.lastName === "" ? userDetails.lastName : fields.lastName;
     oldData.phone = fields.phone === "" ? userDetails.phone : fields.phone;
+    oldData.salaryNumber =
+      fields.salaryNumber === "" ? userDetails.salaryNumber || "" : fields.salaryNumber;
+    oldData.salaryOperator =
+      fields.salaryOperator === "" ? userDetails.salaryOperator || "" : fields.salaryOperator;
     oldData.email = fields.email === "" ? userDetails.email : fields.email;
     oldData.role = fields.role === "" ? userDetails.role : fields.role;
     oldData.department =

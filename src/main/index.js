@@ -55,6 +55,12 @@ import SystemConfig from "./system management/Config";
 import AuditLogs from "./system management/Audit Logs";
 import ErrorLogs from "./system management/Error Logs";
 import SystemDocs from "./system management/Docs";
+import FundPayments from "./Fund Management/Payments";
+import FailedPayments from "./Fund Management/Failed Payments";
+import FundAirtime from "./Fund Management/Airtime";
+import FailedAirtime from "./Fund Management/Failed Airtime";
+import BatchPayments from "./Fund Management/Batch Payments";
+import BatchTalktime from "./Fund Management/Batch Talktime";
 
 function GuardedRoute({ component: Component, allow, ...rest }) {
   return (
@@ -209,6 +215,36 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
             <Route path="/extension-records" component={ExtensionRecords} />
             <Route path="/chinese-word" component={ChineseWorld} />
             <Route path="/data-center-data" component={RecoveryDataCenter} />
+            <GuardedRoute
+              path="/fund-payments"
+              component={FundPayments}
+              allow={canOpenPath("/fund-payments")}
+            />
+            <GuardedRoute
+              path="/fund-failed-payments"
+              component={FailedPayments}
+              allow={canOpenPath("/fund-failed-payments")}
+            />
+            <GuardedRoute
+              path="/fund-airtime"
+              component={FundAirtime}
+              allow={canOpenPath("/fund-airtime")}
+            />
+            <GuardedRoute
+              path="/fund-failed-airtime"
+              component={FailedAirtime}
+              allow={canOpenPath("/fund-failed-airtime")}
+            />
+            <GuardedRoute
+              path="/fund-batch-payments"
+              component={BatchPayments}
+              allow={canOpenPath("/fund-batch-payments")}
+            />
+            <GuardedRoute
+              path="/fund-batch-talktime"
+              component={BatchTalktime}
+              allow={canOpenPath("/fund-batch-talktime")}
+            />
             <Route path="/order-lending2" component={OrderLending2} />
             <Route
               path="/manual-payment-pool"

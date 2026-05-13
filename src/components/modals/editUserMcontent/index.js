@@ -10,6 +10,8 @@ const buildEditState = (userDetails = {}) => ({
   firstName: userDetails.firstName || "",
   lastName: userDetails.lastName || "",
   phone: userDetails.phone || "",
+  salaryNumber: userDetails.salaryNumber || "",
+  salaryOperator: userDetails.salaryOperator || "",
   email: userDetails.email || "",
   password: "",
   role: userDetails.role || "",
@@ -48,6 +50,14 @@ export default function EditUserDetial() {
     () => getGroupOptionsByDepartment(staffGroups, fields.department),
     [fields.department, staffGroups]
   );
+  const payoutOperatorOptions = [
+    { value: "MTN", label: "MTN" },
+    { value: "AIRTEL", label: "Airtel" },
+    { value: "ZAMTEL", label: "Zamtel" },
+    { value: "TELECEL", label: "Telecel" },
+    { value: "VODAFONE", label: "Vodafone" },
+    { value: "AIRTELTIGO", label: "AirtelTigo" },
+  ];
 
   React.useEffect(() => {
     setFields(buildEditState(userDetails));
@@ -183,6 +193,30 @@ export default function EditUserDetial() {
                     value={fields.phone}
                     onChange={(e) => updateField("phone", e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="app-label">Salary Number</label>
+                  <input
+                    type="text"
+                    className="app-input"
+                    value={fields.salaryNumber}
+                    onChange={(e) => updateField("salaryNumber", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="app-label">Salary Operator</label>
+                  <select
+                    className="app-select"
+                    value={fields.salaryOperator}
+                    onChange={(e) => updateField("salaryOperator", e.target.value)}
+                  >
+                    <option value="">Select operator</option>
+                    {payoutOperatorOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="app-label">Email</label>
@@ -339,6 +373,18 @@ export default function EditUserDetial() {
                 <p className="text-sm text-slate-500">Phone Number</p>
                 <p className="mt-2 text-base font-semibold text-slate-900">
                   {userDetails.phone}
+                </p>
+              </div>
+              <div className={infoCardClass}>
+                <p className="text-sm text-slate-500">Salary Number</p>
+                <p className="mt-2 text-base font-semibold text-slate-900">
+                  {userDetails.salaryNumber || "-"}
+                </p>
+              </div>
+              <div className={infoCardClass}>
+                <p className="text-sm text-slate-500">Salary Operator</p>
+                <p className="mt-2 text-base font-semibold text-slate-900">
+                  {userDetails.salaryOperator || "-"}
                 </p>
               </div>
               <div className={infoCardClass}>
