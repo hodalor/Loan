@@ -3,7 +3,11 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import BasicSelect from "../../../components/inputs/select";
 import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
-import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
+import {
+  getAdminsByGroupIds,
+  getGroupOptionsByDepartment,
+  getManagedGroupIdsForUser,
+} from "../../../libs/staffGroups";
 
 export default function PrePaymentRecords() {
   const {
@@ -20,18 +24,54 @@ export default function PrePaymentRecords() {
     setRange,
     setSelect,
     _handleOnChange,
+    user,
+    _hasAccess,
   } = React.useContext(GlobalContext);
+  const paymentScope = _hasAccess("action:precollection:payments:all")
+    ? "all"
+    : _hasAccess("action:precollection:payments:group")
+      ? "group"
+      : _hasAccess("action:precollection:payments:own")
+        ? "own"
+        : "none";
+  const managedGroupIds = React.useMemo(
+    () => getManagedGroupIdsForUser(user, staffGroups, "pre-collection"),
+    [staffGroups, user]
+  );
+  const scopedOfficerNames = React.useMemo(
+    () =>
+      new Set(
+        getAdminsByGroupIds(admins, managedGroupIds)
+          .map((admin) => String(admin.userName || "").trim())
+          .filter(Boolean)
+      ),
+    [admins, managedGroupIds]
+  );
+  const currentOfficerName = String(user?.userName || "").trim();
 
   const preOff = React.useMemo(
     () =>
       admins.filter(
-        (admin) => admin.role === "pre-personel" || admin.role === "pre-team-lead"
+        (admin) =>
+          (admin.role === "pre-personel" || admin.role === "pre-team-lead") &&
+          (paymentScope === "all"
+            ? true
+            : paymentScope === "group"
+              ? scopedOfficerNames.size === 0
+                ? String(admin.userName || "").trim() === currentOfficerName
+                : scopedOfficerNames.has(String(admin.userName || "").trim())
+              : String(admin.userName || "").trim() === currentOfficerName)
       ),
-    [admins]
+    [admins, currentOfficerName, paymentScope, scopedOfficerNames]
   );
   const groupOptions = React.useMemo(
-    () => getGroupOptionsByDepartment(staffGroups, "pre-collection"),
-    [staffGroups]
+    () => {
+      const options = getGroupOptionsByDepartment(staffGroups, "pre-collection");
+      if (paymentScope === "all") return options;
+      const allowedIds = new Set(managedGroupIds);
+      return options.filter((group) => allowedIds.has(String(group.value || "")));
+    },
+    [managedGroupIds, paymentScope, staffGroups]
   );
 
   const _calcTotalAmount = (data) => {
@@ -153,7 +193,24 @@ export default function PrePaymentRecords() {
       .toLowerCase();
     const normalizedAdvanceGroup = String(select.advanceGroup || "").trim();
 
-    return rows.filter((row) => {
+    const scopedRows = rows.filter((row) => {
+      const officerName = String(row.preCollOfficer || "").trim();
+
+      if (paymentScope === "all") return true;
+      if (paymentScope === "group") {
+        if (scopedOfficerNames.size === 0) {
+          return officerName === currentOfficerName;
+        }
+        return scopedOfficerNames.has(officerName);
+      }
+      if (paymentScope === "own") {
+        return officerName === currentOfficerName;
+      }
+
+      return false;
+    });
+
+    return scopedRows.filter((row) => {
       const matchesUserId =
         !normalizedUserId ||
         String(row.userId || "").trim().toLowerCase().includes(normalizedUserId);
@@ -192,8 +249,11 @@ export default function PrePaymentRecords() {
     isWithinDateRange,
     rows,
     admins,
+    currentOfficerName,
     select.advanceGroup,
     select.advanceStaff,
+    paymentScope,
+    scopedOfficerNames,
   ]);
 
   const handleExport = () => {
@@ -277,11 +337,13 @@ export default function PrePaymentRecords() {
                 })
               }
             />
-            <BasicSelect data={preOff} title="Advance Staff" />
-            <BasicSelect
-              data={groupOptions}
-              title="Advance Group"
-            />
+            {paymentScope !== "own" ? <BasicSelect data={preOff} title="Advance Staff" /> : null}
+            {paymentScope === "group" || paymentScope === "all" ? (
+              <BasicSelect
+                data={groupOptions}
+                title="Advance Group"
+              />
+            ) : null}
             <CustomDateRangeInputs />
           </div>
           <div className="flex flex-wrap gap-3">

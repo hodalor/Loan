@@ -247,8 +247,14 @@ export default function SystemConfig() {
       return {
         ...current,
         implementedChannels: nextChannels,
+        disbursementGateway: nextChannels.includes(current.disbursementGateway)
+          ? current.disbursementGateway
+          : nextChannels[0],
         activeChannel: nextChannels.includes(current.activeChannel)
           ? current.activeChannel
+          : nextChannels[0],
+        collectionGateway: nextChannels.includes(current.collectionGateway)
+          ? current.collectionGateway
           : nextChannels[0],
         gatewayProvider: nextChannels.includes(current.gatewayProvider)
           ? current.gatewayProvider
@@ -745,7 +751,9 @@ export default function SystemConfig() {
                 />
                 <StatCard
                   title="Primary Channel"
-                  value={channelLabels[config.activeChannel] || "Not set"}
+                  value={
+                    channelLabels[config.disbursementGateway || config.activeChannel] || "Not set"
+                  }
                 />
                 <StatCard title="Last Saved" value={savedAt || "Not saved"} compact />
               </div>
@@ -792,7 +800,8 @@ export default function SystemConfig() {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {availableChannels.map((channel) => {
                   const implemented = config.implementedChannels.includes(channel);
-                  const active = config.activeChannel === channel;
+                  const active =
+                    (config.disbursementGateway || config.activeChannel) === channel;
 
                   return (
                     <button
@@ -836,8 +845,11 @@ export default function SystemConfig() {
                   <select
                     className="app-select"
                     disabled={!canSaveConfig}
-                    value={config.activeChannel}
-                    onChange={(e) => updateField("activeChannel", e.target.value)}
+                    value={config.disbursementGateway || config.activeChannel}
+                    onChange={(e) => {
+                      updateField("disbursementGateway", e.target.value);
+                      updateField("activeChannel", e.target.value);
+                    }}
                   >
                     {config.implementedChannels.map((channel) => (
                       <option key={channel} value={channel}>
@@ -848,12 +860,15 @@ export default function SystemConfig() {
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <label className="app-label">Fallback / Gateway Provider</label>
+                  <label className="app-label">Primary Collection Gateway</label>
                   <select
                     className="app-select"
                     disabled={!canSaveConfig}
-                    value={config.gatewayProvider}
-                    onChange={(e) => updateField("gatewayProvider", e.target.value)}
+                    value={config.collectionGateway || config.gatewayProvider}
+                    onChange={(e) => {
+                      updateField("collectionGateway", e.target.value);
+                      updateField("gatewayProvider", e.target.value);
+                    }}
                   >
                     {config.implementedChannels.map((channel) => (
                       <option key={channel} value={channel}>
@@ -1233,12 +1248,33 @@ export default function SystemConfig() {
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-4">
                 <div>
-                  <label className="app-label">Gateway Provider</label>
+                  <label className="app-label">Collection Gateway</label>
                   <select
                     className="app-select"
                     disabled={!canSaveConfig}
-                    value={config.gatewayProvider}
-                    onChange={(e) => updateField("gatewayProvider", e.target.value)}
+                    value={config.collectionGateway || config.gatewayProvider}
+                    onChange={(e) => {
+                      updateField("collectionGateway", e.target.value);
+                      updateField("gatewayProvider", e.target.value);
+                    }}
+                  >
+                    {config.implementedChannels.map((channel) => (
+                      <option key={channel} value={channel}>
+                        {channelLabels[channel] || channel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="app-label">Disbursement Gateway</label>
+                  <select
+                    className="app-select"
+                    disabled={!canSaveConfig}
+                    value={config.disbursementGateway || config.activeChannel}
+                    onChange={(e) => {
+                      updateField("disbursementGateway", e.target.value);
+                      updateField("activeChannel", e.target.value);
+                    }}
                   >
                     {config.implementedChannels.map((channel) => (
                       <option key={channel} value={channel}>
@@ -1278,7 +1314,12 @@ export default function SystemConfig() {
                   />
                 </div>
                 <div>
-                  <label className="app-label">API Key</label>
+                  <label className="app-label">
+                    {(config.collectionGateway || config.gatewayProvider) === "bridge" ||
+                    (config.disbursementGateway || config.activeChannel) === "bridge"
+                      ? "API Username / Override"
+                      : "API Key"}
+                  </label>
                   <input
                     className="app-input"
                     disabled={!canSaveConfig}
@@ -1287,7 +1328,12 @@ export default function SystemConfig() {
                   />
                 </div>
                 <div>
-                  <label className="app-label">API Secret</label>
+                  <label className="app-label">
+                    {(config.collectionGateway || config.gatewayProvider) === "bridge" ||
+                    (config.disbursementGateway || config.activeChannel) === "bridge"
+                      ? "API Password / Override"
+                      : "API Secret"}
+                  </label>
                   <input
                     className="app-input"
                     disabled={!canSaveConfig}
@@ -1295,6 +1341,15 @@ export default function SystemConfig() {
                     onChange={(e) => updateField("apiSecret", e.target.value)}
                   />
                 </div>
+                {((config.collectionGateway || config.gatewayProvider) === "bridge" ||
+                  (config.disbursementGateway || config.activeChannel) === "bridge") ? (
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
+                    Bridge uses Basic Auth and a service ID. Put `BRIDGE_API_USERNAME`,
+                    `BRIDGE_API_PASSWORD`, `BRIDGE_SERVICE_ID`, and `BRIDGE_CALLBACK_URL`
+                    in `backend/.env`. The username and password fields here act as optional
+                    overrides for Bridge if you need them.
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1898,14 +1953,14 @@ export default function SystemConfig() {
           <i className="fa fa-wallet text-2xl text-emerald-600" />
           <p className="mt-4 text-sm text-slate-500">Primary Gateway</p>
           <p className="mt-2 text-xl font-semibold text-slate-900">
-            {channelLabels[config.gatewayProvider] || "Not set"}
+            {channelLabels[config.collectionGateway || config.gatewayProvider] || "Not set"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
           <i className="fa fa-random text-2xl text-blue-600" />
           <p className="mt-4 text-sm text-slate-500">Active Channel</p>
           <p className="mt-2 text-xl font-semibold text-slate-900">
-            {channelLabels[config.activeChannel] || "Not set"}
+            {channelLabels[config.disbursementGateway || config.activeChannel] || "Not set"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">

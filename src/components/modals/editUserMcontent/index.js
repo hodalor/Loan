@@ -15,6 +15,9 @@ const buildEditState = (userDetails = {}) => ({
   role: userDetails.role || "",
   department: userDetails.department || "",
   staffGroupId: userDetails.staffGroupId || "",
+  managedStaffGroupIds: Array.isArray(userDetails.managedStaffGroupIds)
+    ? userDetails.managedStaffGroupIds
+    : [],
   permissions: normalizeUserPermissions(
     userDetails.role || "",
     userDetails.permissions || []
@@ -225,6 +228,7 @@ export default function EditUserDetial() {
                         ...current,
                         department: e.target.value,
                         staffGroupId: "",
+                        managedStaffGroupIds: [],
                       }))
                     }
                   >
@@ -253,6 +257,30 @@ export default function EditUserDetial() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="md:col-span-2 xl:col-span-3">
+                  <label className="app-label">Managed Groups</label>
+                  <select
+                    multiple
+                    className="app-select min-h-[120px]"
+                    value={fields.managedStaffGroupIds}
+                    onChange={(e) =>
+                      updateField(
+                        "managedStaffGroupIds",
+                        Array.from(e.target.selectedOptions, (option) => option.value)
+                      )
+                    }
+                    disabled={!fields.department}
+                  >
+                    {groupOptions.map((group) => (
+                      <option key={group.value} value={group.value}>
+                        {group.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Optional. Use this for leaders or managers who should view several groups.
+                  </p>
                 </div>
                 <div className="flex items-end">
                   <div className="w-full rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
@@ -329,6 +357,24 @@ export default function EditUserDetial() {
                 <p className="text-sm text-slate-500">Group</p>
                 <p className="mt-2 text-base font-semibold text-slate-900">
                   {userDetails.staffGroupName || "-"}
+                </p>
+              </div>
+              <div className={infoCardClass}>
+                <p className="text-sm text-slate-500">Managed Groups</p>
+                <p className="mt-2 text-base font-semibold text-slate-900">
+                  {Array.isArray(userDetails.managedStaffGroupIds) &&
+                  userDetails.managedStaffGroupIds.length > 0
+                    ? userDetails.managedStaffGroupIds
+                        .map(
+                          (groupId) =>
+                            staffGroups.find(
+                              (group) =>
+                                String(group?._id || group?.id || "") === String(groupId || "")
+                            )?.name || ""
+                        )
+                        .filter(Boolean)
+                        .join(", ")
+                    : "-"}
                 </p>
               </div>
               <div className={infoCardClass}>

@@ -7,6 +7,7 @@ import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector"
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import { _unassignPreColCases } from "../../../handlers";
+import { getAdminsByGroupIds, getManagedGroupIdsForUser } from "../../../libs/staffGroups";
 
 const TAB_ITEMS = [
   { id: "unassigned", label: "Unassigned Cases" },
@@ -38,20 +39,73 @@ export default function AdvanceCaseList() {
     preCompCases,
     user,
     _hasAccess,
+    staffGroups,
   } = React.useContext(GlobalContext);
 
   const [ttl, setTtl] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("unassigned");
   const [actionLoading, setActionLoading] = React.useState("");
   const canAssignPreCollection = _hasAccess("action:precollection:assign");
+  const canViewUnassigned = _hasAccess("action:precollection:cases:unassigned:view");
   const selectedCaseSet = React.useMemo(() => new Set(selectedCases), [selectedCases]);
+  const preAssignedScope = _hasAccess("action:precollection:cases:assigned:all")
+    ? "all"
+    : _hasAccess("action:precollection:cases:assigned:group")
+      ? "group"
+      : _hasAccess("action:precollection:cases:assigned:own")
+        ? "own"
+        : "none";
+  const preCompletedScope = _hasAccess("action:precollection:cases:completed:all")
+    ? "all"
+    : _hasAccess("action:precollection:cases:completed:group")
+      ? "group"
+      : _hasAccess("action:precollection:cases:completed:own")
+        ? "own"
+        : "none";
+  const managedGroupIds = React.useMemo(
+    () => getManagedGroupIdsForUser(user, staffGroups, "pre-collection"),
+    [staffGroups, user]
+  );
+  const scopedOfficerNames = React.useMemo(
+    () =>
+      new Set(
+        getAdminsByGroupIds(admins, managedGroupIds)
+          .map((admin) => String(admin.userName || "").trim())
+          .filter(Boolean)
+      ),
+    [admins, managedGroupIds]
+  );
+  const currentOfficerName = String(user?.userName || "").trim();
+  const visibleTabs = React.useMemo(
+    () =>
+      TAB_ITEMS.filter((tab) => {
+        if (tab.id === "unassigned") return canViewUnassigned;
+        if (tab.id === "assigned") return preAssignedScope !== "none";
+        if (tab.id === "completed") return preCompletedScope !== "none";
+        return true;
+      }),
+    [canViewUnassigned, preAssignedScope, preCompletedScope]
+  );
+
+  React.useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || "assigned");
+    }
+  }, [activeTab, visibleTabs]);
 
   const officers = React.useMemo(
     () =>
       admins
         .filter((admin) => admin.role === "pre-personel" || admin.role === "pre-team-lead")
+        .filter((admin) => {
+          if (preAssignedScope === "all" || preCompletedScope === "all") return true;
+          if (scopedOfficerNames.size === 0) {
+            return String(admin.userName || "").trim() === currentOfficerName;
+          }
+          return scopedOfficerNames.has(String(admin.userName || "").trim());
+        })
         .map((off) => ({ label: off.userName, value: off.userName })),
-    [admins]
+    [admins, currentOfficerName, preAssignedScope, preCompletedScope, scopedOfficerNames]
   );
 
   const calcOverdueDays = React.useCallback((loan) => {
@@ -185,7 +239,27 @@ export default function AdvanceCaseList() {
       const normalizedAdvanceStaff = String(select.advanceStaff || "").trim().toLowerCase();
       const normalizedCaseStatus = String(select.caseStatus || "").trim();
 
-      return rows.filter((row) => {
+      const scopedRows = rows.filter((row) => {
+        if (mode === "unassigned") return canViewUnassigned;
+
+        const officerName = String(row.advanceEmployee || "").trim();
+        const scope = mode === "assigned" ? preAssignedScope : preCompletedScope;
+
+        if (scope === "all") return true;
+        if (scope === "group") {
+          if (scopedOfficerNames.size === 0) {
+            return officerName === currentOfficerName;
+          }
+          return scopedOfficerNames.has(officerName);
+        }
+        if (scope === "own") {
+          return officerName === currentOfficerName;
+        }
+
+        return false;
+      });
+
+      return scopedRows.filter((row) => {
         const matchesUserId =
           !normalizedUserId ||
           String(row.userID || "").trim().toLowerCase().includes(normalizedUserId);
@@ -220,7 +294,21 @@ export default function AdvanceCaseList() {
         );
       });
     },
-    [inputs.loanId, inputs.phone, inputs.userId, isWithinDateRange, select.advanceStaff, select.caseStatus, select.days, select.loanType]
+    [
+      canViewUnassigned,
+      currentOfficerName,
+      inputs.loanId,
+      inputs.phone,
+      inputs.userId,
+      isWithinDateRange,
+      preAssignedScope,
+      preCompletedScope,
+      scopedOfficerNames,
+      select.advanceStaff,
+      select.caseStatus,
+      select.days,
+      select.loanType,
+    ]
   );
 
   const filteredUnassignedRows = React.useMemo(
@@ -376,7 +464,7 @@ export default function AdvanceCaseList() {
 
         <div className="app-panel-body space-y-4">
           <div className="flex flex-wrap gap-3 border-b border-slate-200">
-            {TAB_ITEMS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -435,7 +523,7 @@ export default function AdvanceCaseList() {
               <label className="app-label">Date Range</label>
               <CustomDateRangeInputs />
             </div>
-            {activeTab !== "unassigned" ? (
+            {activeTab !== "unassigned" && preAssignedScope !== "own" ? (
               <div>
                 <label className="app-label">Advance Staff</label>
                 <BasicSelect data={officers} title="Advance Staff" />

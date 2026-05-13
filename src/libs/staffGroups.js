@@ -24,10 +24,42 @@ export const getGroupOptionsByDepartment = (groups = [], department = "") =>
     value: group.id,
   }));
 
+export const normalizeIdList = (values = []) =>
+  [
+    ...new Set(
+      (Array.isArray(values) ? values : [values])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+
 export const getAdminsByGroup = (admins = [], groupId = "") =>
   (Array.isArray(admins) ? admins : []).filter(
     (admin) => String(admin?.staffGroupId || "") === String(groupId || "")
   );
+
+export const getAdminsByGroupIds = (admins = [], groupIds = []) => {
+  const allowedIds = new Set(normalizeIdList(groupIds));
+
+  return (Array.isArray(admins) ? admins : []).filter((admin) =>
+    allowedIds.has(String(admin?.staffGroupId || "").trim())
+  );
+};
+
+export const getManagedGroupIdsForUser = (user = {}, groups = [], department = "") => {
+  const departmentGroups = getGroupsByDepartment(groups, department);
+  const departmentGroupIds = new Set(departmentGroups.map((group) => String(group.id || "").trim()));
+  const explicitManagedIds = normalizeIdList(user?.managedStaffGroupIds).filter((groupId) =>
+    departmentGroupIds.has(groupId)
+  );
+
+  if (explicitManagedIds.length > 0) {
+    return explicitManagedIds;
+  }
+
+  const primaryGroupId = String(user?.staffGroupId || "").trim();
+  return departmentGroupIds.has(primaryGroupId) ? [primaryGroupId] : [];
+};
 
 export const getAdminGroupMap = (admins = []) =>
   new Map(

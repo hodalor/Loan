@@ -12,7 +12,11 @@ import {
   getThisMonthRange,
   getTodayRange,
 } from "../../../libs/ranking/datePresets";
-import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
+import {
+  getAdminsByGroupIds,
+  getGroupOptionsByDepartment,
+  getManagedGroupIdsForUser,
+} from "../../../libs/staffGroups";
 
 const TAB_ITEMS = [
   { id: "amount", label: "Amount Collected" },
@@ -28,39 +32,64 @@ const PAYMENT_FILTER_OPTIONS = [
 ];
 
 export default function PreCollectionRanking() {
-  const { loans, prePayment, admins, staffGroups, globalLoader } = React.useContext(GlobalContext);
+  const { loans, prePayment, admins, staffGroups, globalLoader, user, _hasAccess } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("amount");
   const [range, setRange] = React.useState(() => getDefaultDateRange(7));
   const [paymentFilter, setPaymentFilter] = React.useState("all");
   const [groupFilter, setGroupFilter] = React.useState("");
 
   const [startDate, endDate] = range || [];
-  const groupOptions = React.useMemo(
-    () => getGroupOptionsByDepartment(staffGroups, "pre-collection"),
-    [staffGroups]
+  const rankingScope = _hasAccess("action:precollection:ranking:all")
+    ? "all"
+    : _hasAccess("action:precollection:ranking:group")
+      ? "group"
+      : "none";
+  const managedGroupIds = React.useMemo(
+    () => getManagedGroupIdsForUser(user, staffGroups, "pre-collection"),
+    [staffGroups, user]
   );
-  const allowedUsers = React.useMemo(() => {
-    if (!groupFilter) return null;
+  const groupOptions = React.useMemo(
+    () => {
+      const options = getGroupOptionsByDepartment(staffGroups, "pre-collection");
+      if (rankingScope === "all") return options;
+      const allowedIds = new Set(managedGroupIds);
+      return options.filter((group) => allowedIds.has(String(group.value || "")));
+    },
+    [managedGroupIds, rankingScope, staffGroups]
+  );
+  const accessibleOfficerNames = React.useMemo(() => {
+    if (rankingScope === "all") return null;
 
-    return new Set(
-      admins
-        .filter((admin) => String(admin.staffGroupId || "") === String(groupFilter))
-        .map((admin) => String(admin.userName || "").trim())
-    );
-  }, [admins, groupFilter]);
+    const groupIds = groupFilter ? [groupFilter] : managedGroupIds;
+    const names = getAdminsByGroupIds(admins, groupIds)
+      .map((admin) => String(admin.userName || "").trim())
+      .filter(Boolean);
+
+    if (names.length === 0 && String(user?.userName || "").trim()) {
+      return new Set([String(user.userName || "").trim()]);
+    }
+
+    return new Set(names);
+  }, [admins, groupFilter, managedGroupIds, rankingScope, user]);
   const filteredPrePayment = React.useMemo(() => {
-    if (!allowedUsers) return prePayment;
-    return prePayment.filter((item) => allowedUsers.has(String(item.preCollOfficer || "").trim()));
-  }, [allowedUsers, prePayment]);
+    if (!accessibleOfficerNames) return prePayment;
+    return prePayment.filter((item) => accessibleOfficerNames.has(String(item.preCollOfficer || "").trim()));
+  }, [accessibleOfficerNames, prePayment]);
   const filteredAssignedLoans = React.useMemo(() => {
-    if (!allowedUsers) {
+    if (!accessibleOfficerNames) {
       return loans.filter((loan) => String(loan?.preCollOfficer || "").trim());
     }
 
     return loans.filter((loan) =>
-      allowedUsers.has(String(loan?.preCollOfficer || "").trim())
+      accessibleOfficerNames.has(String(loan?.preCollOfficer || "").trim())
     );
-  }, [allowedUsers, loans]);
+  }, [accessibleOfficerNames, loans]);
+
+  React.useEffect(() => {
+    if (groupFilter && !groupOptions.some((group) => String(group.value) === String(groupFilter))) {
+      setGroupFilter("");
+    }
+  }, [groupFilter, groupOptions]);
 
   const amountTable = React.useMemo(
     () =>
@@ -238,21 +267,23 @@ export default function PreCollectionRanking() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="app-label">Group</label>
-              <select
-                className="app-select"
-                value={groupFilter}
-                onChange={(event) => setGroupFilter(event.target.value)}
-              >
-                <option value="">All Groups</option>
-                {groupOptions.map((group) => (
-                  <option key={group.value} value={group.value}>
-                    {group.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {rankingScope !== "none" ? (
+              <div>
+                <label className="app-label">Group</label>
+                <select
+                  className="app-select"
+                  value={groupFilter}
+                  onChange={(event) => setGroupFilter(event.target.value)}
+                >
+                  <option value="">All Groups</option>
+                  {groupOptions.map((group) => (
+                    <option key={group.value} value={group.value}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="flex items-end">
               <button
                 type="button"

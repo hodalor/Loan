@@ -18,6 +18,7 @@ export default function FailedDisbursements() {
   const [implementedChannels, setImplementedChannels] = React.useState([
     "zynlepay",
     "nsano",
+    "bridge",
   ]);
   const [selectedChannels, setSelectedChannels] = React.useState({});
   const [activeRow, setActiveRow] = React.useState("");

@@ -5,8 +5,10 @@ export const defaultSystemConfig = {
   autoRepaymentPosting: false,
   requireGatewayApprovalCheck: true,
   gatewayProvider: "zynlepay",
+  collectionGateway: "zynlepay",
   activeChannel: "zynlepay",
-  implementedChannels: ["zynlepay", "nsano", "paystack"],
+  disbursementGateway: "zynlepay",
+  implementedChannels: ["zynlepay", "nsano", "paystack", "bridge"],
   gatewayAccountName: "Pathway Main Float",
   callbackUrl: "",
   settlementAccount: "",
@@ -169,6 +171,13 @@ export const defaultSystemConfig = {
           channel: "nsano",
           isEnabled: true,
         },
+        {
+          key: "bridge",
+          label: "Bridge",
+          type: "gateway",
+          channel: "bridge",
+          isEnabled: true,
+        },
       ],
       mobileMoneyNetworks: [
         { key: "mtn-gh", label: "MTN MoMo", type: "mobile-money", isEnabled: true },
@@ -284,4 +293,5 @@ export const channelLabels = {
   zynlepay: "ZynlePay",
   nsano: "Nsano",
   paystack: "Paystack",
+  bridge: "Bridge",
 };

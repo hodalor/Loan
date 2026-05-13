@@ -8,6 +8,7 @@ import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import { _unassignColCases } from "../../../handlers";
 import { formatMoney, getCollectionMetrics } from "../../../libs/collectionMetrics";
+import { getAdminsByGroupIds, getManagedGroupIdsForUser } from "../../../libs/staffGroups";
 
 const TAB_ITEMS = [
   { id: "unassigned", label: "Unassigned Cases" },
@@ -38,20 +39,73 @@ export default function ListOfCollectionCases() {
     completedColCases,
     user,
     _hasAccess,
+    staffGroups,
   } = React.useContext(GlobalContext);
 
   const [ttl, setTtl] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("unassigned");
   const [actionLoading, setActionLoading] = React.useState("");
   const canAssignCollection = _hasAccess("action:collection:assign");
+  const canViewUnassigned = _hasAccess("action:collection:cases:unassigned:view");
   const selectedCaseSet = React.useMemo(() => new Set(selectedCases), [selectedCases]);
+  const collectionAssignedScope = _hasAccess("action:collection:cases:assigned:all")
+    ? "all"
+    : _hasAccess("action:collection:cases:assigned:group")
+      ? "group"
+      : _hasAccess("action:collection:cases:assigned:own")
+        ? "own"
+        : "none";
+  const collectionCompletedScope = _hasAccess("action:collection:cases:completed:all")
+    ? "all"
+    : _hasAccess("action:collection:cases:completed:group")
+      ? "group"
+      : _hasAccess("action:collection:cases:completed:own")
+        ? "own"
+        : "none";
+  const managedGroupIds = React.useMemo(
+    () => getManagedGroupIdsForUser(user, staffGroups, "collection"),
+    [staffGroups, user]
+  );
+  const scopedOfficerNames = React.useMemo(
+    () =>
+      new Set(
+        getAdminsByGroupIds(admins, managedGroupIds)
+          .map((admin) => String(admin.userName || "").trim())
+          .filter(Boolean)
+      ),
+    [admins, managedGroupIds]
+  );
+  const currentOfficerName = String(user?.userName || "").trim();
+  const visibleTabs = React.useMemo(
+    () =>
+      TAB_ITEMS.filter((tab) => {
+        if (tab.id === "unassigned") return canViewUnassigned;
+        if (tab.id === "assigned") return collectionAssignedScope !== "none";
+        if (tab.id === "completed") return collectionCompletedScope !== "none";
+        return true;
+      }),
+    [canViewUnassigned, collectionAssignedScope, collectionCompletedScope]
+  );
+
+  React.useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || "assigned");
+    }
+  }, [activeTab, visibleTabs]);
 
   const officers = React.useMemo(
     () =>
       admins
         .filter((item) => item.role === "col-team-lead" || item.role === "col-personel")
+        .filter((item) => {
+          if (collectionAssignedScope === "all" || collectionCompletedScope === "all") return true;
+          if (scopedOfficerNames.size === 0) {
+            return String(item.userName || "").trim() === currentOfficerName;
+          }
+          return scopedOfficerNames.has(String(item.userName || "").trim());
+        })
         .map((off) => ({ label: off.userName, value: off.userName })),
-    [admins]
+    [admins, collectionAssignedScope, collectionCompletedScope, currentOfficerName, scopedOfficerNames]
   );
 
   const getCustomer = React.useCallback(
@@ -174,7 +228,27 @@ export default function ListOfCollectionCases() {
       const normalizedOfficer = String(select.collectionStaff || "").trim().toLowerCase();
       const normalizedCaseStatus = String(select.caseStatus || "").trim();
 
-      return rows.filter((row) => {
+      const scopedRows = rows.filter((row) => {
+        if (mode === "unassigned") return canViewUnassigned;
+
+        const officerName = String(row.collOfficer || "").trim();
+        const scope = mode === "assigned" ? collectionAssignedScope : collectionCompletedScope;
+
+        if (scope === "all") return true;
+        if (scope === "group") {
+          if (scopedOfficerNames.size === 0) {
+            return officerName === currentOfficerName;
+          }
+          return scopedOfficerNames.has(officerName);
+        }
+        if (scope === "own") {
+          return officerName === currentOfficerName;
+        }
+
+        return false;
+      });
+
+      return scopedRows.filter((row) => {
         const matchesUserId =
           !normalizedUserId ||
           String(row.userID || "").trim().toLowerCase().includes(normalizedUserId);
@@ -208,7 +282,21 @@ export default function ListOfCollectionCases() {
         );
       });
     },
-    [inputs.loanId, inputs.phone, inputs.userId, isWithinDateRange, matchesDaysRange, select.caseStatus, select.collectionStaff, select.loanType]
+    [
+      canViewUnassigned,
+      collectionAssignedScope,
+      collectionCompletedScope,
+      currentOfficerName,
+      inputs.loanId,
+      inputs.phone,
+      inputs.userId,
+      isWithinDateRange,
+      matchesDaysRange,
+      scopedOfficerNames,
+      select.caseStatus,
+      select.collectionStaff,
+      select.loanType,
+    ]
   );
 
   const filteredUnassignedRows = React.useMemo(
@@ -368,7 +456,7 @@ export default function ListOfCollectionCases() {
 
         <div className="app-panel-body space-y-4">
           <div className="flex flex-wrap gap-3 border-b border-slate-200">
-            {TAB_ITEMS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -433,7 +521,7 @@ export default function ListOfCollectionCases() {
               <label className="app-label">Date Range</label>
               <CustomDateRangeInputs />
             </div>
-            {activeTab !== "unassigned" ? (
+            {activeTab !== "unassigned" && collectionAssignedScope !== "own" ? (
               <div>
                 <label className="app-label">Collection Staff</label>
                 <BasicSelect data={officers} title="Collection Staff" />

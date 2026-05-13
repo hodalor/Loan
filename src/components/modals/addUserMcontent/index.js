@@ -16,6 +16,7 @@ const initialFields = {
   department: "",
   gender: "",
   staffGroupId: "",
+  managedStaffGroupIds: [],
   permissions: [],
 };
 
@@ -179,6 +180,7 @@ export default function AddUserDetial() {
                     ...current,
                     department: e.target.value,
                     staffGroupId: "",
+                    managedStaffGroupIds: [],
                   }))
                 }
               >
@@ -205,6 +207,30 @@ export default function AddUserDetial() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="xl:col-span-2">
+              <label className="app-label">Managed Groups</label>
+              <select
+                multiple
+                className="app-select min-h-[120px]"
+                value={fields.managedStaffGroupIds}
+                onChange={(e) =>
+                  updateField(
+                    "managedStaffGroupIds",
+                    Array.from(e.target.selectedOptions, (option) => option.value)
+                  )
+                }
+                disabled={!fields.department}
+              >
+                {groupOptions.map((group) => (
+                  <option key={group.value} value={group.value}>
+                    {group.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Optional. Use this for team leads or managers who should see more than one group.
+              </p>
             </div>
             <div>
               <label className="app-label">Gender*</label>

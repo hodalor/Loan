@@ -3,7 +3,11 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import BasicSelect from "../../../components/inputs/select";
 import CustomDateRangeInputs from "../../../components/inputs/dateRangeSelector";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
-import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
+import {
+  getAdminsByGroupIds,
+  getGroupOptionsByDepartment,
+  getManagedGroupIdsForUser,
+} from "../../../libs/staffGroups";
 
 export default function CollectionPaymentRecords() {
   const {
@@ -19,18 +23,56 @@ export default function CollectionPaymentRecords() {
     dateRange,
     _handleOnChange,
     _handleSelect,
+    user,
+    _hasAccess,
   } = React.useContext(GlobalContext);
+  const paymentScope = _hasAccess("action:collection:payments:all")
+    ? "all"
+    : _hasAccess("action:collection:payments:group")
+      ? "group"
+      : _hasAccess("action:collection:payments:own")
+        ? "own"
+        : "none";
+  const managedGroupIds = React.useMemo(
+    () => getManagedGroupIdsForUser(user, staffGroups, "collection"),
+    [staffGroups, user]
+  );
+  const scopedOfficerNames = React.useMemo(
+    () =>
+      new Set(
+        getAdminsByGroupIds(admins, managedGroupIds)
+          .map((admin) => String(admin.userName || "").trim())
+          .filter(Boolean)
+      ),
+    [admins, managedGroupIds]
+  );
+  const currentOfficerName = String(user?.userName || "").trim();
 
   const officers = React.useMemo(
     () =>
       admins
         .filter((item) => item.role === "col-team-lead" || item.role === "col-personel")
+        .filter((item) => {
+          if (paymentScope === "all") return true;
+          if (paymentScope === "group") {
+            if (scopedOfficerNames.size === 0) {
+              return String(item.userName || "").trim() === currentOfficerName;
+            }
+            return scopedOfficerNames.has(String(item.userName || "").trim());
+          }
+          return String(item.userName || "").trim() === currentOfficerName;
+        })
         .map((off) => ({ label: off.userName, value: off.userName })),
-    [admins]
+    [admins, currentOfficerName, paymentScope, scopedOfficerNames]
   );
   const groupOptions = React.useMemo(
-    () => getGroupOptionsByDepartment(staffGroups, "collection"),
-    [staffGroups]
+    () => {
+      const options = getGroupOptionsByDepartment(staffGroups, "collection");
+      if (paymentScope === "all") return options;
+      const allowedIds = new Set(managedGroupIds);
+      return options.filter((group) => allowedIds.has(String(group.value || "")));
+    },
+    [managedGroupIds, paymentScope, staffGroups]
   );
 
   const isWithinDateRange = React.useCallback(
@@ -105,7 +147,24 @@ export default function CollectionPaymentRecords() {
     const normalizedOfficer = String(select.collectionStaff || "").trim().toLowerCase();
     const normalizedGroup = String(select.collectionGroup || "").trim();
 
-    return rows.filter((row) => {
+    const scopedRows = rows.filter((row) => {
+      const officerName = String(row.collOfficer || "").trim();
+
+      if (paymentScope === "all") return true;
+      if (paymentScope === "group") {
+        if (scopedOfficerNames.size === 0) {
+          return officerName === currentOfficerName;
+        }
+        return scopedOfficerNames.has(officerName);
+      }
+      if (paymentScope === "own") {
+        return officerName === currentOfficerName;
+      }
+
+      return false;
+    });
+
+    return scopedRows.filter((row) => {
       const matchesUserId =
         !normalizedUserId ||
         String(row.userId || "").trim().toLowerCase().includes(normalizedUserId);
@@ -133,7 +192,19 @@ export default function CollectionPaymentRecords() {
         isWithinDateRange(row.dp)
       );
     });
-  }, [admins, inputs.loanId, inputs.phone, inputs.userId, isWithinDateRange, rows, select.collectionGroup, select.collectionStaff]);
+  }, [
+    admins,
+    currentOfficerName,
+    inputs.loanId,
+    inputs.phone,
+    inputs.userId,
+    isWithinDateRange,
+    paymentScope,
+    rows,
+    scopedOfficerNames,
+    select.collectionGroup,
+    select.collectionStaff,
+  ]);
 
   const totalAmount = filteredRows.reduce(
     (sum, row) => sum + parseFloat(row.amountPaid || 0),
@@ -234,14 +305,18 @@ export default function CollectionPaymentRecords() {
                 onChange={(e) => _handleOnChange({ field: "phone", value: e.target.value })}
               />
             </div>
-            <div>
-              <label className="app-label">Collection Staff</label>
-              <BasicSelect data={officers} title="Collection Staff" />
-            </div>
-            <div>
-              <label className="app-label">Collection Group</label>
-              <BasicSelect data={groupOptions} title="Collection Group" />
-            </div>
+            {paymentScope !== "own" ? (
+              <div>
+                <label className="app-label">Collection Staff</label>
+                <BasicSelect data={officers} title="Collection Staff" />
+              </div>
+            ) : null}
+            {paymentScope === "group" || paymentScope === "all" ? (
+              <div>
+                <label className="app-label">Collection Group</label>
+                <BasicSelect data={groupOptions} title="Collection Group" />
+              </div>
+            ) : null}
             <div>
               <label className="app-label">Date Range</label>
               <CustomDateRangeInputs />

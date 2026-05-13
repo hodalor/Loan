@@ -1601,6 +1601,9 @@ export default function GlobalContextProvider(props) {
       department: fields.department,
       permissions: Array.isArray(fields.permissions) ? fields.permissions : [],
       staffGroupId: fields.staffGroupId || "",
+      managedStaffGroupIds: Array.isArray(fields.managedStaffGroupIds)
+        ? fields.managedStaffGroupIds
+        : [],
     };
 
     const validation = await _createAdmin(data);
@@ -1715,6 +1718,9 @@ export default function GlobalContextProvider(props) {
       department: fields.department,
       permissions: fields.permissions,
       staffGroupId: fields.staffGroupId || "",
+      managedStaffGroupIds: Array.isArray(fields.managedStaffGroupIds)
+        ? fields.managedStaffGroupIds
+        : [],
     };
 
     if (
@@ -1773,6 +1779,9 @@ export default function GlobalContextProvider(props) {
         typeof fields.staffGroupId === "string"
           ? fields.staffGroupId
           : userDetails.staffGroupId || "",
+      managedStaffGroupIds: Array.isArray(fields.managedStaffGroupIds)
+        ? fields.managedStaffGroupIds
+        : userDetails.managedStaffGroupIds || [],
       permissions: Array.isArray(fields.permissions)
         ? fields.permissions
         : userDetails.permissions || [],
@@ -1813,6 +1822,9 @@ export default function GlobalContextProvider(props) {
         : userDetails.staffGroupId || "";
     oldData.staffGroupName =
       staffGroups.find((group) => group._id === oldData.staffGroupId)?.name || "";
+    oldData.managedStaffGroupIds = Array.isArray(updateData.managedStaffGroupIds)
+      ? updateData.managedStaffGroupIds
+      : userDetails.managedStaffGroupIds || [];
     oldData.permissions = Array.isArray(fields.permissions)
       ? fields.permissions
       : userDetails.permissions || [];
