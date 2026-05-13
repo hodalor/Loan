@@ -2,6 +2,7 @@ const express = require("express");
 const Loan = require("../../models/loans");
 const syncUserLoanState = require("../../handlers/userHandlers/syncUserLoanState");
 const { _getDatefromDays } = require("../../../libs/calcDate");
+const { logSystemEvent } = require("../../../libs/logger");
 
 const router = express.Router();
 
@@ -58,6 +59,22 @@ router.post("/bridge/webhook", async (req, res) => {
         },
       });
 
+      await logSystemEvent({
+        level: "info",
+        category: "payment",
+        source: "loan.bridgeWebhook",
+        action: "disbursement-webhook",
+        status: "success",
+        message: "Bridge disbursement webhook confirmed a successful payout.",
+        metadata: {
+          loanId: loan.ID,
+          customerId: loan.userId,
+          transactionId,
+          network: payload.nw || "",
+        },
+        details: payload,
+      });
+
       return res.sendStatus(200);
     }
 
@@ -79,6 +96,22 @@ router.post("/bridge/webhook", async (req, res) => {
         },
       });
 
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "loan.bridgeWebhook",
+        action: "disbursement-webhook",
+        status: "failed",
+        message: callbackMessage,
+        metadata: {
+          loanId: loan.ID,
+          customerId: loan.userId,
+          transactionId,
+          network: payload.nw || "",
+        },
+        details: payload,
+      });
+
       return res.sendStatus(200);
     }
 
@@ -97,9 +130,38 @@ router.post("/bridge/webhook", async (req, res) => {
       },
     });
 
+    await logSystemEvent({
+      level: "warn",
+      category: "payment",
+      source: "loan.bridgeWebhook",
+      action: "disbursement-webhook",
+      status: "pending",
+      message: callbackMessage,
+      metadata: {
+        loanId: loan.ID,
+        customerId: loan.userId,
+        transactionId,
+        network: payload.nw || "",
+      },
+      details: payload,
+    });
+
     return res.sendStatus(200);
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "loan.bridgeWebhook",
+      action: "disbursement-webhook",
+      status: "failed",
+      req,
+      message: error.message || "Bridge disbursement webhook processing failed.",
+      details: {
+        stack: error.stack || "",
+        body: req.body,
+      },
+    });
     return res.sendStatus(200);
   }
 });

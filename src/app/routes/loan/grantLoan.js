@@ -6,6 +6,7 @@ const Admins = require("../../models/admin");
 const Users = require("../../models/users");
 const { getSystemConfig } = require("../../services/systemConfig");
 const { processLoanDisbursement } = require("../../services/payout");
+const { logSystemEvent } = require("../../../libs/logger");
 
 const router = express.Router();
 
@@ -134,6 +135,29 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
           : `Loan granted, but automatic disbursement failed: ${payoutResult.message}`
         : "Loan granted and moved to manual disbursement";
 
+    await logSystemEvent({
+      level: payoutResult.success ? "info" : payoutResult.pending ? "warn" : "error",
+      category: "payment",
+      source: "loan.grantLoan",
+      action: "disbursement",
+      status: payoutResult.success ? "success" : payoutResult.pending ? "pending" : "failed",
+      req: request,
+      actor: {
+        userId: officer.userId,
+        userName: officer.userName,
+        role: officer.role,
+      },
+      message: responseMessage,
+      metadata: {
+        loanId: loan.ID,
+        customerId: loan.userId,
+        provider: payoutResult.provider,
+        channel: payoutResult.channel,
+        payoutReference: payoutResult.reference || ID,
+      },
+      details: payoutResult.raw || null,
+    });
+
     return responses.status(200).json({
       success: 1,
       message: responseMessage,
@@ -147,6 +171,22 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
     });
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "loan.grantLoan",
+      action: "disbursement",
+      status: "failed",
+      req: request,
+      message: error.message || "Loan grant failed with an internal error.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        loanId: request.params?.ID || "",
+        reviewOfficer: request.body?.reviewOficer || "",
+      },
+    });
     return responses.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",

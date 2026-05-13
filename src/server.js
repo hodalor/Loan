@@ -76,7 +76,7 @@ const _setCustomerActiveStatus = require("./app/handlers/userHandlers/setActive"
 const _updateUser = require("./app/handlers/userHandlers/updateUser");
 const _removeUser = require("./app/handlers/adminHandlers/deleteUser");
 const _disburseLoans = require("./app/handlers/loanHandlers/disburseLoans");
-const { logger } = require("./libs/logger");
+const { logger, logSystemEvent } = require("./libs/logger");
 
 // end points
 app.use("/users", user.createUser);
@@ -116,6 +116,7 @@ app.use("/admin", admin.updateAdmin);
 app.use("/admin", admin.login);
 app.use("/admin", admin.systemConfig);
 app.use("/admin", admin.staffGroups);
+app.use("/admin", admin.systemLogs);
 app.use('/upload', express.static('upload'));
 
 var bdy = {}
@@ -134,6 +135,36 @@ app.post("/callback", (req, res) => {
 app.get("/", (req, res) => {
   res.send(bdy)
 })
+
+process.on("unhandledRejection", (error) => {
+  console.log(error);
+  logSystemEvent({
+    level: "error",
+    category: "server",
+    source: "process.unhandledRejection",
+    action: "runtime",
+    status: "failed",
+    message: error?.message || "Unhandled promise rejection",
+    details: {
+      stack: error?.stack || "",
+    },
+  });
+});
+
+process.on("uncaughtException", (error) => {
+  console.log(error);
+  logSystemEvent({
+    level: "fatal",
+    category: "server",
+    source: "process.uncaughtException",
+    action: "runtime",
+    status: "failed",
+    message: error?.message || "Uncaught exception",
+    details: {
+      stack: error?.stack || "",
+    },
+  });
+});
 
 const testNasano = async (url) => {
   console.log("started");
@@ -347,6 +378,17 @@ const startServer = async () => {
   await connectDB();
   httpServer.listen(PORT, () => {
     console.log(`server running on port ${PORT}`);
+    logSystemEvent({
+      level: "info",
+      category: "server",
+      source: "server.start",
+      action: "startup",
+      status: "success",
+      message: `Server running on port ${PORT}`,
+      metadata: {
+        port: PORT,
+      },
+    });
   });
 };
 

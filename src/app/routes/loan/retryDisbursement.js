@@ -4,6 +4,7 @@ const Users = require("../../models/users");
 const syncUserLoanState = require("../../handlers/userHandlers/syncUserLoanState");
 const { getSystemConfig } = require("../../services/systemConfig");
 const { processLoanDisbursement } = require("../../services/payout");
+const { logSystemEvent } = require("../../../libs/logger");
 
 const router = express.Router();
 
@@ -64,6 +65,28 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
       },
     });
 
+    await logSystemEvent({
+      level: payoutResult.success ? "info" : payoutResult.pending ? "warn" : "error",
+      category: "payment",
+      source: "loan.retryDisbursement",
+      action: "disbursement-retry",
+      status: payoutResult.success ? "success" : payoutResult.pending ? "pending" : "failed",
+      req,
+      message:
+        payoutResult.success
+          ? "Loan disbursement retried successfully."
+          : payoutResult.pending
+          ? payoutResult.message || "Loan disbursement retry is waiting for callback confirmation."
+          : payoutResult.message || "Loan disbursement retry failed.",
+      metadata: {
+        loanId: loan.ID,
+        customerId: loan.userId,
+        provider: selectedChannel,
+        payoutReference: loan.payoutReference,
+      },
+      details: payoutResult.raw || null,
+    });
+
     return res.status(200).json({
       success: payoutResult.success || payoutResult.pending ? 1 : 0,
       message: payoutResult.success
@@ -80,6 +103,22 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "loan.retryDisbursement",
+      action: "disbursement-retry",
+      status: "failed",
+      req,
+      message: error.message || "Loan disbursement retry failed with an internal error.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        loanId: req.params?.ID || "",
+        requestedChannel: req.body?.channel || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",

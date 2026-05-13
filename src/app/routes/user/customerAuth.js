@@ -20,6 +20,7 @@ const {
 } = require("../../services/customerAuth");
 const { getSystemConfig, getActiveCountryConfig } = require("../../services/systemConfig");
 const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
+const { logSystemEvent } = require("../../../libs/logger");
 
 const router = express.Router();
 
@@ -945,6 +946,17 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   const transaction = await GatewayTransactions.findOne({ reference });
 
   if (!transaction) {
+    await logSystemEvent({
+      level: "warn",
+      category: "payment",
+      source: "customer.portal.gatewayVerification",
+      action: "verify",
+      status: "failed",
+      message: "Portal gateway verification could not find the transaction reference.",
+      metadata: {
+        reference,
+      },
+    });
     return {
       success: 0,
       message: "Transaction reference was not found.",
@@ -987,6 +999,25 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   );
 
   if (!verification.success) {
+    await logSystemEvent({
+      level: verification.pending ? "warn" : "error",
+      category: "payment",
+      source: "customer.portal.gatewayVerification",
+      action: "verify",
+      status: verification.pending ? "pending" : "failed",
+      message:
+        verification.message ||
+        (verification.pending
+          ? "Portal gateway payment is still pending."
+          : "Portal gateway verification failed."),
+      metadata: {
+        reference,
+        provider: transaction.provider,
+        transactionType: transaction.transactionType,
+        phone: transaction.phone,
+      },
+      details: verification.raw || webhookEvent || null,
+    });
     return {
       success: verification.pending ? 2 : 0,
       message: verification.message,
@@ -1048,6 +1079,25 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
 
     const latestTransaction = await GatewayTransactions.findOne({ reference }).lean();
 
+    await logSystemEvent({
+      level: "info",
+      category: "payment",
+      source: "customer.portal.gatewayVerification",
+      action: "apply",
+      status: "success",
+      message:
+        claimedTransaction.transactionType === "extension"
+          ? "Portal extension payment completed successfully."
+          : "Portal repayment completed successfully.",
+      metadata: {
+        reference,
+        provider: claimedTransaction.provider,
+        transactionType: claimedTransaction.transactionType,
+        phone: claimedTransaction.phone,
+        amount: claimedTransaction.amount,
+      },
+    });
+
     return {
       success: 1,
       message:
@@ -1071,6 +1121,25 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
         },
       }
     );
+
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "customer.portal.gatewayVerification",
+      action: "apply",
+      status: "failed",
+      message: error.message || "Portal gateway transaction failed during final processing.",
+      metadata: {
+        reference,
+        provider: claimedTransaction.provider,
+        transactionType: claimedTransaction.transactionType,
+        phone: claimedTransaction.phone,
+        amount: claimedTransaction.amount,
+      },
+      details: {
+        stack: error.stack || "",
+      },
+    });
 
     return {
       success: 0,
@@ -1855,9 +1924,22 @@ router.post("/portal/pay-loan", async (req, res) => {
     const methodKey = String(req.body?.methodKey || "").trim();
 
     if (!phone || !methodKey) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal repayment request was rejected because required fields were missing.",
+        req,
+        metadata: {
+          phone,
+          methodKey,
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "Phone number and repayment method are required.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -1867,9 +1949,21 @@ router.post("/portal/pay-loan", async (req, res) => {
     ]);
 
     if (!user) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal repayment request failed because the customer profile was not found.",
+        req,
+        metadata: {
+          phone,
+        },
+      });
       return res.status(404).json({
         success: 0,
-        message: "Customer profile not found.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -1877,9 +1971,22 @@ router.post("/portal/pay-loan", async (req, res) => {
     const globalLoans = await Loans.find({ userId: user.userId }).lean();
     const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
     if (!activeLoanView || !activeLoanView.canMakePayment) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal repayment request failed because there is no payable active loan.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "There is no active loan available for repayment.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -1889,9 +1996,24 @@ router.post("/portal/pay-loan", async (req, res) => {
         : Math.min(requestedAmount, toMoney(activeLoanView.totalDue || 0));
 
     if (payAmount <= 0) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal repayment request failed because the amount was invalid.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          repaymentType,
+          requestedAmount,
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "Repayment amount must be greater than zero.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -1911,9 +2033,27 @@ router.post("/portal/pay-loan", async (req, res) => {
 
     if (!gatewayResult.success) {
       if (gatewayResult.pending) {
+        await logSystemEvent({
+          level: "info",
+          category: "payment",
+          source: "customer.portal.payLoan",
+          action: "gateway-init",
+          status: "pending",
+          message: "Portal repayment is waiting for gateway confirmation.",
+          req,
+          metadata: {
+            phone,
+            userId: user.userId,
+            amount: payAmount,
+            reference: gatewayResult.reference,
+            provider: gatewayResult.provider,
+            repaymentType,
+          },
+          details: gatewayResult.raw || null,
+        });
         return res.status(200).json({
           success: 2,
-          message: gatewayResult.message,
+          message: "Continue to make payment.",
           data: {
             provider:
               gatewayResult.provider ||
@@ -1926,17 +2066,49 @@ router.post("/portal/pay-loan", async (req, res) => {
         });
       }
 
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "gateway-init",
+        status: "failed",
+        message: gatewayResult.message || "Portal repayment gateway initialization failed.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          amount: payAmount,
+          provider: gatewayResult.provider,
+          repaymentType,
+        },
+        details: gatewayResult.raw || null,
+      });
       return res.status(400).json({
         success: 0,
-        message: gatewayResult.message,
+        message: "Payment failed. Try later.",
       });
     }
 
     const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
     if (!globalLoan) {
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "apply",
+        status: "failed",
+        message: "Portal repayment succeeded at gateway level but the loan record was not found.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          amount: payAmount,
+          loanId: activeLoanView.loanId,
+        },
+      });
       return res.status(404).json({
         success: 0,
-        message: "Loan record not found.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -1953,9 +2125,25 @@ router.post("/portal/pay-loan", async (req, res) => {
     });
 
     if (!userResult || !loanResult) {
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "customer.portal.payLoan",
+        action: "apply",
+        status: "failed",
+        message: "Portal repayment was received but the loan records could not be fully updated.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          amount: payAmount,
+          loanId: activeLoanView.loanId,
+          repaymentType,
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "Payment was received but the loan record could not be updated.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -1964,12 +2152,26 @@ router.post("/portal/pay-loan", async (req, res) => {
       getSystemConfig(),
     ]);
 
+    await logSystemEvent({
+      level: "info",
+      category: "payment",
+      source: "customer.portal.payLoan",
+      action: "apply",
+      status: "success",
+      message: "Portal repayment completed successfully.",
+      req,
+      metadata: {
+        phone,
+        userId: user.userId,
+        amount: payAmount,
+        loanId: activeLoanView.loanId,
+        repaymentType,
+      },
+    });
+
     return res.status(200).json({
       success: 1,
-      message:
-        payAmount >= toMoney(activeLoanView.totalDue || 0)
-          ? "Payment completed successfully. Your level has been updated if applicable."
-          : "Payment completed successfully.",
+      message: "Payment completed successfully.",
       data: {
         loanHistory: await Loans.find({ userId: updatedUser.userId }).lean(),
         activeLoan: buildActiveLoanView(
@@ -1988,9 +2190,25 @@ router.post("/portal/pay-loan", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "customer.portal.payLoan",
+      action: "apply",
+      status: "failed",
+      message: error.message || "Portal repayment failed with an internal error.",
+      req,
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        phone: sanitizePhone(req.body?.phone),
+        methodKey: String(req.body?.methodKey || "").trim(),
+      },
+    });
     return res.status(500).json({
       success: 0,
-      message: "Internal error: code(500)!",
+      message: "Payment failed. Try later.",
     });
   }
 });
@@ -2002,9 +2220,23 @@ router.post("/portal/extend-loan", async (req, res) => {
     const methodKey = String(req.body?.methodKey || "").trim();
 
     if (!phone || !extensionKey || !methodKey) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal extension request was rejected because required fields were missing.",
+        req,
+        metadata: {
+          phone,
+          extensionKey,
+          methodKey,
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "Phone number, extension option and repayment method are required.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -2014,9 +2246,21 @@ router.post("/portal/extend-loan", async (req, res) => {
     ]);
 
     if (!user) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal extension request failed because the customer profile was not found.",
+        req,
+        metadata: {
+          phone,
+        },
+      });
       return res.status(404).json({
         success: 0,
-        message: "Customer profile not found.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -2024,9 +2268,23 @@ router.post("/portal/extend-loan", async (req, res) => {
     const globalLoans = await Loans.find({ userId: user.userId }).lean();
     const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
     if (!activeLoanView || !activeLoanView.canExtend) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal extension request failed because the loan is not eligible for extension.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          loanId: activeLoanView?.loanId || "",
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "Loan extension is only available on or before the due date.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -2035,9 +2293,24 @@ router.post("/portal/extend-loan", async (req, res) => {
     );
 
     if (!extensionOption) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "init",
+        status: "failed",
+        message: "Portal extension request failed because the selected option was invalid.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          extensionKey,
+          loanId: activeLoanView.loanId,
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "The selected extension option is not available.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -2058,9 +2331,28 @@ router.post("/portal/extend-loan", async (req, res) => {
 
     if (!gatewayResult.success) {
       if (gatewayResult.pending) {
+        await logSystemEvent({
+          level: "info",
+          category: "payment",
+          source: "customer.portal.extendLoan",
+          action: "gateway-init",
+          status: "pending",
+          message: "Portal extension payment is waiting for gateway confirmation.",
+          req,
+          metadata: {
+            phone,
+            userId: user.userId,
+            amount: toMoney(extensionOption.feeAmount || 0),
+            reference: gatewayResult.reference,
+            provider: gatewayResult.provider,
+            extensionKey,
+            loanId: activeLoanView.loanId,
+          },
+          details: gatewayResult.raw || null,
+        });
         return res.status(200).json({
           success: 2,
-          message: gatewayResult.message,
+          message: "Continue to make payment.",
           data: {
             provider:
               gatewayResult.provider ||
@@ -2074,17 +2366,50 @@ router.post("/portal/extend-loan", async (req, res) => {
         });
       }
 
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "gateway-init",
+        status: "failed",
+        message: gatewayResult.message || "Portal extension gateway initialization failed.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          amount: toMoney(extensionOption.feeAmount || 0),
+          provider: gatewayResult.provider,
+          extensionKey,
+          loanId: activeLoanView.loanId,
+        },
+        details: gatewayResult.raw || null,
+      });
       return res.status(400).json({
         success: 0,
-        message: gatewayResult.message,
+        message: "Payment failed. Try later.",
       });
     }
 
     const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
     if (!globalLoan) {
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "apply",
+        status: "failed",
+        message: "Portal extension payment succeeded at gateway level but the loan record was not found.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          extensionKey,
+          loanId: activeLoanView.loanId,
+        },
+      });
       return res.status(404).json({
         success: 0,
-        message: "Loan record not found.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -2124,9 +2449,25 @@ router.post("/portal/extend-loan", async (req, res) => {
     });
 
     if (!savedLoan || !savedUserExtension) {
+      await logSystemEvent({
+        level: "error",
+        category: "payment",
+        source: "customer.portal.extendLoan",
+        action: "apply",
+        status: "failed",
+        message: "Portal extension payment was received but the due date update failed.",
+        req,
+        metadata: {
+          phone,
+          userId: user.userId,
+          extensionKey,
+          loanId: activeLoanView.loanId,
+          amount: toMoney(extensionOption.feeAmount || 0),
+        },
+      });
       return res.status(400).json({
         success: 0,
-        message: "Extension payment was received but the loan due date could not be updated.",
+        message: "Payment failed. Try later.",
       });
     }
 
@@ -2135,9 +2476,26 @@ router.post("/portal/extend-loan", async (req, res) => {
       getSystemConfig(),
     ]);
 
+    await logSystemEvent({
+      level: "info",
+      category: "payment",
+      source: "customer.portal.extendLoan",
+      action: "apply",
+      status: "success",
+      message: "Portal extension completed successfully.",
+      req,
+      metadata: {
+        phone,
+        userId: user.userId,
+        extensionKey,
+        loanId: activeLoanView.loanId,
+        amount: toMoney(extensionOption.feeAmount || 0),
+      },
+    });
+
     return res.status(200).json({
       success: 1,
-      message: "Extension completed successfully.",
+      message: "Payment completed successfully.",
       data: {
         loanHistory: await Loans.find({ userId: updatedUser.userId }).lean(),
         activeLoan: buildActiveLoanView(
@@ -2156,9 +2514,26 @@ router.post("/portal/extend-loan", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "customer.portal.extendLoan",
+      action: "apply",
+      status: "failed",
+      message: error.message || "Portal extension failed with an internal error.",
+      req,
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        phone: sanitizePhone(req.body?.phone),
+        methodKey: String(req.body?.methodKey || "").trim(),
+        extensionKey: String(req.body?.extensionKey || "").trim(),
+      },
+    });
     return res.status(500).json({
       success: 0,
-      message: "Internal error: code(500)!",
+      message: "Payment failed. Try later.",
     });
   }
 });
@@ -2170,6 +2545,15 @@ const handlePortalGatewayVerification = async (req, res) => {
       String(req.body?.reference || "").trim();
 
     if (!reference) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.gatewayVerification",
+        action: "verify",
+        status: "failed",
+        message: "Portal gateway verification was requested without a reference.",
+        req,
+      });
       return res.status(400).json({
         success: 0,
         message: "Transaction reference is required.",
@@ -2183,6 +2567,18 @@ const handlePortalGatewayVerification = async (req, res) => {
     return res.status(statusCode).json(response);
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "customer.portal.gatewayVerification",
+      action: "verify",
+      status: "failed",
+      message: error.message || "Portal gateway verification failed with an internal error.",
+      req,
+      details: {
+        stack: error.stack || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",
@@ -2227,6 +2623,38 @@ router.post("/portal/bridge/webhook", async (req, res) => {
       }
     );
 
+    await logSystemEvent({
+      level:
+        bridgeStatus === "000"
+          ? "info"
+          : bridgeStatus === "002"
+          ? "warn"
+          : bridgeStatus === "001" || bridgeStatus === "003"
+          ? "error"
+          : "info",
+      category: "payment",
+      source: "customer.portal.bridgeWebhook",
+      action: "webhook",
+      status:
+        bridgeStatus === "000"
+          ? "success"
+          : bridgeStatus === "002"
+          ? "pending"
+          : bridgeStatus === "001" || bridgeStatus === "003"
+          ? "failed"
+          : "received",
+      message:
+        bridgeStatus === "000"
+          ? "Bridge portal webhook confirmed a successful transaction."
+          : String(req.body?.status_desc || req.body?.message || "Bridge portal webhook received.")
+              .trim(),
+      metadata: {
+        reference,
+        bridgeStatus,
+      },
+      details: req.body,
+    });
+
     if (bridgeStatus === "000") {
       await finalizePortalGatewayTransaction({
         reference,
@@ -2237,6 +2665,19 @@ router.post("/portal/bridge/webhook", async (req, res) => {
     return res.sendStatus(200);
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "customer.portal.bridgeWebhook",
+      action: "webhook",
+      status: "failed",
+      message: error.message || "Bridge portal webhook processing failed.",
+      req,
+      details: {
+        stack: error.stack || "",
+        body: req.body,
+      },
+    });
     return res.sendStatus(200);
   }
 });

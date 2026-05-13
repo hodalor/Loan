@@ -5,6 +5,7 @@ const updateAdmin = require("./updateAdmin");
 const login = require("./login");
 const systemConfig = require("./systemConfig");
 const staffGroups = require("./staffGroups");
+const systemLogs = require("./systemLogs");
 
 module.exports = {
   login,
@@ -14,4 +15,5 @@ module.exports = {
   updateAdmin,
   systemConfig,
   staffGroups,
+  systemLogs,
 };
