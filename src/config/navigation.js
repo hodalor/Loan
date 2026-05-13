@@ -76,6 +76,11 @@ const rawNavigationItems = [
         path: "/failed-disbursements",
         roles: ["super-admin", "admin"],
       },
+      {
+        label: "Paid Not Updated",
+        path: "/order-paid-not-updated",
+        roles: ["super-admin", "admin"],
+      },
     ],
   },
   {
@@ -381,6 +386,13 @@ const actionPermissionGroups = [
           "pre-personel",
           "col-personel",
         ],
+      },
+      {
+        key: "action:payment:restore",
+        label: "Restore Gateway Payments",
+        description:
+          "Retry loan posting for portal payments already confirmed by the gateway but not yet completed inside the loan records.",
+        defaultRoles: ["super-admin", "admin"],
       },
     ],
   },
