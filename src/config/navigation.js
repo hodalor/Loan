@@ -663,6 +663,13 @@ const actionPermissionGroups = [
           "See recovery columns before DAY-1 on the data center recovery matrix and assign this visibility to specific staff.",
         defaultRoles: ["super-admin", "admin", "rv-team-lead", "pre-team-lead", "col-team-lead"],
       },
+      {
+        key: "action:system:portal-recover",
+        label: "Recover Portal Payments",
+        description:
+          "Replay stored Bridge portal payment confirmation for pending transactions when a callback was received but not applied.",
+        defaultRoles: ["super-admin"],
+      },
     ],
   },
 ];

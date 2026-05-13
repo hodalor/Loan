@@ -25,4 +25,24 @@ const _getSystemLogs = async (path = "system-logs", filters = {}) => {
   }
 };
 
+export const recoverPortalPayment = async (reference = "") => {
+  try {
+    const reqs = await fetch(`${adminBaseUrl}system-logs/portal-recover`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ reference }),
+    });
+    return await reqs.json();
+  } catch (error) {
+    console.log(error);
+    return {
+      success: 0,
+      message: "Could not run the portal payment recovery right now.",
+    };
+  }
+};
+
 export default _getSystemLogs;

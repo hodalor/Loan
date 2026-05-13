@@ -1,6 +1,9 @@
 import React from "react";
 import SimpleDataTable from "../../components/tables/SimpleDataTable";
-import _getSystemLogs from "../../handlers/gets/getSystemLogs";
+import _getSystemLogs, {
+  recoverPortalPayment,
+} from "../../handlers/gets/getSystemLogs";
+import { GlobalContext } from "../../libs/context/globalContext";
 
 const levelTone = {
   info: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -34,6 +37,36 @@ const truncateText = (value = "", limit = 96) => {
   if (normalized.length <= limit) return normalized || "-";
   return `${normalized.slice(0, limit)}...`;
 };
+const getRecoverableReference = (log = {}) => {
+  const candidates = [
+    log?.metadata?.reference,
+    log?.details?.response?.data?.transaction?.reference,
+    log?.details?.reference,
+    log?.details?.trans_ref,
+    log?.details?.transaction_id,
+  ];
+
+  const match = candidates.find((item) => String(item || "").trim());
+  return String(match || "")
+    .trim()
+    .replace(/\s+/g, "");
+};
+const isRecoverablePortalLog = (log = {}) => {
+  const source = String(log?.source || "").trim();
+  const reference = getRecoverableReference(log);
+  const provider = String(
+    log?.metadata?.provider || log?.details?.provider || ""
+  ).trim().toLowerCase();
+
+  if (!reference) return false;
+  if (provider && provider !== "bridge") return false;
+
+  return [
+    "customer.portal.payLoan",
+    "customer.portal.gatewayVerification",
+    "customer.portal.bridgeWebhook",
+  ].includes(source);
+};
 
 export default function SystemLogsPage({
   title,
@@ -42,6 +75,7 @@ export default function SystemLogsPage({
   defaultLevel = "",
   showLevelFilter = true,
 }) {
+  const { _hasAccess } = React.useContext(GlobalContext);
   const [logs, setLogs] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
@@ -52,6 +86,8 @@ export default function SystemLogsPage({
   const [errorMessage, setErrorMessage] = React.useState("");
   const [selectedLog, setSelectedLog] = React.useState(null);
   const [copyMessage, setCopyMessage] = React.useState("");
+  const [recovering, setRecovering] = React.useState(false);
+  const [recoverMessage, setRecoverMessage] = React.useState("");
 
   const loadLogs = React.useCallback(async () => {
     setLoading(true);
@@ -141,6 +177,42 @@ export default function SystemLogsPage({
     const timeoutId = window.setTimeout(() => setCopyMessage(""), 1800);
     return () => window.clearTimeout(timeoutId);
   }, [copyMessage]);
+
+  React.useEffect(() => {
+    if (!recoverMessage) return undefined;
+
+    const timeoutId = window.setTimeout(() => setRecoverMessage(""), 2600);
+    return () => window.clearTimeout(timeoutId);
+  }, [recoverMessage]);
+
+  const canRecoverPortalPayment = React.useMemo(
+    () =>
+      _hasAccess("action:system:portal-recover") && isRecoverablePortalLog(selectedLog || {}),
+    [_hasAccess, selectedLog]
+  );
+
+  const handleRecoverPortalPayment = React.useCallback(async () => {
+    const reference = getRecoverableReference(selectedLog || {});
+    if (!reference) {
+      setRecoverMessage("No transaction reference was found on this log.");
+      return;
+    }
+
+    setRecovering(true);
+    setRecoverMessage("");
+
+    const response = await recoverPortalPayment(reference);
+
+    setRecovering(false);
+    setRecoverMessage(
+      response.message ||
+        (response.success === 1
+          ? "Portal payment recovery completed."
+          : "Portal payment recovery failed.")
+    );
+
+    await loadLogs();
+  }, [loadLogs, selectedLog]);
 
   const columns = React.useMemo(
     () => [
@@ -395,6 +467,11 @@ export default function SystemLogsPage({
                     {copyMessage}
                   </span>
                 ) : null}
+                {recoverMessage ? (
+                  <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                    {recoverMessage}
+                  </span>
+                ) : null}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -488,6 +565,16 @@ export default function SystemLogsPage({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  {canRecoverPortalPayment ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={handleRecoverPortalPayment}
+                      disabled={recovering}
+                    >
+                      {recovering ? "Recovering..." : "Recover Payment"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100"
