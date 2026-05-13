@@ -189,6 +189,12 @@ const rawNavigationItems = [
         icon: "fa fa-sliders",
         roles: ["super-admin"],
       },
+      {
+        label: "Docs",
+        path: "/system-docs",
+        icon: "fa fa-book",
+        roles: ["super-admin"],
+      },
     ],
   },
 ];
