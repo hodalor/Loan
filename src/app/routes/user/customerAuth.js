@@ -3227,4 +3227,6 @@ router.post(
   }
 );
 
+router.finalizePortalGatewayTransaction = finalizePortalGatewayTransaction;
+
 module.exports = router;
