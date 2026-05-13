@@ -93,6 +93,27 @@ const getPortalPaymentMethods = (user = {}) =>
     : user.phone
     ? [getDefaultPaymentMethod(user)]
     : [];
+const resolveBridgeCallbackUrl = (req, configuredUrl = "", fallbackPath = "") => {
+  const fallbackUrl = `${req.protocol}://${req.get("host")}${fallbackPath}`;
+  const rawValue = String(configuredUrl || "").trim();
+
+  if (!rawValue) return fallbackUrl;
+
+  try {
+    const parsed = new URL(rawValue);
+
+    if (parsed.pathname && parsed.pathname !== "/") {
+      return parsed.toString();
+    }
+
+    parsed.pathname = fallbackPath;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch (error) {
+    return fallbackUrl;
+  }
+};
 const buildLoanCalculations = ({ amount, term }) => {
   const interestAmount = toMoney((amount * term.interestRate) / 100);
   const serviceFeeAmount = toMoney((amount * term.serviceFeeRate) / 100);
@@ -531,9 +552,11 @@ const initializeBridgeCharge = async ({
     0,
     80
   );
-  const callbackUrl =
-    String(config.bridgeCallbackUrl || systemConfig.callbackUrl || "").trim() ||
-    `${req.protocol}://${req.get("host")}/users/portal/bridge/webhook`;
+  const callbackUrl = resolveBridgeCallbackUrl(
+    req,
+    config.bridgeCallbackUrl || systemConfig.callbackUrl,
+    "/users/portal/bridge/webhook"
+  );
 
   const response = await fetch(`${config.bridgeBaseUrl}/make_payment`, {
     method: "POST",

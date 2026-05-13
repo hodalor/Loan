@@ -61,6 +61,27 @@ const formatBridgeRequestTime = (value = new Date()) => {
 
 const buildBridgeAuthHeader = (username = "", password = "") =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+const resolveBridgeCallbackUrl = (configuredUrl = "", fallbackUrl = "") => {
+  const rawValue = String(configuredUrl || "").trim();
+
+  if (!rawValue) return fallbackUrl;
+
+  try {
+    const parsed = new URL(rawValue);
+
+    if (parsed.pathname && parsed.pathname !== "/") {
+      return parsed.toString();
+    }
+
+    const resolvedFallback = new URL(fallbackUrl);
+    parsed.pathname = resolvedFallback.pathname;
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch (error) {
+    return fallbackUrl;
+  }
+};
 
 const getBridgeCredentials = (systemConfig = {}) => ({
   username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
@@ -443,9 +464,10 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
       0,
       80
     );
-    const callbackUrl =
-      String(config.bridgeCallbackUrl || systemConfig.callbackUrl || "").trim() ||
-      "http://localhost:5000/loans/bridge/webhook";
+    const callbackUrl = resolveBridgeCallbackUrl(
+      config.bridgeCallbackUrl || systemConfig.callbackUrl,
+      "http://localhost:5000/loans/bridge/webhook"
+    );
     const { response, payload } = await fetchJsonWithTimeout(
       `${config.bridgeBaseUrl}/make_payment`,
       {
