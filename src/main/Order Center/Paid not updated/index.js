@@ -41,7 +41,7 @@ const normalizeReference = (value = "") =>
     .replace(/\s+/g, "");
 
 export default function PaidNotUpdated() {
-  const { _hasAccess, setAlerts, alerts } = React.useContext(GlobalContext);
+  const { _hasAccess, setAlerts } = React.useContext(GlobalContext);
   const canRestore = _hasAccess("action:payment:restore");
 
   const [activeTab, setActiveTab] = React.useState("pending");
@@ -64,16 +64,15 @@ export default function PaidNotUpdated() {
     if (response.success === 0) {
       setRecords([]);
       setAlerts({
-        ...alerts,
         open: true,
-        severity: "error",
-        message: response.message || "Could not load portal payment records.",
+        type: "error",
+        msg: response.message || "Could not load portal payment records.",
       });
       return;
     }
 
     setRecords(Array.isArray(response.data) ? response.data : []);
-  }, [activeTab, alerts, search, setAlerts]);
+  }, [activeTab, search, setAlerts]);
 
   React.useEffect(() => {
     loadRecords();
@@ -98,10 +97,9 @@ export default function PaidNotUpdated() {
 
     if (!selectedRows.length) {
       setAlerts({
-        ...alerts,
         open: true,
-        severity: "warning",
-        message: "Select at least one payment record to export.",
+        type: "warning",
+        msg: "Select at least one payment record to export.",
       });
       return;
     }
@@ -130,7 +128,7 @@ export default function PaidNotUpdated() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Portal Payments");
     XLSX.writeFile(workbook, `paid-not-updated-${activeTab}.xlsx`);
-  }, [activeTab, alerts, records, selectedRefs, setAlerts]);
+  }, [activeTab, records, selectedRefs, setAlerts]);
 
   const handleRestore = React.useCallback(
     async (reference) => {
@@ -142,10 +140,9 @@ export default function PaidNotUpdated() {
       setRestoringReference("");
 
       setAlerts({
-        ...alerts,
         open: true,
-        severity: response.success === 1 ? "success" : response.success === 2 ? "warning" : "error",
-        message:
+        type: response.success === 1 ? "success" : response.success === 2 ? "warning" : "error",
+        msg:
           response.message ||
           (response.success === 1
             ? "Payment restored successfully."
@@ -158,7 +155,7 @@ export default function PaidNotUpdated() {
         setSelectedRecord(null);
       }
     },
-    [alerts, loadRecords, setAlerts]
+    [loadRecords, setAlerts]
   );
 
   const allSelected = records.length > 0 && selectedRefs.length === records.length;
