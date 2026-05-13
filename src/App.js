@@ -205,10 +205,12 @@ const buildInitialRepaymentDraft = () => ({
   repaymentType: "full",
   amount: "",
   methodKey: "",
+  mobileMoneyOperator: "",
 });
 const buildInitialExtensionDraft = () => ({
   extensionKey: "",
   methodKey: "",
+  mobileMoneyOperator: "",
 });
 
 const isPhoneValid = (value = "") => value.trim().length >= 10;
@@ -292,6 +294,10 @@ const formatDaysLabel = (days) => {
 };
 const getRepaymentMethodLabel = (options = [], key = "") =>
   options.find((item) => item.key === key)?.label || key || "-";
+const getGatewayMobileMoneyNetworks = (lifecycleConfig = {}) =>
+  Array.isArray(lifecycleConfig?.mobileMoneyNetworks) ? lifecycleConfig.mobileMoneyNetworks : [];
+const getDefaultGatewayMobileMoneyOperator = (lifecycleConfig = {}) =>
+  getGatewayMobileMoneyNetworks(lifecycleConfig)[0]?.key || "";
 const getRecordBadges = (loan = {}) => {
   const badges = [];
 
@@ -784,6 +790,7 @@ function App() {
     buildDefaultPortalContent().authVerification.firebaseWebConfig;
   const isRealOtpMode = otpMode === "real";
   const firebaseVerificationReady = isFirebasePhoneVerificationReady(firebaseWebConfig);
+  const lifecycleConfig = sessionAccount?.lifecycleConfig || null;
 
   const showMessage = (type, text) => setAppMessage({ type, text });
   const resetOtpVerificationState = useCallback(() => {
@@ -1190,6 +1197,44 @@ function App() {
     pendingGatewayTransaction,
     screen,
   ]);
+
+  useEffect(() => {
+    const defaultOperator = getDefaultGatewayMobileMoneyOperator(lifecycleConfig);
+
+    setRepaymentDraft((current) => {
+      if (current.methodKey !== "mobile-money") {
+        return current.mobileMoneyOperator
+          ? { ...current, mobileMoneyOperator: "" }
+          : current;
+      }
+
+      if (current.mobileMoneyOperator || !defaultOperator) {
+        return current;
+      }
+
+      return {
+        ...current,
+        mobileMoneyOperator: defaultOperator,
+      };
+    });
+
+    setExtensionDraft((current) => {
+      if (current.methodKey !== "mobile-money") {
+        return current.mobileMoneyOperator
+          ? { ...current, mobileMoneyOperator: "" }
+          : current;
+      }
+
+      if (current.mobileMoneyOperator || !defaultOperator) {
+        return current;
+      }
+
+      return {
+        ...current,
+        mobileMoneyOperator: defaultOperator,
+      };
+    });
+  }, [lifecycleConfig]);
 
   useEffect(() => {
     if (screen !== "portal" || !pendingGatewayTransaction?.reference) {
@@ -1764,6 +1809,10 @@ function App() {
       amount:
         repaymentDraft.repaymentType === "partial" ? Number(repaymentDraft.amount || 0) : undefined,
       methodKey: repaymentDraft.methodKey,
+      mobileMoneyOperator:
+        repaymentDraft.methodKey === "mobile-money"
+          ? repaymentDraft.mobileMoneyOperator
+          : "",
     });
     setLifecycleLoading(false);
 
@@ -1818,6 +1867,10 @@ function App() {
       phone,
       extensionKey: extensionDraft.extensionKey,
       methodKey: extensionDraft.methodKey,
+      mobileMoneyOperator:
+        extensionDraft.methodKey === "mobile-money"
+          ? extensionDraft.mobileMoneyOperator
+          : "",
     });
     setLifecycleLoading(false);
 
@@ -2190,6 +2243,7 @@ function App() {
                   loanApplying={loanApplying}
                   lifecycleLoading={lifecycleLoading}
                   lifecycleAction={lifecycleAction}
+                  lifecycleConfig={lifecycleConfig}
                   repaymentDraft={repaymentDraft}
                   extensionDraft={extensionDraft}
                   repaymentSummaryData={repaymentSummaryData}
@@ -2200,6 +2254,17 @@ function App() {
                       setRepaymentDraft((current) => ({
                         ...current,
                         [field]: value,
+                        ...(field === "methodKey" && value !== "mobile-money"
+                          ? { mobileMoneyOperator: "" }
+                          : {}),
+                        ...(field === "methodKey" &&
+                        value === "mobile-money" &&
+                        !current.mobileMoneyOperator
+                          ? {
+                              mobileMoneyOperator:
+                                getDefaultGatewayMobileMoneyOperator(lifecycleConfig),
+                            }
+                          : {}),
                       }));
                       setRepaymentSummaryData(null);
                     }
@@ -2229,6 +2294,17 @@ function App() {
                       setExtensionDraft((current) => ({
                         ...current,
                         [field]: value,
+                        ...(field === "methodKey" && value !== "mobile-money"
+                          ? { mobileMoneyOperator: "" }
+                          : {}),
+                        ...(field === "methodKey" &&
+                        value === "mobile-money" &&
+                        !current.mobileMoneyOperator
+                          ? {
+                              mobileMoneyOperator:
+                                getDefaultGatewayMobileMoneyOperator(lifecycleConfig),
+                            }
+                          : {}),
                       }));
                       setExtensionSummaryData(null);
                     }
@@ -2441,6 +2517,7 @@ function LoanApplyTab({
   loanApplying,
   lifecycleLoading,
   lifecycleAction,
+  lifecycleConfig,
   repaymentDraft,
   extensionDraft,
   repaymentSummaryData,
@@ -2463,6 +2540,11 @@ function LoanApplyTab({
   if (!offer) {
     return <div className="portal-loading">Loading available loan offer...</div>;
   }
+
+  const mobileMoneyOperatorOptions = getGatewayMobileMoneyNetworks(lifecycleConfig);
+  const collectionGateway = String(lifecycleConfig?.collectionGateway || "").trim();
+  const requiresMobileMoneyOperator =
+    lifecycleConfig?.requiresMobileMoneyOperator === true;
 
   if (!offer.canApply) {
     if (activeLoan?.statusKey === "review") {
@@ -2611,6 +2693,26 @@ function LoanApplyTab({
                     </select>
                   </label>
 
+                  {repaymentDraft.methodKey === "mobile-money" &&
+                  mobileMoneyOperatorOptions.length > 0 ? (
+                    <label className="field">
+                      <span>Mobile money operator</span>
+                      <select
+                        value={repaymentDraft.mobileMoneyOperator}
+                        onChange={(event) =>
+                          onRepaymentDraftChange("mobileMoneyOperator", event.target.value)
+                        }
+                      >
+                        <option value="">Select operator</option>
+                        {mobileMoneyOperatorOptions.map((item) => (
+                          <option key={item.key} value={item.key}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+
                   {repaymentDraft.repaymentType === "partial" ? (
                     <Field
                       label="Repayment Amount"
@@ -2653,6 +2755,9 @@ function LoanApplyTab({
                   disabled={
                     lifecycleLoading ||
                     !repaymentDraft.methodKey ||
+                    (repaymentDraft.methodKey === "mobile-money" &&
+                      requiresMobileMoneyOperator &&
+                      !repaymentDraft.mobileMoneyOperator) ||
                     (repaymentDraft.repaymentType === "partial" && !repaymentDraft.amount)
                   }
                 >
@@ -2663,6 +2768,12 @@ function LoanApplyTab({
                     : "Review Payment"}
                 </button>
               </div>
+              {repaymentDraft.methodKey === "mobile-money" && requiresMobileMoneyOperator ? (
+                <div className="warning-note">
+                  <strong>Gateway:</strong> {collectionGateway || "Mobile money"} requires you to
+                  choose the operator before sending the prompt.
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -2730,6 +2841,26 @@ function LoanApplyTab({
                       ))}
                     </select>
                   </label>
+
+                  {extensionDraft.methodKey === "mobile-money" &&
+                  mobileMoneyOperatorOptions.length > 0 ? (
+                    <label className="field">
+                      <span>Mobile money operator</span>
+                      <select
+                        value={extensionDraft.mobileMoneyOperator}
+                        onChange={(event) =>
+                          onExtensionDraftChange("mobileMoneyOperator", event.target.value)
+                        }
+                      >
+                        <option value="">Select operator</option>
+                        {mobileMoneyOperatorOptions.map((item) => (
+                          <option key={item.key} value={item.key}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                 </div>
               </div>
 
@@ -2744,6 +2875,9 @@ function LoanApplyTab({
                   disabled={
                     lifecycleLoading ||
                     !extensionDraft.methodKey ||
+                    (extensionDraft.methodKey === "mobile-money" &&
+                      requiresMobileMoneyOperator &&
+                      !extensionDraft.mobileMoneyOperator) ||
                     !extensionDraft.extensionKey
                   }
                 >
