@@ -2244,6 +2244,7 @@ function App() {
                   lifecycleLoading={lifecycleLoading}
                   lifecycleAction={lifecycleAction}
                   lifecycleConfig={lifecycleConfig}
+                  pendingGatewayTransaction={pendingGatewayTransaction}
                   repaymentDraft={repaymentDraft}
                   extensionDraft={extensionDraft}
                   repaymentSummaryData={repaymentSummaryData}
@@ -2518,6 +2519,7 @@ function LoanApplyTab({
   lifecycleLoading,
   lifecycleAction,
   lifecycleConfig,
+  pendingGatewayTransaction,
   repaymentDraft,
   extensionDraft,
   repaymentSummaryData,
@@ -2545,6 +2547,12 @@ function LoanApplyTab({
   const collectionGateway = String(lifecycleConfig?.collectionGateway || "").trim();
   const requiresMobileMoneyOperator =
     lifecycleConfig?.requiresMobileMoneyOperator === true;
+  const isAwaitingRepaymentConfirmation =
+    pendingGatewayTransaction?.reference &&
+    pendingGatewayTransaction?.type === "repayment";
+  const isAwaitingExtensionConfirmation =
+    pendingGatewayTransaction?.reference &&
+    pendingGatewayTransaction?.type === "extension";
 
   if (!offer.canApply) {
     if (activeLoan?.statusKey === "review") {
@@ -2738,14 +2746,36 @@ function LoanApplyTab({
                     value={formatCurrency(repaymentSummaryData.amount || 0)}
                     emphasis
                   />
-                  <div className="warning-note">
-                    <strong>Next step:</strong> customer self-service gateway charge is prepared from this summary. Final gateway submission is the next phase.
+                  <div
+                    className={`warning-note ${
+                      isAwaitingRepaymentConfirmation ? "warning-note-info" : ""
+                    }`}
+                  >
+                    {isAwaitingRepaymentConfirmation ? (
+                      <div className="waiting-indicator">
+                        <span className="waiting-spinner" aria-hidden="true" />
+                        <span>
+                          <strong>Waiting:</strong> the payment prompt was sent and this page is
+                          checking Bridge callback confirmation now.
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <strong>Next step:</strong> customer self-service gateway charge is
+                        prepared from this summary. Final gateway submission is the next phase.
+                      </>
+                    )}
                   </div>
                 </div>
               ) : null}
 
               <div className="actions portal-actions">
-                <button type="button" className="ghost-btn" onClick={onClearLifecycleAction}>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={onClearLifecycleAction}
+                  disabled={isAwaitingRepaymentConfirmation}
+                >
                   Back
                 </button>
                 <button
@@ -2754,6 +2784,7 @@ function LoanApplyTab({
                   onClick={repaymentSummaryData ? onSubmitRepayment : onReviewRepayment}
                   disabled={
                     lifecycleLoading ||
+                    isAwaitingRepaymentConfirmation ||
                     !repaymentDraft.methodKey ||
                     (repaymentDraft.methodKey === "mobile-money" &&
                       requiresMobileMoneyOperator &&
@@ -2761,7 +2792,9 @@ function LoanApplyTab({
                     (repaymentDraft.repaymentType === "partial" && !repaymentDraft.amount)
                   }
                 >
-                  {lifecycleLoading
+                  {isAwaitingRepaymentConfirmation
+                    ? "Waiting for confirmation..."
+                    : lifecycleLoading
                     ? "Processing..."
                     : repaymentSummaryData
                     ? "Pay Now"
@@ -2865,7 +2898,12 @@ function LoanApplyTab({
               </div>
 
               <div className="actions portal-actions">
-                <button type="button" className="ghost-btn" onClick={onClearLifecycleAction}>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={onClearLifecycleAction}
+                  disabled={isAwaitingExtensionConfirmation}
+                >
                   Back
                 </button>
                 <button
@@ -2874,6 +2912,7 @@ function LoanApplyTab({
                   onClick={extensionSummaryData ? onSubmitExtension : () => onReviewExtension(extensionDraft.extensionKey)}
                   disabled={
                     lifecycleLoading ||
+                    isAwaitingExtensionConfirmation ||
                     !extensionDraft.methodKey ||
                     (extensionDraft.methodKey === "mobile-money" &&
                       requiresMobileMoneyOperator &&
@@ -2881,13 +2920,26 @@ function LoanApplyTab({
                     !extensionDraft.extensionKey
                   }
                 >
-                  {lifecycleLoading
+                  {isAwaitingExtensionConfirmation
+                    ? "Waiting for confirmation..."
+                    : lifecycleLoading
                     ? "Processing..."
                     : extensionSummaryData
                     ? "Pay Extension Fee"
                     : "Review Extension"}
                 </button>
               </div>
+              {isAwaitingExtensionConfirmation ? (
+                <div className="warning-note warning-note-info">
+                  <div className="waiting-indicator">
+                    <span className="waiting-spinner" aria-hidden="true" />
+                    <span>
+                      <strong>Waiting:</strong> the extension charge was sent and this page is
+                      checking Bridge callback confirmation now.
+                    </span>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
