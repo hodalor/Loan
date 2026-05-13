@@ -221,12 +221,15 @@ const buildLifecycleConfig = (systemConfig = {}) => ({
   overduePenaltyRate: Number(systemConfig.overduePenaltyRate || 0),
   allowPartialRepayment: Boolean(systemConfig.allowPartialRepayment),
   activeCountry: buildCountryProfile(getActiveCountryConfig(systemConfig)),
+  collectionGateway: getCollectionGateway(systemConfig),
+  requiresMobileMoneyOperator: getCollectionGateway(systemConfig) === "bridge",
   repaymentOptions: (Array.isArray(systemConfig.repaymentOptions) ? systemConfig.repaymentOptions : [])
     .filter((item) => item?.isEnabled)
     .map((item) => ({
       key: item.key,
       label: item.label,
     })),
+  mobileMoneyNetworks: buildGatewayAwareMobileMoneyNetworks(systemConfig),
   extensionPeriods: (Array.isArray(systemConfig.extensionPeriods) ? systemConfig.extensionPeriods : [])
     .filter((item) => item?.isEnabled)
     .sort((left, right) => Number(left.days || 0) - Number(right.days || 0)),
@@ -411,8 +414,25 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
     extensionOptions,
   };
 };
-const getRepaymentSourceAccount = (user = {}) => {
+const getRepaymentSourceAccount = ({
+  user = {},
+  methodKey = "",
+  mobileMoneyOperator = "",
+}) => {
   const paymentMethods = Array.isArray(user.paymentMethods) ? user.paymentMethods : [];
+  const normalizedMethodKey = String(methodKey || "").trim().toLowerCase();
+  const normalizedOperator = String(mobileMoneyOperator || "").trim();
+
+  if (normalizedMethodKey === "mobile-money") {
+    return {
+      method: sanitizePhone(user.phone || paymentMethods[0]?.method || ""),
+      operator:
+        normalizedOperator ||
+        paymentMethods.find((item) => item?.isVerified)?.operator ||
+        paymentMethods[0]?.operator ||
+        "",
+    };
+  }
 
   return (
     paymentMethods.find((item) => item?.isVerified) ||
@@ -451,6 +471,7 @@ const formatBridgeRequestTime = (value = new Date()) => {
 };
 const buildBridgeAuthHeader = (username = "", password = "") =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+const normalizeGatewayKey = (value = "") => String(value || "").trim().toLowerCase();
 const getBridgeCredentials = (systemConfig = {}) => ({
   username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
   password: String(systemConfig.apiSecret || config.bridgeApiPassword || "").trim(),
@@ -470,6 +491,25 @@ const mapOperatorToBridgeNetworkCode = (operator = "") => {
   if (normalized.includes("airtel") || normalized.includes("tigo")) return "AIR";
 
   return "";
+};
+const getCollectionGateway = (systemConfig = {}) =>
+  normalizeGatewayKey(
+    systemConfig.collectionGateway || systemConfig.gatewayProvider || systemConfig.activeChannel
+  );
+const buildGatewayAwareMobileMoneyNetworks = (systemConfig = {}) => {
+  const activeCountry = buildCountryProfile(getActiveCountryConfig(systemConfig));
+  const allNetworks = Array.isArray(activeCountry.mobileMoneyNetworks)
+    ? activeCountry.mobileMoneyNetworks
+    : [];
+  const gateway = getCollectionGateway(systemConfig);
+
+  if (gateway === "bridge") {
+    return allNetworks.filter((network) =>
+      Boolean(mapOperatorToBridgeNetworkCode(network?.label || network?.key || ""))
+    );
+  }
+
+  return allNetworks;
 };
 const runCollectionCharge = async ({
   amount,
@@ -516,13 +556,19 @@ const initializeBridgeCharge = async ({
   req,
   user,
   amount,
+  methodKey = "",
   systemConfig,
   referencePrefix,
   transactionType,
   loanId,
+  mobileMoneyOperator,
   context = {},
 }) => {
-  const sourceAccount = getRepaymentSourceAccount(user);
+  const sourceAccount = getRepaymentSourceAccount({
+    user,
+    methodKey,
+    mobileMoneyOperator,
+  });
   const bridgeCredentials = getBridgeCredentials(systemConfig);
   const networkCode = mapOperatorToBridgeNetworkCode(sourceAccount?.operator);
   const activeCountry = getActiveCountryConfig(systemConfig);
@@ -1164,6 +1210,7 @@ const processCustomerGatewayCharge = async ({
   referencePrefix,
   transactionType,
   loanId,
+  mobileMoneyOperator = "",
   context = {},
 }) => {
   if (
@@ -1200,15 +1247,21 @@ const processCustomerGatewayCharge = async ({
       req,
       user,
       amount,
+      methodKey,
       systemConfig,
       referencePrefix,
       transactionType,
       loanId,
+      mobileMoneyOperator,
       context,
     });
   }
 
-  const sourceAccount = getRepaymentSourceAccount(user);
+  const sourceAccount = getRepaymentSourceAccount({
+    user,
+    methodKey,
+    mobileMoneyOperator,
+  });
   if (!sourceAccount?.method) {
     return {
       success: false,
@@ -1922,6 +1975,7 @@ router.post("/portal/pay-loan", async (req, res) => {
     const repaymentType = req.body?.repaymentType === "partial" ? "partial" : "full";
     const requestedAmount = toMoney(req.body?.amount || 0);
     const methodKey = String(req.body?.methodKey || "").trim();
+    const mobileMoneyOperator = String(req.body?.mobileMoneyOperator || "").trim();
 
     if (!phone || !methodKey) {
       await logSystemEvent({
@@ -2029,6 +2083,7 @@ router.post("/portal/pay-loan", async (req, res) => {
       context: {
         repaymentType,
       },
+      mobileMoneyOperator,
     });
 
     if (!gatewayResult.success) {
@@ -2048,6 +2103,7 @@ router.post("/portal/pay-loan", async (req, res) => {
             reference: gatewayResult.reference,
             provider: gatewayResult.provider,
             repaymentType,
+            mobileMoneyOperator,
           },
           details: gatewayResult.raw || null,
         });
@@ -2080,6 +2136,7 @@ router.post("/portal/pay-loan", async (req, res) => {
           amount: payAmount,
           provider: gatewayResult.provider,
           repaymentType,
+          mobileMoneyOperator,
         },
         details: gatewayResult.raw || null,
       });
@@ -2166,6 +2223,7 @@ router.post("/portal/pay-loan", async (req, res) => {
         amount: payAmount,
         loanId: activeLoanView.loanId,
         repaymentType,
+        mobileMoneyOperator,
       },
     });
 
@@ -2218,6 +2276,7 @@ router.post("/portal/extend-loan", async (req, res) => {
     const phone = sanitizePhone(req.body?.phone);
     const extensionKey = String(req.body?.extensionKey || "").trim();
     const methodKey = String(req.body?.methodKey || "").trim();
+    const mobileMoneyOperator = String(req.body?.mobileMoneyOperator || "").trim();
 
     if (!phone || !extensionKey || !methodKey) {
       await logSystemEvent({
@@ -2327,6 +2386,7 @@ router.post("/portal/extend-loan", async (req, res) => {
         extensionKey: extensionOption.key,
         extensionOption,
       },
+      mobileMoneyOperator,
     });
 
     if (!gatewayResult.success) {
@@ -2347,6 +2407,7 @@ router.post("/portal/extend-loan", async (req, res) => {
             provider: gatewayResult.provider,
             extensionKey,
             loanId: activeLoanView.loanId,
+            mobileMoneyOperator,
           },
           details: gatewayResult.raw || null,
         });
@@ -2381,6 +2442,7 @@ router.post("/portal/extend-loan", async (req, res) => {
           provider: gatewayResult.provider,
           extensionKey,
           loanId: activeLoanView.loanId,
+          mobileMoneyOperator,
         },
         details: gatewayResult.raw || null,
       });
