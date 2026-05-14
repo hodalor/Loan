@@ -49,6 +49,7 @@ const buildTabs = ({ requestType, failedOnly }) => {
     return [
       { id: "pending_first_approval", label: "Pending First Approval" },
       { id: "pending_second_approval", label: "Pending Second Approval" },
+      { id: "pending_gateway_confirmation", label: "Pending Gateway" },
       { id: "all_records", label: "All Records" },
     ];
   }
@@ -67,6 +68,7 @@ const formatMoney = (value) => {
 const statusLabelMap = {
   pending_first_approval: "Pending First Approval",
   pending_second_approval: "Pending Second Approval",
+  pending_gateway_confirmation: "Pending Gateway",
   completed: "Completed",
   rejected: "Rejected",
   failed: "Failed",
@@ -75,6 +77,7 @@ const statusLabelMap = {
 const badgeTone = {
   pending_first_approval: "bg-amber-50 text-amber-700",
   pending_second_approval: "bg-sky-50 text-sky-700",
+  pending_gateway_confirmation: "bg-indigo-50 text-indigo-700",
   completed: "bg-emerald-50 text-emerald-700",
   rejected: "bg-rose-50 text-rose-700",
   failed: "bg-rose-100 text-rose-800",
@@ -218,6 +221,8 @@ export default function FundRequestsWorkspace({
 
   const allVisibleSelected =
     visibleRows.length > 0 && visibleRows.every((row) => selectedIds.includes(row.id));
+  const isApprovalTab =
+    !failedOnly && ["pending_first_approval", "pending_second_approval"].includes(activeTab);
 
   React.useEffect(() => {
     setSelectedIds([]);
@@ -229,7 +234,7 @@ export default function FundRequestsWorkspace({
       {
         key: "select",
         label:
-          !failedOnly && activeTab !== "all_records" ? (
+          isApprovalTab ? (
             <input
               type="checkbox"
               checked={allVisibleSelected}
@@ -246,7 +251,7 @@ export default function FundRequestsWorkspace({
             ""
           ),
         render: (row) =>
-          !failedOnly && activeTab !== "all_records" ? (
+          isApprovalTab ? (
             <input
               type="checkbox"
               checked={selectedIds.includes(row.id)}
@@ -309,7 +314,7 @@ export default function FundRequestsWorkspace({
           row.createdAt ? new Date(row.createdAt).toLocaleDateString() : "-",
       },
     ],
-    [activeTab, allVisibleSelected, failedOnly, requestType, selectedIds, visibleRows]
+    [allVisibleSelected, isApprovalTab, requestType, selectedIds, visibleRows]
   );
 
   const updateSingleForm = (field, value) => {
@@ -662,7 +667,7 @@ export default function FundRequestsWorkspace({
             </div>
           </div>
 
-          {!failedOnly && activeTab !== "all_records" && selectedIds.length > 0 ? (
+          {isApprovalTab && selectedIds.length > 0 ? (
             <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
               <div>
                 <label className="app-label">Bulk Remark</label>
