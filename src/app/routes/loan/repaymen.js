@@ -31,6 +31,14 @@ const normalizeBridgeReference = (value = "") =>
     .replace(/\s*-\s*/g, "-")
     .replace(/\s+/g, " ")
     .trim();
+const getBridgeReferenceVariants = (value = "") => {
+  const rawValue = String(value || "").trim();
+  const normalizedValue = normalizeBridgeReference(value);
+
+  return [rawValue, normalizedValue].filter(
+    (item, index, list) => Boolean(item) && list.indexOf(item) === index
+  );
+};
 const getBridgeCallbackReferenceCandidates = (payload = {}) =>
   [
     payload.trans_ref,
@@ -40,7 +48,7 @@ const getBridgeCallbackReferenceCandidates = (payload = {}) =>
     payload.collection_trans_id,
     payload.trans_id,
   ]
-    .map((value) => normalizeBridgeReference(value))
+    .flatMap((value) => getBridgeReferenceVariants(value))
     .filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
 const getBridgeCallbackReference = (payload = {}) =>
   getBridgeCallbackReferenceCandidates(payload)[0] || "";
