@@ -4,6 +4,48 @@ import { _getSystemConfig } from "../../../handlers";
 import { channelLabels } from "../../../libs/systemConfig";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 
+const toTitleCase = (value = "") =>
+  String(value || "")
+    .trim()
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const getQueueSourceLabel = (status = "") => {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+
+  if (normalizedStatus === "bounced-back") return "Callback failure";
+  if (normalizedStatus === "failed") return "Initial failure";
+  if (normalizedStatus === "pending") return "Awaiting callback";
+  if (normalizedStatus === "cancelled") return "Cancelled by admin";
+  if (normalizedStatus === "success") return "Completed payout";
+
+  return toTitleCase(normalizedStatus || "Unknown");
+};
+
+const getStatusTone = (status = "") => {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+
+  if (normalizedStatus === "bounced-back") {
+    return "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200";
+  }
+
+  if (normalizedStatus === "pending") {
+    return "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200";
+  }
+
+  if (normalizedStatus === "success") {
+    return "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200";
+  }
+
+  if (normalizedStatus === "cancelled") {
+    return "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200";
+  }
+
+  return "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200";
+};
+
 export default function FailedDisbursements({
   queueMode = "failed",
   title = "Failed Disbursements",
@@ -72,6 +114,7 @@ export default function FailedDisbursements({
       : [];
 
     return queueLoans.map((loan, index) => {
+      const payoutStatus = String(loan?.payoutStatus || "").trim().toLowerCase();
       const customer =
         Array.isArray(customers) && customers.length > 0
           ? customers.find((person) => person.userId === loan.userId)
@@ -84,6 +127,7 @@ export default function FailedDisbursements({
         ...loan,
         id: loan._id || loan.ID || index + 1,
         loanId: loan.ID,
+        payoutStatus,
         customerName: customer?.IDinfo
           ? `${customer.IDinfo.firstName} ${customer.IDinfo.middleName} ${customer.IDinfo.lastName}`
           : "",
@@ -91,6 +135,7 @@ export default function FailedDisbursements({
         provider: loan.disbursementProvider || "Pending",
         paymentOperator: loan.paymentOperator || paymentMethod?.operator || "",
         message: loan.payoutMessage || "Gateway request failed",
+        sourceLabel: getQueueSourceLabel(payoutStatus),
       };
     });
   }, [customers, loans, queueMode]);
@@ -102,6 +147,20 @@ export default function FailedDisbursements({
     { key: "phone", label: "Phone" },
     { key: "amount", label: "Amount" },
     { key: "provider", label: "Last Channel" },
+    {
+      key: "payoutStatus",
+      label: "Queue Status",
+      render: (row) => (
+        <span
+          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${getStatusTone(
+            row.payoutStatus
+          )}`}
+        >
+          {toTitleCase(row.payoutStatus || queueMode)}
+        </span>
+      ),
+    },
+    { key: "sourceLabel", label: "Source" },
     {
       key: "paymentOperator",
       label: "Service Provider",

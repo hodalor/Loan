@@ -3469,6 +3469,7 @@ export default function GlobalContextProvider(props) {
             ? {
                 ...item,
                 isDisbursed: false,
+                loanStatus: response.data.loanStatus || item.loanStatus,
                 payoutStatus: response.data.payoutStatus || item.payoutStatus,
                 payoutMessage: response.data.payoutMessage || item.payoutMessage,
               }
@@ -3484,6 +3485,7 @@ export default function GlobalContextProvider(props) {
         const nextLoan = {
           ...current,
           isDisbursed: false,
+          loanStatus: response.data.loanStatus || current.loanStatus,
           payoutStatus: response.data.payoutStatus || current.payoutStatus,
           payoutMessage: response.data.payoutMessage || current.payoutMessage,
         };
