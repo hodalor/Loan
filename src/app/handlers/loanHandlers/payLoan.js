@@ -5,15 +5,26 @@ const toNumber = (value = 0) => {
   const parsed = Number.parseFloat(value);
   return Number.isNaN(parsed) ? 0 : parsed;
 };
+const getLookupVariants = (value = "") => {
+  const rawValue = String(value || "");
+  const trimmedValue = rawValue.trim();
+
+  return [rawValue, trimmedValue].filter(
+    (item, index, list) => Boolean(item) && list.indexOf(item) === index
+  );
+};
 
 const _payLoan = async ({ id, payAmount }) => {
   try {
-    const lookupValue = String(id || "").trim();
-    if (!lookupValue) return false;
+    const lookupValues = getLookupVariants(id);
+    if (lookupValues.length === 0) return false;
 
-    const matchers = [{ loanId: lookupValue }, { ID: lookupValue }];
-    if (mongoose.Types.ObjectId.isValid(lookupValue)) {
-      matchers.push({ _id: lookupValue });
+    const matchers = lookupValues.flatMap((lookupValue) => [{ loanId: lookupValue }, { ID: lookupValue }]);
+    const objectIdCandidate = lookupValues.find((lookupValue) =>
+      mongoose.Types.ObjectId.isValid(lookupValue)
+    );
+    if (objectIdCandidate) {
+      matchers.push({ _id: objectIdCandidate });
     }
 
     const loan = await Loans.findOne({ $or: matchers });
