@@ -63,13 +63,66 @@ const toNumber = (value = 0) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const toValidDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getItemPaymentEvents = (item = {}) => {
+  const explicitEvents = (Array.isArray(item?.paymentEvents) ? item.paymentEvents : [])
+    .map((event, index) => {
+      const paidDate = toValidDate(event?.paidDate || event?.datePaid);
+      const amountPaid = toNumber(event?.amountPaid);
+
+      if (!paidDate || amountPaid <= 0) return null;
+
+      return {
+        id: `${item?.id || item?.ID || item?.loanId || "item"}-event-${index}`,
+        paidDate,
+        amountPaid,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.paidDate - right.paidDate);
+
+  if (explicitEvents.length > 0) {
+    return explicitEvents;
+  }
+
+  const paidDate = toValidDate(item?.dp);
+  const amountPaid = toNumber(item?.amountPaid);
+  if (!paidDate || amountPaid <= 0) return [];
+
+  return [
+    {
+      id: `${item?.id || item?.ID || item?.loanId || "item"}-fallback`,
+      paidDate,
+      amountPaid,
+    },
+  ];
+};
+
+const getEventsInRange = (item = {}, startDate, endDate) =>
+  getItemPaymentEvents(item).filter(
+    (event) => event.paidDate >= startDate && event.paidDate <= endDate
+  );
+
+const getCollectedAmountInRange = (item = {}, startDate, endDate) =>
+  getEventsInRange(item, startDate, endDate).reduce(
+    (sum, event) => sum + toNumber(event.amountPaid),
+    0
+  );
+
 const isSettledPaymentStatus = (status = "") =>
   ["Paid", "Payed"].includes(String(status || "").trim());
 
 const getPaymentProgressType = (item = {}) => {
   const departmentStatus = String(item?.departmentPaymentStatus || "").trim().toLowerCase();
   const repaymentAmount = toNumber(item?.repaymentAmount);
-  const amountPaid = toNumber(item?.amountPaid);
+  const amountPaid = getItemPaymentEvents(item).reduce(
+    (sum, event) => sum + toNumber(event.amountPaid),
+    0
+  );
 
   if (amountPaid <= 0) return "none";
   if (departmentStatus === "full") return "full";
@@ -126,13 +179,9 @@ const buildRankingTable = ({
 
   (Array.isArray(data) ? data : []).forEach((item) => {
     const officerName = String(item?.[officerField] || "").trim();
-    const paidDate = item?.dp ? new Date(item.dp) : null;
-
-    if (!officerName || !paidDate || Number.isNaN(paidDate.getTime())) return;
-    if (paidDate < normalizedStart || paidDate > normalizedEnd) return;
+    if (!officerName) return;
     if (!matchesPaymentFilter(item, paymentFilter)) return;
 
-    const dayKey = formatDateKey(paidDate);
     const existing =
       rankMap.get(officerName) ||
       {
@@ -141,9 +190,26 @@ const buildRankingTable = ({
         values: Object.fromEntries(columnDates.map((column) => [column.key, 0])),
       };
 
-    const nextValue = mode === "cases" ? 1 : toNumber(item?.amountPaid);
-    existing.values[dayKey] = toNumber(existing.values[dayKey]) + nextValue;
-    existing.totalValue += nextValue;
+    if (mode === "cases") {
+      const caseDayKeys = new Set(
+        getEventsInRange(item, normalizedStart, normalizedEnd).map((event) =>
+          formatDateKey(event.paidDate)
+        )
+      );
+
+      caseDayKeys.forEach((dayKey) => {
+        existing.values[dayKey] = toNumber(existing.values[dayKey]) + 1;
+        existing.totalValue += 1;
+      });
+    } else {
+      getEventsInRange(item, normalizedStart, normalizedEnd).forEach((event) => {
+        const dayKey = formatDateKey(event.paidDate);
+        const nextValue = toNumber(event.amountPaid);
+        existing.values[dayKey] = toNumber(existing.values[dayKey]) + nextValue;
+        existing.totalValue += nextValue;
+      });
+    }
+
     rankMap.set(officerName, existing);
   });
 
@@ -230,10 +296,7 @@ const buildPercentageRankingTable = ({
 
   (Array.isArray(collectedData) ? collectedData : []).forEach((item) => {
     const officerName = String(item?.[officerField] || "").trim();
-    const paidDate = item?.dp ? new Date(item.dp) : null;
-
-    if (!officerName || !paidDate || Number.isNaN(paidDate.getTime())) return;
-    if (paidDate < normalizedStart || paidDate > normalizedEnd) return;
+    if (!officerName) return;
     if (!matchesPaymentFilter(item, paymentFilter)) return;
 
     const existing =
@@ -246,8 +309,11 @@ const buildPercentageRankingTable = ({
         collectedCases: 0,
       };
 
-    existing.collectedAmount += toNumber(item?.amountPaid);
-    existing.collectedCases += 1;
+    const collectedAmount = getCollectedAmountInRange(item, normalizedStart, normalizedEnd);
+    const collectedCases = getEventsInRange(item, normalizedStart, normalizedEnd).length > 0 ? 1 : 0;
+
+    existing.collectedAmount += collectedAmount;
+    existing.collectedCases += collectedCases;
     rankMap.set(officerName, existing);
   });
 

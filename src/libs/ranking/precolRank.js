@@ -1,5 +1,61 @@
+const toNumber = (value = 0) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toValidDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getPaymentEvents = (loan = {}) => {
+  const events = (Array.isArray(loan?.paymentEvents) ? loan.paymentEvents : [])
+    .map((event, index) => {
+      const paidDate = toValidDate(event?.paidDate || event?.datePaid);
+      const amountPaid = toNumber(event?.amountPaid);
+
+      if (!paidDate || amountPaid <= 0) return null;
+
+      return {
+        id: `${loan?.id || loan?.ID || loan?.loanId || "loan"}-${index}`,
+        paidDate,
+        amountPaid,
+      };
+    })
+    .filter(Boolean);
+
+  if (events.length > 0) return events;
+
+  const paidDate = toValidDate(loan?.dp);
+  const amountPaid = toNumber(loan?.amountPaid);
+  if (!paidDate || amountPaid <= 0) return [];
+
+  return [{ id: `${loan?.id || loan?.ID || loan?.loanId || "loan"}-fallback`, paidDate, amountPaid }];
+};
+
+const createEmptyDays = () => ({
+  mon: 0,
+  tue: 0,
+  wed: 0,
+  thu: 0,
+  fri: 0,
+  sat: 0,
+  sun: 0,
+});
+
+const getWeekDayKey = (date) => {
+  const day = date.getDay();
+  if (day === 1) return "mon";
+  if (day === 2) return "tue";
+  if (day === 3) return "wed";
+  if (day === 4) return "thu";
+  if (day === 5) return "fri";
+  if (day === 6) return "sat";
+  return "sun";
+};
+
 const _getPreRankRec = async (data) => {
-  var loans = [];
+  const loans = [];
 
   data.forEach((loan) => {
     const now = new Date();
@@ -15,88 +71,29 @@ const _getPreRankRec = async (data) => {
     const startOfNextWeek = new Date(+startOfThisWeek);
     startOfNextWeek.setDate(mondayThisWeek + 7);
 
-    let loanDate =
-      loan.dp === undefined || loan.dp === null ? null : new Date(loan.dp);
+    getPaymentEvents(loan)
+      .filter((event) => event.paidDate >= startOfThisWeek && event.paidDate < startOfNextWeek)
+      .forEach((event) => {
+        const officerName = loan.preCollOfficer;
+        if (!officerName) return;
 
-    if (
-      loanDate !== null &&
-      loanDate >= startOfThisWeek &&
-      loanDate < startOfNextWeek
-    ) {
-      let check = loans.find((item) => item.userName === loan.preCollOfficer);
+        let check = loans.find((item) => item.userName === officerName);
+        if (!check) {
+          check = { userName: officerName, days: createEmptyDays(), totalAmount: 0 };
+          loans.push(check);
+        }
 
-      if (check) {
-        let day = loanDate.getDay();
-        let days = {
-          mon:
-            day === 1
-              ? check.days.mon + parseFloat(loan.amountPaid)
-              : check.days.mon,
-          tue:
-            day === 2
-              ? check.days.tue + parseFloat(loan.amountPaid)
-              : check.days.tue,
-          wed:
-            day === 3
-              ? check.days.wed + parseFloat(loan.amountPaid)
-              : check.days.wed,
-          thu:
-            day === 4
-              ? check.days.thu + parseFloat(loan.amountPaid)
-              : check.days.thu,
-          fri:
-            day === 5
-              ? check.days.fri + parseFloat(loan.amountPaid)
-              : check.days.fri,
-          sat:
-            day === 6
-              ? check.days.sat + parseFloat(loan.amountPaid)
-              : check.days.sat,
-          sun:
-            day === 7
-              ? check.days.sun + parseFloat(loan.amountPaid)
-              : check.days.sun,
-        };
-
-        let newLoans = loans.filter((item) => item.userName !== check.userName);
-
-        check.days = days;
+        const dayKey = getWeekDayKey(event.paidDate);
+        check.days[dayKey] += toNumber(event.amountPaid);
         check.totalAmount =
-          days.mon +
-          days.tue +
-          days.wed +
-          days.thu +
-          days.fri +
-          days.sat +
-          days.sun;
-
-        newLoans.push(check);
-      }
-
-      if (!check) {
-        let day = loanDate.getDay();
-        let days = {
-          mon: day === 1 ? parseFloat(loan.amountPaid) : 0,
-          tue: day === 2 ? parseFloat(loan.amountPaid) : 0,
-          wed: day === 3 ? parseFloat(loan.amountPaid) : 0,
-          thu: day === 4 ? parseFloat(loan.amountPaid) : 0,
-          fri: day === 5 ? parseFloat(loan.amountPaid) : 0,
-          sat: day === 6 ? parseFloat(loan.amountPaid) : 0,
-          sun: day === 7 ? parseFloat(loan.amountPaid) : 0,
-        };
-
-        let totalAmount =
-          days.mon +
-          days.tue +
-          days.wed +
-          days.thu +
-          days.fri +
-          days.sat +
-          days.sun;
-
-        loans.push({ userName: loan.preCollOfficer, days, totalAmount });
-      }
-    }
+          check.days.mon +
+          check.days.tue +
+          check.days.wed +
+          check.days.thu +
+          check.days.fri +
+          check.days.sat +
+          check.days.sun;
+      });
   });
 
   return loans;
