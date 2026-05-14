@@ -567,7 +567,7 @@ const isBridgeAcceptedInitialization = (response, payload = {}) => {
   return response.status === 202 || normalizedStatus === "202";
 };
 const getCanonicalLoanWritebackId = (loan = {}) =>
-  String(loan?.loanId || loan?.ID || loan?._id || "").trim();
+  String(loan?._id || loan?.loanId || loan?.ID || "").trim();
 const normalizeGatewayKey = (value = "") => String(value || "").trim().toLowerCase();
 const getBridgeCredentials = (systemConfig = {}) => ({
   username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
