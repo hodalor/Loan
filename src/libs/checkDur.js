@@ -11,13 +11,15 @@ const _checkDuration = async (data) => {
 
   if (!loan) return (result = null);
 
-  if (loan.dop === null) return (result = null);
+  if (loan.isDisbursed !== true || loan.dop === null || loan.dop === undefined)
+    return (result = null);
 
   let amount = parseFloat(loan.amount); // loan amonut collected
   let repaymentAmount = parseFloat(loan.repaymentAmount); // amount to be paid back, with interest
   let dateOfPayment = loan.dop; // date loan will be paid back
 
   let loanDate = new Date(dateOfPayment);
+  if (Number.isNaN(loanDate.getTime())) return (result = null);
 
   let timeDiff = loanDate.getTime() - tda.getTime();
 

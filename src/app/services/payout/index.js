@@ -6,6 +6,27 @@ const DEFAULT_GATEWAY_TIMEOUT_MS = 15000;
 
 const normalizeOperator = (value = "") => value.toLowerCase().trim();
 const toSubunitAmount = (amount = 0) => Math.round(Number(amount || 0) * 100);
+const digitsOnly = (value = "") => String(value || "").replace(/\D/g, "");
+const toValidPhoneLength = (value = "") => {
+  const digits = digitsOnly(value);
+  return digits.startsWith("0") ? digits.slice(1).length : digits.length;
+};
+const normalizeBridgePhoneNumber = (value = "", { dialCode = "", phoneExample = "" } = {}) => {
+  const digits = digitsOnly(value);
+  const dialDigits = digitsOnly(dialCode);
+
+  if (!digits) return "";
+  if (!dialDigits) return digits;
+  if (digits.startsWith(dialDigits)) return digits;
+  if (digits.startsWith("0")) return `${dialDigits}${digits.slice(1)}`;
+
+  const expectedLocalLength = toValidPhoneLength(phoneExample);
+  if (expectedLocalLength > 0 && digits.length === expectedLocalLength) {
+    return `${dialDigits}${digits}`;
+  }
+
+  return digits;
+};
 const getGatewayTimeoutMs = () => {
   const configuredTimeout = Number(config.paymentRequestTimeoutMs);
 
@@ -457,6 +478,10 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
   const bridgeCredentials = getBridgeCredentials(systemConfig);
   const networkCode = mapOperatorToBridgeNetworkCode(paymentMethod?.operator);
   const activeCountry = getActiveCountryConfig(systemConfig);
+  const normalizedCustomerNumber = normalizeBridgePhoneNumber(paymentMethod?.method, {
+    dialCode: user?.countryDialCode || activeCountry?.dialCode || "",
+    phoneExample: activeCountry?.phoneExample || "",
+  });
 
   if (!bridgeCredentials.username || !bridgeCredentials.password || !bridgeCredentials.serviceId) {
     return buildGatewayFailure({
@@ -474,6 +499,24 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
       channel: paymentMethod?.operator || "unknown",
       reference: loan.ID,
       message: "The selected payment operator is not supported by Bridge routing.",
+      raw: {
+        operator: paymentMethod?.operator || "",
+        paymentMethod: paymentMethod?.method || "",
+      },
+    });
+  }
+
+  if (!normalizedCustomerNumber) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: networkCode || "momo",
+      reference: loan.ID,
+      message: "A valid payout phone number is required for Bridge disbursement.",
+      raw: {
+        operator: paymentMethod?.operator || "",
+        paymentMethod: paymentMethod?.method || "",
+        dialCode: user?.countryDialCode || activeCountry?.dialCode || "",
+      },
     });
   }
 
@@ -486,6 +529,21 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
       config.bridgeCallbackUrl || systemConfig.callbackUrl,
       "http://localhost:5000/loans/bridge/webhook"
     );
+    const requestBody = {
+      service_id: bridgeCredentials.serviceId,
+      reference: `Loan disbursement ${loan.ID || ""}`.trim(),
+      customer_number: normalizedCustomerNumber,
+      transaction_id: transactionId,
+      trans_type: "MTC",
+      amount: Number(loan.amount || 0),
+      nw: networkCode,
+      nickname: getDisplayName(user, loan),
+      payment_option: "MOM",
+      currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
+      currency_val: config.bridgeCurrencyValue,
+      callback_url: callbackUrl,
+      request_time: formatBridgeRequestTime(),
+    };
     const { response, payload } = await fetchJsonWithTimeout(
       `${config.bridgeBaseUrl}/make_payment`,
       {
@@ -498,21 +556,7 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          service_id: bridgeCredentials.serviceId,
-          reference: `Loan disbursement ${loan.ID || ""}`.trim(),
-          customer_number: paymentMethod.method,
-          transaction_id: transactionId,
-          trans_type: "MTC",
-          amount: Number(loan.amount || 0),
-          nw: networkCode,
-          nickname: getDisplayName(user, loan),
-          payment_option: "MOM",
-          currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
-          currency_val: config.bridgeCurrencyValue,
-          callback_url: callbackUrl,
-          request_time: formatBridgeRequestTime(),
-        }),
+        body: JSON.stringify(requestBody),
       },
       "Bridge"
     );
@@ -527,7 +571,10 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
       message: accepted
         ? payload?.response_message || "Bridge payout accepted and is awaiting callback."
         : payload?.response_message || "Bridge payout request failed.",
-      raw: payload,
+      raw: {
+        request: requestBody,
+        response: payload,
+      },
     };
   } catch (error) {
     return buildGatewayFailure({
@@ -535,7 +582,12 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
       channel: networkCode,
       reference: loan.ID,
       message: error.message || "Bridge payout request failed.",
-      raw: error.originalError?.message || null,
+      raw: {
+        customerNumber: normalizedCustomerNumber,
+        originalNumber: paymentMethod?.method || "",
+        operator: paymentMethod?.operator || "",
+        gatewayError: error.originalError?.message || null,
+      },
     });
   }
 };
@@ -777,6 +829,11 @@ const payWithPaystackTransfer = async ({ transfer }) => {
 
 const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
   const bridgeCredentials = getBridgeCredentials(systemConfig);
+  const activeCountry = getActiveCountryConfig(systemConfig);
+  const normalizedCustomerNumber = normalizeBridgePhoneNumber(transfer.destinationNumber, {
+    dialCode: activeCountry?.dialCode || "",
+    phoneExample: activeCountry?.phoneExample || "",
+  });
 
   if (!bridgeCredentials.username || !bridgeCredentials.password || !bridgeCredentials.serviceId) {
     return buildGatewayFailure({
@@ -795,15 +852,47 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
       channel: transfer.destinationOperator || "momo",
       reference: transfer.reference,
       message: "The selected mobile money operator is not supported for Bridge payouts.",
+      raw: {
+        operator: transfer.destinationOperator || "",
+        destinationNumber: transfer.destinationNumber || "",
+      },
+    });
+  }
+
+  if (!normalizedCustomerNumber) {
+    return buildGatewayFailure({
+      provider: "bridge",
+      channel: networkCode,
+      reference: transfer.reference,
+      message: "A valid mobile money number is required for Bridge payouts.",
+      raw: {
+        operator: transfer.destinationOperator || "",
+        destinationNumber: transfer.destinationNumber || "",
+        dialCode: activeCountry?.dialCode || "",
+      },
     });
   }
 
   try {
-    const activeCountry = await getActiveCountryConfig(systemConfig);
     const callbackUrl = resolveBridgeCallbackUrl(
       config.bridgeCallbackUrl,
       `${config.baseUrl}/admin/fund-requests/bridge-webhook`
     );
+    const requestBody = {
+      service_id: bridgeCredentials.serviceId,
+      reference: String(transfer.reason || "Staff payment").trim(),
+      customer_number: normalizedCustomerNumber,
+      transaction_id: transfer.reference,
+      trans_type: "MTC",
+      amount: Number(transfer.amount || 0),
+      nw: networkCode,
+      nickname: transfer.recipientName || "Staff",
+      payment_option: "MOM",
+      currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
+      currency_val: config.bridgeCurrencyValue,
+      callback_url: callbackUrl,
+      request_time: formatBridgeRequestTime(),
+    };
 
     const { response, payload } = await fetchJsonWithTimeout(
       `${config.bridgeBaseUrl}/make_payment`,
@@ -817,21 +906,7 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          service_id: bridgeCredentials.serviceId,
-          reference: String(transfer.reason || "Staff payment").trim(),
-          customer_number: transfer.destinationNumber,
-          transaction_id: transfer.reference,
-          trans_type: "MTC",
-          amount: Number(transfer.amount || 0),
-          nw: networkCode,
-          nickname: transfer.recipientName || "Staff",
-          payment_option: "MOM",
-          currency_code: activeCountry?.currencyCode || config.bridgeCurrencyCode,
-          currency_val: config.bridgeCurrencyValue,
-          callback_url: callbackUrl,
-          request_time: formatBridgeRequestTime(),
-        }),
+        body: JSON.stringify(requestBody),
       },
       "Bridge"
     );
@@ -851,7 +926,10 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
           : response.ok
           ? "Payout request submitted to Bridge"
           : "Bridge payout failed"),
-      raw: payload,
+      raw: {
+        request: requestBody,
+        response: payload,
+      },
     };
   } catch (error) {
     return buildGatewayFailure({
@@ -859,7 +937,12 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
       channel: transfer.destinationOperator || "momo",
       reference: transfer.reference,
       message: error.message || "Bridge payout request failed.",
-      raw: error.originalError?.message || null,
+      raw: {
+        customerNumber: normalizedCustomerNumber,
+        originalNumber: transfer.destinationNumber || "",
+        operator: transfer.destinationOperator || "",
+        gatewayError: error.originalError?.message || null,
+      },
     });
   }
 };
