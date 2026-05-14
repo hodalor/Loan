@@ -4,7 +4,6 @@ const Admins = require("../../models/admin");
 const StaffGroups = require("../../models/staffGroup");
 const Users = require("../../models/users");
 const { getCalendarDayDifferenceByCountry } = require("../../../libs/countryTime");
-const { dedupeLoanRecords } = require("../../../libs/loanRecords");
 
 const router = express.Router();
 const ADMIN_PROJECTION = "-password -logData -casesAssigned -__v";
@@ -107,8 +106,7 @@ const filterCollectionLoans = (loans = [], users = [], userName = "") => {
 const findAdmins = () => Admins.find().select(ADMIN_PROJECTION).sort({ createdAt: -1 }).lean();
 const findUsers = () =>
   Users.find().select(USER_SUMMARY_PROJECTION).sort({ createdAt: -1 }).lean();
-const findLoans = async (filter = {}) =>
-  dedupeLoanRecords(await Loans.find(filter).sort({ doa: -1, updatedAt: -1 }).lean());
+const findLoans = (filter = {}) => Loans.find(filter).sort({ doa: -1 }).lean();
 
 router.get("/getData/:id", async (req, res) => {
   try {

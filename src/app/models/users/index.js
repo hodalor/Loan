@@ -203,102 +203,77 @@ const collCallRecords = new mongoose.Schema({
 const paymentRecords = new mongoose.Schema({
   recordType: {
     type: String, //balance , public transfare
-    required: false,
+    required: true,
     unique: false,
   },
   loanId: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   userId: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   clearanceDate: {
     type: Date,
-    required: false,
-    unique: false,
-  },
-  datePaid: {
-    type: Date,
-    required: false,
+    required: true,
     unique: false,
   },
   remainingAmount: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   amountPaid: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   actualAmount: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   clearRemainingAmount: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   remarks: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   recordProofAudit: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   recordProofConfirm: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   rejectRemarks: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   auditResults: {
     type: String, //pass(clear and close case) , reject(case still open for collection)
-    required: false,
+    required: true,
     unique: false,
   },
   reviewedBy: {
     type: String,
-    required: false,
+    required: true,
     unique: false,
   },
   confirmedBy: {
     type: String,
-    required: false,
-    unique: false,
-  },
-  source: {
-    type: String,
-    required: false,
-    unique: false,
-  },
-  provider: {
-    type: String,
-    required: false,
-    unique: false,
-  },
-  reference: {
-    type: String,
-    required: false,
-    unique: false,
-  },
-  transactionId: {
-    type: String,
-    required: false,
+    required: true,
     unique: false,
   },
 });

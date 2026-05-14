@@ -1,7 +1,6 @@
 const express = require("express");
 const Loans = require("../../models/loans");
 const _clearLoan = require("../../handlers/userHandlers/clearUserLoan");
-const { applyRepaymentToLoanLedger } = require("../../services/loanRepayment");
 
 const router = express.Router();
 
@@ -44,36 +43,37 @@ router.patch("/confirmClearB/:ID", async (req, res) => {
         });
     }
 
-    const paidAt = new Date();
-    const ledgerResult = await applyRepaymentToLoanLedger({
-      loanId: ID,
-      amountJustCleared,
-      paidAt,
-      clearOverride: true,
-    });
+    loan.isNewLoan = false;
+    loan.paymentStatus = "Paid";
+    loan.loanStatus = "Granted";
+    loan.caseStatus = "Completed";
+    loan.dp = new Date();
+    loan.amountPaid = Number.parseFloat(loan.amountPaid || 0) + amountJustCleared;
+    loan.paymentRecords =
+      loan.paymentRecords === undefined
+        ? [
+            {
+              datePaid: new Date(),
+              amountPaid: amountJustCleared,
+            },
+          ]
+        : [
+            ...loan.paymentRecords,
+            {
+              datePaid: new Date(),
+              amountPaid: amountJustCleared,
+            },
+          ];
 
-    if (ledgerResult) {
-      const embeddedPaymentRecord = {
-        ...(loan.clearanceRecord?.toObject ? loan.clearanceRecord.toObject() : loan.clearanceRecord),
-        recordType: loan.clearanceRecord?.recordType || "balance",
-        loanId: ID,
-        userId: loan.userId,
-        clearanceDate: loan.clearanceRecord?.clearanceDate || paidAt,
-        datePaid: paidAt,
-        amountPaid: `${amountJustCleared}`,
-        actualAmount: `${loan.clearanceRecord?.actualAmount || amountJustCleared}`,
-        clearRemainingAmount: "true",
-        auditResults: auditResults || "pass",
-        confirmedBy: confirmedBy || loan.clearanceRecord?.confirmedBy || "",
-        source: "manual-clearance",
-      };
+    let savedLoan = await loan.save();
+
+    if (savedLoan) {
       const resp = await _clearLoan({
         ID,
-        dp: paidAt,
+        dp: loan.dp,
         userId: loan.userId,
         clear: true,
         amt: amountJustCleared,
-        paymentRecord: embeddedPaymentRecord,
       });
 
       if (resp)
@@ -89,7 +89,7 @@ router.patch("/confirmClearB/:ID", async (req, res) => {
         });
     }
 
-    if (!ledgerResult)
+    if (!savedLoan)
       return res.status(400).json({
         success: 0,
         message: "could not clear loan",

@@ -7,7 +7,6 @@ const systemConfig = require("./systemConfig");
 const staffGroups = require("./staffGroups");
 const systemLogs = require("./systemLogs");
 const fundRequests = require("./fundRequests");
-const portalPayments = require("./portalPayments");
 
 module.exports = {
   login,
@@ -19,5 +18,4 @@ module.exports = {
   staffGroups,
   systemLogs,
   fundRequests,
-  portalPayments,
 };

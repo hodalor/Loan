@@ -9,6 +9,7 @@ const { upload } = require("../../../libs/uploadImage");
 const config = require("../../../config");
 const { _encrypt, _decrypt } = require("../../../libs/encrypt");
 const _generateString = require("../../../libs/generateID");
+const _payLoan = require("../../handlers/loanHandlers/payLoan");
 const _saveLoan = require("../../handlers/loanHandlers/saveLoan");
 const _clearLoan = require("../../handlers/userHandlers/clearUserLoan");
 const _createExt = require("../../handlers/userHandlers/createExt");
@@ -20,11 +21,6 @@ const {
 const { getSystemConfig, getActiveCountryConfig } = require("../../services/systemConfig");
 const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
 const { logSystemEvent } = require("../../../libs/logger");
-const { dedupeLoanRecords, normalizeLoanBusinessId } = require("../../../libs/loanRecords");
-const {
-  applyRepaymentToLoanLedger,
-  ensureRepaymentEventInLoanLedger,
-} = require("../../services/loanRepayment");
 
 const router = express.Router();
 
@@ -252,54 +248,6 @@ const isTruthyGatewayResponse = (response = {}) => {
 const isPendingGatewayResponse = (response = {}) =>
   `${response.response_code || response.status || ""}`.toLowerCase() === "990" ||
   `${response.message || response.response_message || ""}`.toLowerCase().includes("pending");
-const findGatewayTransactionByReference = async (reference = "") => {
-  const normalizedReference = normalizeTransactionReference(reference);
-
-  if (!normalizedReference) return null;
-
-  return (
-    (await GatewayTransactions.findOne({ reference: normalizedReference })) ||
-    (await GatewayTransactions.findOne({ reference: String(reference || "").trim() }))
-  );
-};
-const findLoanRecordByBusinessId = async (loanId = "") => {
-  const normalizedLoanId = normalizeLoanBusinessId(loanId);
-
-  if (!normalizedLoanId) return null;
-
-  const matchingLoans = await Loans.find({
-    $or: [{ ID: normalizedLoanId }, { loanId: normalizedLoanId }],
-  })
-    .sort({ updatedAt: -1, createdAt: -1 })
-    .lean();
-
-  if (matchingLoans.length > 0) {
-    return dedupeLoanRecords(matchingLoans)[0] || null;
-  }
-
-  return await Loans.findById(normalizedLoanId).catch(() => null);
-};
-const ensureLoanLedgerRecord = async ({ userId = "", loanId = "", sourceLoan = null }) => {
-  const normalizedLoanId = normalizeTransactionReference(loanId || sourceLoan?.ID || "");
-  if (!normalizedLoanId) return null;
-
-  const existingLoan = await findLoanRecordByBusinessId(normalizedLoanId);
-  if (existingLoan) return existingLoan;
-  if (!sourceLoan) return null;
-
-  const draftLoan = {
-    ...sourceLoan,
-    userId: String(userId || sourceLoan.userId || "").trim(),
-    ID: normalizedLoanId,
-    loanId: normalizeTransactionReference(sourceLoan.loanId || normalizedLoanId),
-  };
-
-  delete draftLoan._id;
-  delete draftLoan.__v;
-
-  const createdLoan = new Loans(draftLoan);
-  return createdLoan.save();
-};
 const toSubunitAmount = (amount = 0) => Math.round(Number(amount || 0) * 100);
 const sanitizePortalTransaction = (transaction = {}) => ({
   provider: transaction.provider || "paystack",
@@ -310,20 +258,20 @@ const sanitizePortalTransaction = (transaction = {}) => ({
   amount: Number(transaction.amount || 0),
   currency: transaction.currency || config.paystackCurrency || "GHS",
   methodKey: transaction.methodKey || "",
-  loanId: normalizeTransactionReference(transaction.loanId || ""),
+  loanId: transaction.loanId || "",
   checkoutUrl: transaction.checkoutUrl || "",
   verifiedAt: transaction.verifiedAt || null,
   processedAt: transaction.processedAt || null,
   failureReason: transaction.failureReason || "",
 });
 const getPaystackReferenceFromPayload = (payload = {}) =>
-  normalizeTransactionReference(
+  String(
     payload?.data?.reference ||
       payload?.reference ||
       payload?.trxref ||
       payload?.event?.data?.reference ||
       ""
-  );
+  ).trim();
 const getPaystackVerificationUrl = (reference = "") =>
   `${config.paystackBaseUrl}/transaction/verify/${encodeURIComponent(reference)}`;
 const mergeLoanCollections = (user = {}, globalLoans = []) => {
@@ -342,45 +290,21 @@ const mergeLoanCollections = (user = {}, globalLoans = []) => {
     (loan) => loan?.ID && !knownIds.has(loan.ID)
   );
 
-  return dedupeLoanRecords([...mergedLoans, ...extraGlobalLoans]).sort(
+  return [...mergedLoans, ...extraGlobalLoans].sort(
     (left, right) =>
       new Date(right.doa || right.createdAt || 0) - new Date(left.doa || left.createdAt || 0)
   );
 };
 const getUserLoanHistory = (user = {}, globalLoans = []) =>
   mergeLoanCollections(user, globalLoans);
-const isLoanSettled = (loan = {}) => {
-  const repaymentAmount = toMoney(loan?.repaymentAmount || 0);
-  const amountPaid = toMoney(loan?.amountPaid || 0);
-  const paymentStatus = String(loan?.paymentStatus || "").trim().toLowerCase();
-  const caseStatus = String(loan?.caseStatus || "").trim().toLowerCase();
-
-  return (
-    paymentStatus === "paid" ||
-    paymentStatus === "payed" ||
-    caseStatus === "completed" ||
-    (repaymentAmount > 0 && amountPaid + 0.009 >= repaymentAmount)
-  );
-};
 const getCurrentPortalLoan = (user = {}, globalLoans = []) => {
   const loans = getUserLoanHistory(user, globalLoans);
   return (
     loans.find((loan) => loan.loanStatus === "Review") ||
-    loans.find((loan) => loan.loanStatus === "Granted" && !isLoanSettled(loan)) ||
+    loans.find((loan) => loan.loanStatus === "Granted" && loan.paymentStatus !== "Paid") ||
     loans.find((loan) => loan.loanStatus === "Rejected") ||
     loans[0] ||
     null
-  );
-};
-const getLoanByBusinessId = (loans = [], loanId = "") => {
-  const normalizedLoanId = normalizeTransactionReference(loanId);
-  if (!normalizedLoanId) return null;
-
-  return (
-    (Array.isArray(loans) ? loans : []).find(
-      (loan) =>
-        normalizeTransactionReference(loan?.ID || loan?.loanId || loan?._id) === normalizedLoanId
-    ) || null
   );
 };
 const startOfDay = (dateValue) => {
@@ -396,14 +320,14 @@ const getDayDifference = (futureDateValue) => {
 
   return Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 };
-const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
+const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => {
+  const loan = getCurrentPortalLoan(user, globalLoans);
   if (!loan) return null;
 
   const lifecycleConfig = buildLifecycleConfig(systemConfig);
   const amount = toMoney(loan.amount || 0);
   const repaymentAmount = toMoney(loan.repaymentAmount || 0);
   const amountPaid = toMoney(loan.amountPaid || 0);
-  const isFullyPaid = isLoanSettled(loan);
   const outstandingBalance = Math.max(repaymentAmount - amountPaid, 0);
   const dueDate = loan.dop || null;
   const daysRemaining = dueDate ? getDayDifference(dueDate) : null;
@@ -441,7 +365,7 @@ const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
     title = "Loan approved, awaiting disbursement";
     message =
       "Your loan has been approved and the disbursement is still waiting for final confirmation.";
-  } else if (loan.loanStatus === "Granted" && isFullyPaid) {
+  } else if (loan.loanStatus === "Granted" && loan.paymentStatus === "Paid") {
     statusKey = "paid";
     title = "Loan fully paid";
     message = "Your loan is fully repaid. You can apply again if a new offer is available.";
@@ -467,7 +391,7 @@ const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
       : [];
 
   return {
-    loanId: normalizeTransactionReference(loan.ID || loan.loanId || ""),
+    loanId: loan.ID || loan.loanId || "",
     statusKey,
     status: loan.loanStatus || "Not applied",
     title,
@@ -489,36 +413,6 @@ const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
     allowPartialRepayment: lifecycleConfig.allowPartialRepayment,
     extensionOptions,
   };
-};
-const buildPortalRepaymentRecord = ({
-  transaction = {},
-  loanView = {},
-  userId = "",
-  amount = 0,
-  paidAt = new Date(),
-  clear = false,
-}) => ({
-  recordType: "portal-repayment",
-  loanId: loanView.loanId || normalizeTransactionReference(transaction.loanId || ""),
-  userId: String(userId || transaction.userId || "").trim(),
-  clearanceDate: paidAt,
-  datePaid: paidAt,
-  remainingAmount: `${Math.max(toMoney(loanView.outstandingBalance || 0) - toMoney(amount), 0)}`,
-  amountPaid: `${toMoney(amount)}`,
-  actualAmount: `${toMoney(amount)}`,
-  clearRemainingAmount: `${clear}`,
-  remarks: "Customer portal gateway repayment",
-  auditResults: "pass",
-  reviewedBy: "System",
-  confirmedBy: "System",
-  source: "portal-gateway",
-  provider: transaction.provider || "",
-  reference: transaction.reference || "",
-  transactionId: transaction.reference || "",
-});
-const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => {
-  const loan = getCurrentPortalLoan(user, globalLoans);
-  return buildPortalLoanView(loan, systemConfig);
 };
 const getRepaymentSourceAccount = ({
   user = {},
@@ -578,36 +472,6 @@ const formatBridgeRequestTime = (value = new Date()) => {
 const buildBridgeAuthHeader = (username = "", password = "") =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 const normalizeGatewayKey = (value = "") => String(value || "").trim().toLowerCase();
-const normalizeTransactionReference = (value = "") =>
-  String(value || "")
-    .trim()
-    .replace(/\s+/g, "");
-const getBridgeWebhookReference = (payload = {}) =>
-  normalizeTransactionReference(
-    payload?.transaction_id ||
-      payload?.trans_ref ||
-      payload?.client_ref ||
-      payload?.reference ||
-      payload?.collection_trans_id ||
-      payload?.trans_id ||
-      ""
-  );
-const getBridgeWebhookStatus = (payload = {}) =>
-  String(
-    payload?.status ||
-      payload?.status_code ||
-      payload?.trans_status ||
-      payload?.code ||
-      ""
-  ).trim();
-const getBridgeWebhookMessage = (payload = {}) =>
-  String(
-    payload?.status_desc ||
-      payload?.response_message ||
-      payload?.message ||
-      payload?.description ||
-      ""
-  ).trim();
 const getBridgeCredentials = (systemConfig = {}) => ({
   username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
   password: String(systemConfig.apiSecret || config.bridgeApiPassword || "").trim(),
@@ -731,9 +595,10 @@ const initializeBridgeCharge = async ({
     };
   }
 
-  const reference = normalizeTransactionReference(
-    `${referencePrefix}-${Date.now()}-${String(user.userId || "customer").toLowerCase()}`
-  ).slice(0, 80);
+  const reference = `${referencePrefix}-${Date.now()}-${String(user.userId || "customer").toLowerCase()}`.slice(
+    0,
+    80
+  );
   const callbackUrl = resolveBridgeCallbackUrl(
     req,
     config.bridgeCallbackUrl || systemConfig.callbackUrl,
@@ -789,7 +654,7 @@ const initializeBridgeCharge = async ({
         processed: false,
         phone: sanitizePhone(user.phone || ""),
         userId: user.userId || "",
-        loanId: normalizeTransactionReference(loanId || ""),
+        loanId: loanId || "",
         methodKey: "mobile-money",
         amount: toMoney(amount),
         currency: activeCountry?.currencyCode || config.bridgeCurrencyCode,
@@ -915,7 +780,7 @@ const initializePaystackCharge = async ({
         processed: false,
         phone: sanitizePhone(user.phone || ""),
         userId: user.userId || "",
-        loanId: normalizeTransactionReference(loanId || ""),
+        loanId: loanId || "",
         methodKey,
         amount: toMoney(amount),
         currency: config.paystackCurrency,
@@ -973,7 +838,7 @@ const verifyPaystackCharge = async (reference) => {
 };
 const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
   const event = webhookEvent || transaction?.rawWebhookEvent || null;
-  const callbackStatus = getBridgeWebhookStatus(event);
+  const callbackStatus = String(event?.status || "").trim();
   const normalizedTransactionStatus = String(transaction?.status || "").trim().toLowerCase();
 
   if (callbackStatus === "000" || normalizedTransactionStatus === "success") {
@@ -981,7 +846,8 @@ const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
       success: true,
       pending: false,
       message:
-        getBridgeWebhookMessage(event) ||
+        String(event?.status_desc || "").trim() ||
+        String(event?.message || "").trim() ||
         "Bridge payment completed successfully.",
       raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
     };
@@ -995,7 +861,8 @@ const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
       success: false,
       pending: true,
       message:
-        getBridgeWebhookMessage(event) ||
+        String(event?.status_desc || "").trim() ||
+        String(event?.message || "").trim() ||
         "Bridge payment is still pending.",
       raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
     };
@@ -1010,7 +877,8 @@ const verifyBridgeCharge = async (transaction, webhookEvent = null) => {
       success: false,
       pending: false,
       message:
-        getBridgeWebhookMessage(event) ||
+        String(event?.status_desc || "").trim() ||
+        String(event?.message || "").trim() ||
         transaction?.failureReason ||
         "Bridge payment failed.",
       raw: event || transaction?.rawWebhookEvent || transaction?.rawInitializeResponse || null,
@@ -1032,52 +900,34 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
   const systemConfig = await getSystemConfig();
   const currentUserData = user.toObject();
-  const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
-  const loanHistory = getUserLoanHistory(currentUserData, globalLoans);
-  const transactionLoanId = normalizeTransactionReference(transaction.loanId || "");
-  const sourceLoan = getLoanByBusinessId(loanHistory, transactionLoanId);
-  const targetLoanView = buildPortalLoanView(sourceLoan, systemConfig);
+  const globalLoans = await Loans.find({ userId: user.userId }).lean();
+  const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
 
-  if (!targetLoanView || targetLoanView.loanId !== transactionLoanId) {
-    throw new Error("Loan record not found.");
+  if (!activeLoanView || activeLoanView.loanId !== transaction.loanId) {
+    throw new Error("Loan details changed before this payment could be applied.");
   }
 
   if (transaction.transactionType === "repayment") {
     const payAmount = toMoney(transaction.amount || 0);
-    const globalLoan = await ensureLoanLedgerRecord({
-      userId: user.userId,
-      loanId: targetLoanView.loanId,
-      sourceLoan,
-    });
-    const paidAt = new Date();
-    const ledgerResult = await applyRepaymentToLoanLedger({
-      loanId: targetLoanView.loanId,
-      amountJustCleared: payAmount,
-      paidAt,
-      clearOverride: payAmount >= toMoney(targetLoanView.totalDue || 0),
-    });
+    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
 
-    if (!globalLoan || !ledgerResult) {
+    if (!globalLoan) {
       throw new Error("Loan record not found.");
     }
 
     const userResult = await _clearLoan({
-      ID: targetLoanView.loanId,
-      dp: paidAt,
+      ID: activeLoanView.loanId,
+      dp: new Date(),
       userId: user.userId,
-      clear: payAmount >= toMoney(targetLoanView.totalDue || 0),
+      clear: payAmount >= toMoney(activeLoanView.totalDue || 0),
       amt: payAmount,
-      paymentRecord: buildPortalRepaymentRecord({
-        transaction,
-        loanView: targetLoanView,
-        userId: user.userId,
-        amount: payAmount,
-        paidAt,
-        clear: payAmount >= toMoney(targetLoanView.totalDue || 0),
-      }),
+    });
+    const loanResult = await _payLoan({
+      id: globalLoan.loanId,
+      payAmount,
     });
 
-    if (!userResult) {
+    if (!userResult || !loanResult) {
       throw new Error("Payment was confirmed but the loan record could not be updated.");
     }
   }
@@ -1085,25 +935,21 @@ const applyPortalGatewayTransaction = async (transaction) => {
   if (transaction.transactionType === "extension") {
     const extensionKey = String(transaction.context?.extensionKey || "").trim();
     const extensionOption =
-      (targetLoanView.extensionOptions || []).find((item) => item.key === extensionKey) ||
+      (activeLoanView.extensionOptions || []).find((item) => item.key === extensionKey) ||
       transaction.context?.extensionOption;
 
     if (!extensionOption) {
       throw new Error("The selected extension option is no longer available.");
     }
 
-    const globalLoan = await ensureLoanLedgerRecord({
-      userId: user.userId,
-      loanId: targetLoanView.loanId,
-      sourceLoan,
-    });
+    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
     if (!globalLoan) {
       throw new Error("Loan record not found.");
     }
 
     const nextDueDate = new Date(extensionOption.extendedDueDate);
     const extensionRecord = {
-      loanId: targetLoanView.loanId,
+      loanId: activeLoanView.loanId,
       extPeriod: extensionOption.label,
       extHandlingFee: `${toMoney(extensionOption.feeAmount || 0)}`,
       extExpDate: nextDueDate,
@@ -1122,7 +968,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
     const savedLoan = await globalLoan.save();
     const savedUserExtension = await _createExt({
-      ID: targetLoanView.loanId,
+      ID: activeLoanView.loanId,
       dop: nextDueDate,
       userId: user.userId,
       extRecord: extensionRecord,
@@ -1142,107 +988,8 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
   return summary;
 };
-const backfillPortalRepaymentRecords = async ({ reference = "" }) => {
-  const normalizedReference = normalizeTransactionReference(reference);
-  if (!normalizedReference) {
-    throw new Error("Transaction reference is required.");
-  }
-
-  const transaction = await findGatewayTransactionByReference(normalizedReference);
-  if (!transaction) {
-    throw new Error("Stored transaction was not found.");
-  }
-
-  if (transaction.transactionType !== "repayment") {
-    throw new Error("Only repayment transactions can be backfilled.");
-  }
-
-  const normalizedStatus = String(transaction.status || "").trim().toLowerCase();
-  if (
-    !transaction.processed &&
-    !["success", "verified"].includes(normalizedStatus) &&
-    !transaction.rawWebhookEvent &&
-    !transaction.rawVerifyResponse
-  ) {
-    throw new Error("This transaction has not been confirmed by the gateway yet.");
-  }
-
-  const user =
-    (transaction.userId && (await User.findOne({ userId: transaction.userId }))) ||
-    (transaction.phone && (await User.findOne({ phone: transaction.phone })));
-  if (!user) {
-    throw new Error("Customer profile not found for this payment.");
-  }
-
-  const systemConfig = await getSystemConfig();
-  const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
-  const loanHistory = getUserLoanHistory(user.toObject(), globalLoans);
-  const transactionLoanId = normalizeTransactionReference(transaction.loanId || "");
-  const sourceLoan = getLoanByBusinessId(loanHistory, transactionLoanId);
-  const targetLoanView = buildPortalLoanView(sourceLoan, systemConfig);
-
-  if (!targetLoanView || targetLoanView.loanId !== transactionLoanId) {
-    throw new Error("Loan record not found.");
-  }
-
-  const payAmount = toMoney(transaction.amount || 0);
-  const paidAt = new Date(
-    transaction.processedAt ||
-      transaction.verifiedAt ||
-      transaction.updatedAt ||
-      transaction.createdAt ||
-      new Date()
-  );
-
-  await ensureLoanLedgerRecord({
-    userId: user.userId,
-    loanId: targetLoanView.loanId,
-    sourceLoan,
-  });
-
-  const ledgerSync = await ensureRepaymentEventInLoanLedger({
-    loanId: targetLoanView.loanId,
-    amountPaid: payAmount,
-    paidAt,
-  });
-
-  const currentGlobalLoan = await findLoanRecordByBusinessId(targetLoanView.loanId);
-  const clear = isLoanSettled(currentGlobalLoan || sourceLoan || {});
-  const userSync = await _clearLoan({
-    ID: targetLoanView.loanId,
-    dp: paidAt,
-    userId: user.userId,
-    clear,
-    amt: 0,
-    paymentRecord: buildPortalRepaymentRecord({
-      transaction,
-      loanView: buildPortalLoanView(currentGlobalLoan || sourceLoan, systemConfig) || targetLoanView,
-      userId: user.userId,
-      amount: payAmount,
-      paidAt,
-      clear,
-    }),
-  });
-
-  if (!ledgerSync || !userSync) {
-    throw new Error("Portal payment backfill could not be completed.");
-  }
-
-  const summary = await buildPortalSummaryData(transaction.phone);
-
-  return {
-    success: 1,
-    message: "Portal payment records backfilled successfully.",
-    status: "success",
-    data: {
-      ...(summary || {}),
-      transaction: sanitizePortalTransaction(transaction.toObject()),
-    },
-  };
-};
 const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null }) => {
-  const normalizedReference = normalizeTransactionReference(reference);
-  const transaction = await findGatewayTransactionByReference(normalizedReference);
+  const transaction = await GatewayTransactions.findOne({ reference });
 
   if (!transaction) {
     await logSystemEvent({
@@ -1254,7 +1001,6 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
       message: "Portal gateway verification could not find the transaction reference.",
       metadata: {
         reference,
-        normalizedReference,
       },
     });
     return {
@@ -1280,7 +1026,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   const verification =
     String(transaction.provider || "").trim() === "bridge"
       ? await verifyBridgeCharge(transaction, webhookEvent)
-      : await verifyPaystackCharge(normalizedReference);
+      : await verifyPaystackCharge(reference);
   await GatewayTransactions.updateOne(
     { _id: transaction._id },
     {
@@ -1311,7 +1057,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
           ? "Portal gateway payment is still pending."
           : "Portal gateway verification failed."),
       metadata: {
-        reference: normalizedReference,
+        reference,
         provider: transaction.provider,
         transactionType: transaction.transactionType,
         phone: transaction.phone,
@@ -1343,7 +1089,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   );
 
   if (!claimedTransaction) {
-    const latestTransaction = await findGatewayTransactionByReference(normalizedReference);
+    const latestTransaction = await GatewayTransactions.findOne({ reference });
     const summary = latestTransaction?.phone
       ? await buildPortalSummaryData(latestTransaction.phone)
       : null;
@@ -1377,7 +1123,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
       }
     );
 
-    const latestTransaction = await findGatewayTransactionByReference(normalizedReference);
+    const latestTransaction = await GatewayTransactions.findOne({ reference }).lean();
 
     await logSystemEvent({
       level: "info",
@@ -1390,7 +1136,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
           ? "Portal extension payment completed successfully."
           : "Portal repayment completed successfully.",
       metadata: {
-        reference: normalizedReference,
+        reference,
         provider: claimedTransaction.provider,
         transactionType: claimedTransaction.transactionType,
         phone: claimedTransaction.phone,
@@ -1631,9 +1377,7 @@ const buildPortalSummaryData = async (phone) => {
 
   if (!updatedUser) return null;
 
-  const refreshedLoans = dedupeLoanRecords(
-    await Loans.find({ userId: updatedUser.userId }).lean()
-  );
+  const refreshedLoans = await Loans.find({ userId: updatedUser.userId }).lean();
 
   return {
     loanHistory: refreshedLoans,
@@ -2129,7 +1873,7 @@ router.post("/portal/repayment-summary", async (req, res) => {
       });
     }
 
-    const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
+    const globalLoans = await Loans.find({ userId: user.userId }).lean();
     const activeLoan = buildActiveLoanView(user, systemConfig, globalLoans);
     if (!activeLoan || !activeLoan.canMakePayment) {
       return res.status(400).json({
@@ -2189,7 +1933,7 @@ router.post("/portal/extension-summary", async (req, res) => {
       });
     }
 
-    const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
+    const globalLoans = await Loans.find({ userId: user.userId }).lean();
     const activeLoan = buildActiveLoanView(user, systemConfig, globalLoans);
     if (!activeLoan || !activeLoan.canExtend) {
       return res.status(400).json({
@@ -2279,7 +2023,6 @@ router.post("/portal/pay-loan", async (req, res) => {
 
     const currentUserData = user.toObject();
     const globalLoans = await Loans.find({ userId: user.userId }).lean();
-    const activeSourceLoan = getCurrentPortalLoan(currentUserData, globalLoans);
     const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
     if (!activeLoanView || !activeLoanView.canMakePayment) {
       await logSystemEvent({
@@ -2403,11 +2146,7 @@ router.post("/portal/pay-loan", async (req, res) => {
       });
     }
 
-    const globalLoan = await ensureLoanLedgerRecord({
-      userId: user.userId,
-      loanId: activeLoanView.loanId,
-      sourceLoan: activeSourceLoan,
-    });
+    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
     if (!globalLoan) {
       await logSystemEvent({
         level: "error",
@@ -2430,41 +2169,19 @@ router.post("/portal/pay-loan", async (req, res) => {
       });
     }
 
-    const paidAt = new Date();
-    const ledgerResult = await applyRepaymentToLoanLedger({
-      loanId: activeLoanView.loanId,
-      amountJustCleared: payAmount,
-      paidAt,
-      clearOverride: payAmount >= toMoney(activeLoanView.totalDue || 0),
-    });
     const userResult = await _clearLoan({
       ID: activeLoanView.loanId,
-      dp: paidAt,
+      dp: new Date(),
       userId: user.userId,
       clear: payAmount >= toMoney(activeLoanView.totalDue || 0),
       amt: payAmount,
-      paymentRecord: {
-        recordType: "portal-repayment",
-        loanId: activeLoanView.loanId,
-        userId: user.userId,
-        clearanceDate: paidAt,
-        datePaid: paidAt,
-        remainingAmount: `${Math.max(toMoney(activeLoanView.outstandingBalance || 0) - payAmount, 0)}`,
-        amountPaid: `${payAmount}`,
-        actualAmount: `${payAmount}`,
-        clearRemainingAmount: `${payAmount >= toMoney(activeLoanView.totalDue || 0)}`,
-        remarks: "Customer portal gateway repayment",
-        auditResults: "pass",
-        reviewedBy: "System",
-        confirmedBy: "System",
-        source: "portal-gateway",
-        provider: gatewayResult.provider || "",
-        reference: gatewayResult.reference || "",
-        transactionId: gatewayResult.reference || "",
-      },
+    });
+    const loanResult = await _payLoan({
+      id: globalLoan.loanId,
+      payAmount,
     });
 
-    if (!userResult || !ledgerResult) {
+    if (!userResult || !loanResult) {
       await logSystemEvent({
         level: "error",
         category: "payment",
@@ -2608,7 +2325,6 @@ router.post("/portal/extend-loan", async (req, res) => {
 
     const currentUserData = user.toObject();
     const globalLoans = await Loans.find({ userId: user.userId }).lean();
-    const activeSourceLoan = getCurrentPortalLoan(currentUserData, globalLoans);
     const activeLoanView = buildActiveLoanView(currentUserData, systemConfig, globalLoans);
     if (!activeLoanView || !activeLoanView.canExtend) {
       await logSystemEvent({
@@ -2736,11 +2452,7 @@ router.post("/portal/extend-loan", async (req, res) => {
       });
     }
 
-    const globalLoan = await ensureLoanLedgerRecord({
-      userId: user.userId,
-      loanId: activeLoanView.loanId,
-      sourceLoan: activeSourceLoan,
-    });
+    const globalLoan = await Loans.findOne({ ID: activeLoanView.loanId });
     if (!globalLoan) {
       await logSystemEvent({
         level: "error",
@@ -2892,7 +2604,7 @@ const handlePortalGatewayVerification = async (req, res) => {
   try {
     const reference =
       getPaystackReferenceFromPayload(req.body) ||
-      normalizeTransactionReference(req.body?.reference || "");
+      String(req.body?.reference || "").trim();
 
     if (!reference) {
       await logSystemEvent({
@@ -2941,32 +2653,17 @@ router.post("/portal/paystack/verify", handlePortalGatewayVerification);
 
 router.post("/portal/bridge/webhook", async (req, res) => {
   try {
-    const reference = getBridgeWebhookReference(req.body);
+    const reference = String(req.body?.transaction_id || "").trim();
     if (!reference) {
       return res.sendStatus(200);
     }
 
-    const transaction = await findGatewayTransactionByReference(reference);
+    const transaction = await GatewayTransactions.findOne({ reference });
     if (!transaction) {
-      await logSystemEvent({
-        level: "warn",
-        category: "payment",
-        source: "customer.portal.bridgeWebhook",
-        action: "webhook",
-        status: "failed",
-        message: "Bridge portal webhook could not match the callback reference to a stored transaction.",
-        metadata: {
-          reference,
-          bridgeReference: req.body?.trans_ref || req.body?.transaction_id || "",
-          bridgeStatus: getBridgeWebhookStatus(req.body),
-        },
-        details: req.body,
-      });
       return res.sendStatus(200);
     }
 
-    const bridgeStatus = getBridgeWebhookStatus(req.body);
-    const bridgeMessage = getBridgeWebhookMessage(req.body);
+    const bridgeStatus = String(req.body?.status || "").trim();
     await GatewayTransactions.updateOne(
       { _id: transaction._id },
       {
@@ -2983,7 +2680,7 @@ router.post("/portal/bridge/webhook", async (req, res) => {
           failureReason:
             bridgeStatus === "000"
               ? ""
-              : bridgeMessage,
+              : String(req.body?.status_desc || req.body?.message || "").trim(),
         },
       }
     );
@@ -3011,7 +2708,8 @@ router.post("/portal/bridge/webhook", async (req, res) => {
       message:
         bridgeStatus === "000"
           ? "Bridge portal webhook confirmed a successful transaction."
-          : bridgeMessage || "Bridge portal webhook received.",
+          : String(req.body?.status_desc || req.body?.message || "Bridge portal webhook received.")
+              .trim(),
       metadata: {
         reference,
         bridgeStatus,
@@ -3476,8 +3174,5 @@ router.post(
     }
   }
 );
-
-router.finalizePortalGatewayTransaction = finalizePortalGatewayTransaction;
-router.backfillPortalRepaymentRecords = backfillPortalRepaymentRecords;
 
 module.exports = router;
