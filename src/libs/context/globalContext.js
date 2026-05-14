@@ -3390,6 +3390,50 @@ export default function GlobalContextProvider(props) {
 
     const response = await _retryDisbursement({ loanId, channel, operator });
 
+    if (response?.data?.loanId) {
+      setLoans((current) =>
+        (Array.isArray(current) ? current : []).map((item) =>
+          item?.ID === response.data.loanId
+            ? {
+                ...item,
+                disbursementProvider: response.data.provider || item.disbursementProvider,
+                disbursementChannel:
+                  response.data.disbursementChannel || item.disbursementChannel,
+                paymentOperator: response.data.operator || item.paymentOperator,
+                isDisbursed:
+                  response.data.isDisbursed === undefined
+                    ? item.isDisbursed
+                    : response.data.isDisbursed,
+                payoutStatus: response.data.payoutStatus || item.payoutStatus,
+                payoutMessage: response.data.payoutMessage || item.payoutMessage,
+              }
+            : item
+        )
+      );
+
+      setLoan((current) => {
+        if (!current?.ID || current.ID !== response.data.loanId) {
+          return current;
+        }
+
+        const nextLoan = {
+          ...current,
+          disbursementProvider: response.data.provider || current.disbursementProvider,
+          disbursementChannel: response.data.disbursementChannel || current.disbursementChannel,
+          paymentOperator: response.data.operator || current.paymentOperator,
+          isDisbursed:
+            response.data.isDisbursed === undefined
+              ? current.isDisbursed
+              : response.data.isDisbursed,
+          payoutStatus: response.data.payoutStatus || current.payoutStatus,
+          payoutMessage: response.data.payoutMessage || current.payoutMessage,
+        };
+
+        localStorage.setItem("loan", JSON.stringify(nextLoan));
+        return nextLoan;
+      });
+    }
+
     await _getData();
 
     setGlobalLoader(false);

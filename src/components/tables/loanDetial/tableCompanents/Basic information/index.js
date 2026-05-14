@@ -30,6 +30,22 @@ export default function BasicInfo(props) {
       { type: "label", content: "Score card model results" },
       { content: loan?.scoreCard || "-" },
     ],
+    [
+      { type: "label", content: "Provider" },
+      { content: loan?.disbursementProvider || "-" },
+      { type: "label", content: "Channel" },
+      { content: loan?.disbursementChannel || "-" },
+      { type: "label", content: "Service provider" },
+      { content: loan?.paymentOperator || "-" },
+    ],
+    [
+      { type: "label", content: "Payout status" },
+      { content: loan?.payoutStatus || "-" },
+      { type: "label", content: "Gateway message" },
+      { content: loan?.payoutMessage || "-" },
+      { type: "label", content: "Disbursed" },
+      { content: loan?.isDisbursed === true ? "Yes" : "No" },
+    ],
   ];
 
   return (
