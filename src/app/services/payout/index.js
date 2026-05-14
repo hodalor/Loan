@@ -956,21 +956,23 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
       "Bridge"
     );
 
-    const ok = response.status === 202 || response.ok;
+    const accepted = response.ok && `${payload?.response_code || response.status || ""}` === "202";
     return {
-      success: ok && response.status !== 202 && isTruthyGatewayResponse(payload),
-      pending: response.status === 202,
+      success: false,
+      pending: accepted,
       provider: "bridge",
       channel: networkCode,
       reference: transfer.reference,
       message:
-        payload?.status_desc ||
-        payload?.message ||
-        (response.status === 202
-          ? "Bridge accepted the payout request and is awaiting callback confirmation."
-          : response.ok
-          ? "Payout request submitted to Bridge"
-          : "Bridge payout failed"),
+        accepted
+          ? payload?.response_message ||
+            payload?.status_desc ||
+            payload?.message ||
+            "Bridge accepted the payout request and is awaiting callback confirmation."
+          : payload?.response_message ||
+            payload?.status_desc ||
+            payload?.message ||
+            "Bridge payout failed",
       raw: {
         request: requestBody,
         response: payload,

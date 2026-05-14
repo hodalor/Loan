@@ -102,6 +102,94 @@ const syncRequestDestinationFromEmployee = async (record = {}) => {
   return employee;
 };
 
+const normalizeBridgeReference = (value = "") =>
+  String(value || "")
+    .replace(/\s*-\s*/g, "-")
+    .trim();
+
+const getFundBridgeCallbackReferenceCandidates = (payload = {}) => {
+  const rawCandidates = [
+    payload?.trans_ref,
+    payload?.transaction_id,
+    payload?.reference,
+    payload?.trans_id,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  return rawCandidates.reduce((result, candidate) => {
+    const normalizedCandidate = normalizeBridgeReference(candidate);
+    [candidate, normalizedCandidate].forEach((value) => {
+      if (value && !result.includes(value)) {
+        result.push(value);
+      }
+    });
+    return result;
+  }, []);
+};
+
+const getFundBridgeCallbackStatus = (payload = {}) =>
+  String(payload?.trans_status || payload?.status || payload?.status_code || "").trim();
+
+const getFundBridgeCallbackMessage = (payload = {}) =>
+  String(payload?.message || payload?.status_desc || payload?.response_message || "").trim();
+
+const applyGatewayOutcomeToFundRequest = ({
+  record,
+  payoutResult = {},
+  actor = {},
+  actionLabel = "send",
+}) => {
+  record.gatewayProvider = payoutResult.provider || record.gatewayProvider || "";
+  record.gatewayReference = payoutResult.reference || record.gatewayReference || record.requestCode;
+  record.gatewayStatus = payoutResult.pending ? "pending" : payoutResult.success ? "success" : "failed";
+  record.gatewayMessage = String(payoutResult.message || "").trim();
+
+  if (payoutResult.success) {
+    record.status = "completed";
+    record.history.push(
+      buildHistoryEntry({
+        status: "completed",
+        message:
+          actionLabel === "resend"
+            ? "Payment resent successfully."
+            : "Payment sent successfully after second approval.",
+        actor,
+      })
+    );
+    return;
+  }
+
+  if (payoutResult.pending) {
+    record.status = "pending_gateway_confirmation";
+    record.history.push(
+      buildHistoryEntry({
+        status: "pending_gateway_confirmation",
+        message:
+          record.gatewayMessage ||
+          (actionLabel === "resend"
+            ? "Payment resend is waiting for gateway confirmation."
+            : "Payment is waiting for gateway confirmation."),
+        actor,
+      })
+    );
+    return;
+  }
+
+  record.status = "failed";
+  record.history.push(
+    buildHistoryEntry({
+      status: "failed",
+      message:
+        record.gatewayMessage ||
+        (actionLabel === "resend"
+          ? "Payment resend failed."
+          : "Payment failed after second approval."),
+      actor,
+    })
+  );
+};
+
 const nextStatusAfterFirstApproval = (request = {}) =>
   request.requestType === "payment" ? "pending_second_approval" : "completed";
 
@@ -493,43 +581,12 @@ router.patch("/fund-requests/decision", async (req, res) => {
             systemConfig,
           });
 
-          record.gatewayProvider = payoutResult.provider || "";
-          record.gatewayReference = payoutResult.reference || record.requestCode;
-          record.gatewayStatus = payoutResult.pending
-            ? "pending"
-            : payoutResult.success
-            ? "success"
-            : "failed";
-          record.gatewayMessage = payoutResult.message || "";
-
-          if (payoutResult.success) {
-            record.status = "completed";
-            record.history.push(
-              buildHistoryEntry({
-                status: "completed",
-                message: "Payment sent successfully after second approval.",
-                actor,
-              })
-            );
-          } else if (payoutResult.pending) {
-            record.status = "pending_second_approval";
-            record.history.push(
-              buildHistoryEntry({
-                status: "pending_gateway_confirmation",
-                message: payoutResult.message || "Payment is waiting for gateway confirmation.",
-                actor,
-              })
-            );
-          } else {
-            record.status = "failed";
-            record.history.push(
-              buildHistoryEntry({
-                status: "failed",
-                message: payoutResult.message || "Payment failed after second approval.",
-                actor,
-              })
-            );
-          }
+          applyGatewayOutcomeToFundRequest({
+            record,
+            payoutResult,
+            actor,
+            actionLabel: "approval",
+          });
         }
       }
 
@@ -564,7 +621,16 @@ router.post("/fund-requests/:id/resend", async (req, res) => {
     }
 
     if (record.requestType === "payment") {
+      if (record.status !== "failed") {
+        return res.status(400).json({
+          success: 0,
+          message: "Only failed payments can be resent from this queue.",
+          data: serializeRequest(record.toObject()),
+        });
+      }
+
       await syncRequestDestinationFromEmployee(record);
+      const systemConfig = await getSystemConfig();
 
       if (!String(record.destinationNumber || "").trim()) {
         record.gatewayStatus = "validation-error";
@@ -590,14 +656,22 @@ router.post("/fund-requests/:id/resend", async (req, res) => {
         });
       }
 
-      record.status = "pending_second_approval";
-      record.history.push(
-        buildHistoryEntry({
-          status: "pending_second_approval",
-          message: "Failed payment returned for resend.",
-          actor,
-        })
-      );
+      const payoutResult = await processInternalTransfer({
+        amount: record.amount,
+        recipientNumber: record.destinationNumber,
+        recipientName: record.employeeName || record.employeeUserName,
+        operator: record.destinationOperator,
+        reference: record.requestCode,
+        reason: record.reason,
+        systemConfig,
+      });
+
+      applyGatewayOutcomeToFundRequest({
+        record,
+        payoutResult,
+        actor,
+        actionLabel: "resend",
+      });
     } else {
       record.status = "pending_first_approval";
       record.history.push(
@@ -609,13 +683,22 @@ router.post("/fund-requests/:id/resend", async (req, res) => {
       );
     }
 
-    record.gatewayStatus = "";
-    record.gatewayMessage = "";
+    if (record.requestType !== "payment") {
+      record.gatewayStatus = "";
+      record.gatewayMessage = "";
+    }
     await record.save();
 
     return res.status(200).json({
       success: 1,
-      message: "Request returned for resend successfully.",
+      message:
+        record.requestType === "payment"
+          ? record.status === "completed"
+            ? "Payment resent successfully."
+            : record.status === "pending_gateway_confirmation"
+            ? "Payment resend submitted and is awaiting gateway confirmation."
+            : "Payment resend attempted."
+          : "Request returned for resend successfully.",
       data: serializeRequest(record.toObject()),
     });
   } catch (error) {
@@ -629,10 +712,20 @@ router.post("/fund-requests/:id/resend", async (req, res) => {
 
 router.post("/fund-requests/bridge-webhook", async (req, res) => {
   try {
-    const reference = String(req.body?.transaction_id || req.body?.reference || "").trim();
-    const bridgeStatus = String(req.body?.status || req.body?.status_code || "").trim();
+    const referenceCandidates = getFundBridgeCallbackReferenceCandidates(req.body);
+    const reference = referenceCandidates[0] || "";
+    const bridgeStatus = getFundBridgeCallbackStatus(req.body);
+    const callbackMessage = getFundBridgeCallbackMessage(req.body) || "Bridge callback received.";
+
+    if (referenceCandidates.length === 0) {
+      return res.sendStatus(200);
+    }
+
     const record = await FundRequest.findOne({
-      $or: [{ gatewayReference: reference }, { requestCode: reference }],
+      $or: [
+        { gatewayReference: { $in: referenceCandidates } },
+        { requestCode: { $in: referenceCandidates } },
+      ],
     });
 
     if (!record) {
@@ -640,17 +733,16 @@ router.post("/fund-requests/bridge-webhook", async (req, res) => {
     }
 
     record.gatewayReference = reference || record.gatewayReference;
-    record.gatewayStatus = bridgeStatus;
-    record.gatewayMessage = String(
-      req.body?.status_desc || req.body?.message || record.gatewayMessage || ""
-    ).trim();
+    record.gatewayStatus =
+      bridgeStatus === "000" ? "success" : bridgeStatus === "001" || bridgeStatus === "003" ? "failed" : "pending";
+    record.gatewayMessage = callbackMessage;
 
     if (bridgeStatus === "000") {
       record.status = "completed";
       record.history.push(
         buildHistoryEntry({
           status: "completed",
-          message: "Bridge webhook confirmed successful payment.",
+          message: callbackMessage || "Bridge webhook confirmed successful payment.",
           actor: {},
         })
       );
@@ -660,6 +752,15 @@ router.post("/fund-requests/bridge-webhook", async (req, res) => {
         buildHistoryEntry({
           status: "failed",
           message: record.gatewayMessage || "Bridge webhook reported a failed payment.",
+          actor: {},
+        })
+      );
+    } else {
+      record.status = "pending_gateway_confirmation";
+      record.history.push(
+        buildHistoryEntry({
+          status: "pending_gateway_confirmation",
+          message: callbackMessage || "Bridge webhook says payment is still pending.",
           actor: {},
         })
       );
