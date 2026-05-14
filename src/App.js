@@ -197,6 +197,7 @@ const buildInitialLoanRequest = () => ({
   amount: "",
   termKey: "",
   paymentMethod: "",
+  paymentOperator: "",
   useLoan: "Personal needs",
   acceptedTerms: false,
   stage: "builder",
@@ -377,6 +378,7 @@ const buildLoanRequestFromOffer = (offer) => {
     amount: offer?.defaultAmount || "",
     termKey: firstTerm?.key || "",
     paymentMethod: firstMethod?.method || "",
+    paymentOperator: firstMethod?.operator || "",
     useLoan: "Personal needs",
     acceptedTerms: false,
     stage: "builder",
@@ -395,6 +397,11 @@ const syncLoanRequestWithOffer = (currentRequest, offer) => {
   const hasSelectedMethod = availableMethods.some(
     (method) => method.method === currentRequest?.paymentMethod
   );
+  const resolvedPaymentMethod = hasSelectedMethod
+    ? currentRequest?.paymentMethod
+    : fallbackRequest.paymentMethod;
+  const resolvedPaymentMethodRecord =
+    availableMethods.find((method) => method.method === resolvedPaymentMethod) || null;
   const normalizedAmount =
     requestedAmount >= minAmount && requestedAmount <= maxAmount
       ? requestedAmount
@@ -405,9 +412,12 @@ const syncLoanRequestWithOffer = (currentRequest, offer) => {
     ...(currentRequest || {}),
     amount: normalizedAmount,
     termKey: hasSelectedTerm ? currentRequest?.termKey : fallbackRequest.termKey,
-    paymentMethod: hasSelectedMethod
-      ? currentRequest?.paymentMethod
-      : fallbackRequest.paymentMethod,
+    paymentMethod: resolvedPaymentMethod,
+    paymentOperator:
+      resolvedPaymentMethodRecord?.operator ||
+      (resolvedPaymentMethod === currentRequest?.paymentMethod
+        ? currentRequest?.paymentOperator || ""
+        : fallbackRequest.paymentOperator),
     acceptedTerms: false,
   };
 };
@@ -825,6 +835,13 @@ function App() {
     setLoanRequest((current) => ({
       ...current,
       [field]: value,
+      ...(field === "paymentMethod"
+        ? {
+            paymentOperator:
+              (loanOffer?.paymentMethods || []).find((method) => method.method === value)?.operator ||
+              "",
+          }
+        : {}),
     }));
   };
   const handleCountryChange = (countryCode) => {
@@ -1923,6 +1940,15 @@ function App() {
       return;
     }
 
+    if (
+      lifecycleConfig?.collectionGateway === "bridge" &&
+      !String(loanRequest.paymentMethod || "").includes("@") &&
+      !String(loanRequest.paymentOperator || "").trim()
+    ) {
+      showMessage("error", "Select the mobile money provider for this payout number.");
+      return;
+    }
+
     if (!isNotEmpty(loanRequest.useLoan)) {
       showMessage("error", "Tell us what the loan will be used for.");
       return;
@@ -1959,6 +1985,7 @@ function App() {
       amount: selectedAmount,
       termKey: loanRequest.termKey,
       paymentMethod: loanRequest.paymentMethod,
+      paymentOperator: loanRequest.paymentOperator,
       useLoan: loanRequest.useLoan,
       acceptedTerms: loanRequest.acceptedTerms,
     });
@@ -3043,6 +3070,22 @@ function LoanApplyTab({
                   ))}
                 </select>
               </label>
+              {!String(loanRequest.paymentMethod || "").includes("@") && mobileMoneyOperatorOptions.length > 0 ? (
+                <label className="field">
+                  <span>Service provider</span>
+                  <select
+                    value={loanRequest.paymentOperator || ""}
+                    onChange={(event) => onChange("paymentOperator", event.target.value)}
+                  >
+                    <option value="">Select service provider</option>
+                    {mobileMoneyOperatorOptions.map((network) => (
+                      <option key={network.key || network.label} value={network.label || network.key}>
+                        {network.label || network.key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <Field
                 label="Use of loan"
                 value={loanRequest.useLoan}
@@ -3075,6 +3118,10 @@ function LoanApplyTab({
             </div>
             <ReviewRow label="Total Fee Rate" value={`${loanSummary?.totalFeeRate || 0}%`} />
             <ReviewRow label="Due Date" value={formatDate(loanSummary?.dueDate)} />
+            <ReviewRow label="Payout method" value={loanRequest.paymentMethod || "-"} />
+            {!String(loanRequest.paymentMethod || "").includes("@") ? (
+              <ReviewRow label="Service provider" value={loanRequest.paymentOperator || "-"} />
+            ) : null}
           </div>
 
           <div className="terms-card">
