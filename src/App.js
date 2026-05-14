@@ -414,7 +414,18 @@ const syncLoanRequestWithOffer = (currentRequest, offer) => {
 
 const buildLoanRecords = (loans = []) =>
   [...loans]
+    .filter(
+      (loan, index, items) =>
+        items.findIndex(
+          (item) => String(item?.ID || item?.loanId || "").trim() === String(loan?.ID || loan?.loanId || "").trim()
+        ) === index
+    )
     .flatMap((loan, index) => {
+      const repaymentAmount = Number(loan.repaymentAmount || 0);
+      const displayAmountPaid =
+        repaymentAmount > 0
+          ? Math.min(Number(loan.amountPaid || 0), repaymentAmount)
+          : Number(loan.amountPaid || 0);
       const records = [
         {
           id: `loan-${loan.ID || index}`,
@@ -426,7 +437,7 @@ const buildLoanRecords = (loans = []) =>
           subtitle: `Loan Application - ${loan.duration || "Term not specified"} (${loan.ID || "Pending"})`,
           badges: getRecordBadges(loan),
           metaRows: [
-            { label: "Repayment Amount", value: formatCurrency(Number(loan.repaymentAmount || 0)) },
+            { label: "Repayment Amount", value: formatCurrency(repaymentAmount) },
             { label: "Due Date", value: formatDate(loan.dop) },
             { label: "Provider", value: loan.disbursementProvider || "-" },
             { label: "Channel", value: loan.disbursementChannel || "-" },
@@ -434,12 +445,12 @@ const buildLoanRecords = (loans = []) =>
         },
       ];
 
-      if (Number(loan.amountPaid || 0) > 0) {
+      if (displayAmountPaid > 0) {
         records.push({
           id: `repayment-${loan.ID || index}`,
           type: "Repayment",
           status: loan.paymentStatus === "Paid" ? "Completed" : "In progress",
-          amount: Number(loan.amountPaid || 0),
+          amount: displayAmountPaid,
           direction: "debit",
           date: loan.dp || loan.updatedAt || loan.doa,
           subtitle: `Loan repayment${loan.ID ? ` (${loan.ID})` : ""}`,
@@ -451,11 +462,11 @@ const buildLoanRecords = (loans = []) =>
           ],
           metaRows: [
             { label: "Loan ID", value: loan.ID || "-" },
-            { label: "Amount Paid", value: formatCurrency(Number(loan.amountPaid || 0)) },
+            { label: "Amount Paid", value: formatCurrency(displayAmountPaid) },
             {
               label: "Balance",
               value: formatCurrency(
-                Math.max(Number(loan.repaymentAmount || 0) - Number(loan.amountPaid || 0), 0)
+                Math.max(repaymentAmount - displayAmountPaid, 0)
               ),
             },
           ],
