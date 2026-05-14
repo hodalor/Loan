@@ -208,6 +208,7 @@ router.patch("/cancel-bounced-disbursement/:ID", async (req, res) => {
   try {
     const loanId = req.params.ID;
     const loan = await Loan.findOne({ ID: loanId });
+    const user = loan ? await Users.findOne({ userId: loan.userId }) : null;
 
     if (!loan) {
       return res.status(404).json({
@@ -233,30 +234,73 @@ router.patch("/cancel-bounced-disbursement/:ID", async (req, res) => {
 
     const cancellationMessage =
       String(req.body?.remark || "").trim() ||
-      "Payout callback case cancelled by admin and removed from the bounce queue.";
+      "Disbursement was rejected after callback failure. Customer can apply again if eligible.";
 
-    loan.payoutStatus = "cancelled";
+    loan.loanStatus = "Rejected";
+    loan.caseStatus = "Rejected";
+    loan.paymentStatus = "Not paid";
+    loan.isNewLoan = false;
+    loan.payoutStatus = "rejected";
     loan.payoutMessage = cancellationMessage;
+    loan.dod = null;
+    loan.dop = null;
     await loan.save();
 
-    await syncUserLoanState({
-      userId: loan.userId,
-      loanId: loan.ID,
-      rootLoanStatus: loan.loanStatus,
-      updates: {
-        isDisbursed: false,
-        payoutStatus: loan.payoutStatus,
-        payoutReference: loan.payoutReference,
-        payoutMessage: loan.payoutMessage,
-      },
-    });
+    if (user) {
+      const userLoans = Array.isArray(user.loan?.loans) ? user.loan.loans : [];
+      const nextLoans = userLoans.map((item) =>
+        item.ID === loan.ID
+          ? {
+              ...item,
+              isDisbursed: false,
+              isNewLoan: false,
+              loanStatus: "Rejected",
+              caseStatus: "Rejected",
+              paymentStatus: "Not paid",
+              payoutStatus: loan.payoutStatus,
+              payoutReference: loan.payoutReference,
+              payoutMessage: loan.payoutMessage,
+              dod: null,
+              dop: null,
+            }
+          : item
+      );
+
+      user.loan = {
+        ...user.loan,
+        isApplied: false,
+        loanStatus: "Rejected",
+        paymentStatus: "Not paid",
+        loans: nextLoans,
+      };
+
+      await user.save();
+    } else {
+      await syncUserLoanState({
+        userId: loan.userId,
+        loanId: loan.ID,
+        rootLoanStatus: loan.loanStatus,
+        updates: {
+          isDisbursed: false,
+          isNewLoan: false,
+          loanStatus: "Rejected",
+          caseStatus: "Rejected",
+          paymentStatus: "Not paid",
+          payoutStatus: loan.payoutStatus,
+          payoutReference: loan.payoutReference,
+          payoutMessage: loan.payoutMessage,
+          dod: null,
+          dop: null,
+        },
+      });
+    }
 
     await logSystemEvent({
       level: "warn",
       category: "payment",
       source: "loan.retryDisbursement",
       action: "disbursement-cancel",
-      status: "cancelled",
+      status: "rejected",
       req,
       message: cancellationMessage,
       metadata: {
@@ -268,9 +312,10 @@ router.patch("/cancel-bounced-disbursement/:ID", async (req, res) => {
 
     return res.status(200).json({
       success: 1,
-      message: "Bounced-back disbursement cancelled successfully.",
+      message: "Bounced-back disbursement rejected. Customer can apply again if eligible.",
       data: {
         loanId: loan.ID,
+        loanStatus: loan.loanStatus,
         payoutStatus: loan.payoutStatus,
         payoutMessage: loan.payoutMessage,
       },

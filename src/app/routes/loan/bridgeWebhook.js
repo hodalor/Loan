@@ -9,22 +9,61 @@ const router = express.Router();
 router.post("/bridge/webhook", async (req, res) => {
   try {
     const payload = req.body || {};
-    const transactionId = String(payload.transaction_id || "").trim();
+    const transactionId = String(
+      payload.transaction_id ||
+        payload.trans_ref ||
+        payload.trans_id ||
+        payload.collection_trans_id ||
+        ""
+    ).trim();
 
     if (!transactionId) {
       return res.sendStatus(200);
     }
 
-    const loan = await Loan.findOne({ payoutReference: transactionId });
+    const referenceCandidates = [
+      String(payload.transaction_id || "").trim(),
+      String(payload.trans_ref || "").trim(),
+      String(payload.trans_id || "").trim(),
+      String(payload.collection_trans_id || "").trim(),
+    ].filter(Boolean);
+
+    const loan = await Loan.findOne({
+      payoutReference: { $in: referenceCandidates },
+    });
     if (!loan) {
       return res.sendStatus(200);
     }
 
-    const callbackStatus = String(payload.status || "").trim();
+    const callbackStatus = String(payload.status || payload.trans_status || "").trim();
     const callbackMessage =
       String(payload.status_desc || "").trim() ||
+      String(payload.response_message || "").trim() ||
       String(payload.message || "").trim() ||
       "Bridge callback received.";
+    const currentPayoutStatus = String(loan.payoutStatus || "").trim().toLowerCase();
+
+    // Keep terminal admin and payout decisions stable even if Bridge sends a late callback.
+    if (["success", "cancelled", "rejected"].includes(currentPayoutStatus)) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "loan.bridgeWebhook",
+        action: "disbursement-webhook",
+        status: "ignored",
+        message: `Ignored Bridge callback because payout is already marked as ${currentPayoutStatus}.`,
+        metadata: {
+          loanId: loan.ID,
+          customerId: loan.userId,
+          transactionId,
+          network: payload.nw || "",
+          currentPayoutStatus,
+        },
+        details: payload,
+      });
+
+      return res.sendStatus(200);
+    }
 
     if (callbackStatus === "000") {
       const durationDays = Number.parseInt(String(loan.duration || "").split(" ")[0], 10);
@@ -79,7 +118,7 @@ router.post("/bridge/webhook", async (req, res) => {
     }
 
     if (callbackStatus === "001" || callbackStatus === "003") {
-      const wasPendingCallback = String(loan.payoutStatus || "").trim().toLowerCase() === "pending";
+      const wasPendingCallback = currentPayoutStatus === "pending";
       loan.isDisbursed = false;
       loan.payoutStatus = wasPendingCallback ? "bounced-back" : "failed";
       loan.payoutMessage = callbackMessage;
