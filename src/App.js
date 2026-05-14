@@ -1026,6 +1026,11 @@ function App() {
         pendingGatewayTransaction?.type ||
         fallbackType;
       const receiptType = transactionType === "extension" ? "Extension" : "Repayment";
+      const phone = formData.personal.phone || sessionAccount?.phone || formData.login.phone;
+      const verifiedSummary =
+        response.data?.customer || response.data?.loanHistory || response.data?.activeLoan
+          ? response.data
+          : null;
 
       setTransactionReceipt({
         type: receiptType,
@@ -1060,10 +1065,11 @@ function App() {
           receiptType === "Extension" ? response.data?.activeLoan?.dueDate || null : undefined,
       });
 
-      await loadPortalSummary(
-        formData.personal.phone || sessionAccount?.phone || formData.login.phone,
-        { quiet: true }
-      );
+      if (verifiedSummary) {
+        hydratePortalData(verifiedSummary, phone);
+      } else {
+        await loadPortalSummary(phone, { quiet: true });
+      }
       setLifecycleAction("");
       setRepaymentSummaryData(null);
       setExtensionSummaryData(null);
@@ -1078,6 +1084,7 @@ function App() {
       extensionSummaryData?.extension?.feeAmount,
       formData.login.phone,
       formData.personal.phone,
+      hydratePortalData,
       loadPortalSummary,
       pendingGatewayTransaction,
       repaymentSummaryData?.amount,
