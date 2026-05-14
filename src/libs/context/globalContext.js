@@ -3377,7 +3377,7 @@ export default function GlobalContextProvider(props) {
     return response;
   };
 
-  const _retryFailedDisbursement = async ({ loanId, channel }) => {
+  const _retryFailedDisbursement = async ({ loanId, channel, operator }) => {
     if (!_hasAccess("action:disbursement:retry"))
       return setAlerts({
         ...alerts,
@@ -3388,7 +3388,7 @@ export default function GlobalContextProvider(props) {
 
     setGlobalLoader(true);
 
-    const response = await _retryDisbursement({ loanId, channel });
+    const response = await _retryDisbursement({ loanId, channel, operator });
 
     await _getData();
 
