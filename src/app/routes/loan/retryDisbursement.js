@@ -119,7 +119,9 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
       data: {
         loanId: loan.ID,
         provider: loan.disbursementProvider,
+        disbursementChannel: loan.disbursementChannel,
         operator: loan.paymentOperator || "",
+        isDisbursed: loan.isDisbursed,
         payoutStatus: loan.payoutStatus,
         payoutMessage: loan.payoutMessage,
       },
