@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import {
+  backfillPortalPayment,
   getPortalPayments,
   restorePortalPayment,
 } from "../../../handlers/portalPayments";
@@ -51,6 +52,7 @@ export default function PaidNotUpdated() {
   const [selectedRefs, setSelectedRefs] = React.useState([]);
   const [selectedRecord, setSelectedRecord] = React.useState(null);
   const [restoringReference, setRestoringReference] = React.useState("");
+  const [backfillingReference, setBackfillingReference] = React.useState("");
 
   const loadRecords = React.useCallback(async () => {
     setLoading(true);
@@ -157,6 +159,29 @@ export default function PaidNotUpdated() {
     },
     [loadRecords, setAlerts]
   );
+  const handleBackfill = React.useCallback(
+    async (reference) => {
+      const normalizedReference = normalizeReference(reference);
+      if (!normalizedReference) return;
+
+      setBackfillingReference(normalizedReference);
+      const response = await backfillPortalPayment(normalizedReference);
+      setBackfillingReference("");
+
+      setAlerts({
+        open: true,
+        type: response.success === 1 ? "success" : "error",
+        msg:
+          response.message ||
+          (response.success === 1
+            ? "Payment records backfilled successfully."
+            : "Payment backfill failed."),
+      });
+
+      await loadRecords();
+    },
+    [loadRecords, setAlerts]
+  );
 
   const allSelected = records.length > 0 && selectedRefs.length === records.length;
 
@@ -213,7 +238,7 @@ export default function PaidNotUpdated() {
         key: "actions",
         label: "Action",
         render: (row) =>
-          activeTab === "pending" && canRestore ? (
+          canRestore && activeTab === "pending" ? (
             <button
               type="button"
               className="inline-flex h-9 items-center justify-center rounded-xl bg-violet-600 px-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -225,6 +250,20 @@ export default function PaidNotUpdated() {
             >
               {restoringReference === normalizeReference(row.reference) ? "Restoring..." : "Restore"}
             </button>
+          ) : canRestore && activeTab === "completed" ? (
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-sky-600 px-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={backfillingReference === normalizeReference(row.reference)}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleBackfill(row.reference);
+              }}
+            >
+              {backfillingReference === normalizeReference(row.reference)
+                ? "Backfilling..."
+                : "Backfill"}
+            </button>
           ) : (
             <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
               {row.processed ? "Complete" : "View"}
@@ -232,7 +271,16 @@ export default function PaidNotUpdated() {
           ),
       },
     ],
-    [activeTab, canRestore, handleRestore, restoringReference, selectedRefs, toggleSelection]
+    [
+      activeTab,
+      backfillingReference,
+      canRestore,
+      handleBackfill,
+      handleRestore,
+      restoringReference,
+      selectedRefs,
+      toggleSelection,
+    ]
   );
 
   return (
@@ -243,7 +291,8 @@ export default function PaidNotUpdated() {
             <h3 className="text-lg font-semibold text-slate-900">Paid Not Updated</h3>
             <p className="text-sm text-slate-500">
               Track portal repayments confirmed by the gateway, inspect the raw gateway payloads,
-              export selected records, and restore loan posting when needed.
+              export selected records, restore pending loan posting, and backfill old missing DB
+              payment records safely.
             </p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700">
@@ -452,6 +501,18 @@ export default function PaidNotUpdated() {
                     {restoringReference === normalizeReference(selectedRecord.reference)
                       ? "Restoring..."
                       : "Restore Payment"}
+                  </button>
+                ) : null}
+                {activeTab === "completed" && canRestore ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => handleBackfill(selectedRecord.reference)}
+                    disabled={backfillingReference === normalizeReference(selectedRecord.reference)}
+                  >
+                    {backfillingReference === normalizeReference(selectedRecord.reference)
+                      ? "Backfilling..."
+                      : "Backfill Payment Record"}
                   </button>
                 ) : null}
                 <button

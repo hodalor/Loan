@@ -50,3 +50,9 @@ export const restorePortalPayment = async (reference = "") =>
     method: "POST",
     body: JSON.stringify({ reference }),
   });
+
+export const backfillPortalPayment = async (reference = "") =>
+  request(`portal-payments/${encodeURIComponent(reference)}/backfill`, {
+    method: "POST",
+    body: JSON.stringify({ reference }),
+  });
