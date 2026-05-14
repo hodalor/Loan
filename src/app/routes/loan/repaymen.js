@@ -8,6 +8,7 @@ const _checkLevel = require("../../../libs/levelCheck");
 const config = require("../../../config");
 const _generateString = require("../../../libs/generateID");
 const { getSystemConfig, getActiveCountryConfig } = require("../../services/systemConfig");
+const { logSystemEvent } = require("../../../libs/logger");
 
 const LEGACY_GATEWAY_STATUS_URL = "https://zambia-1.onrender.com";
 const router = express.Router();
@@ -25,17 +26,24 @@ const formatBridgeRequestTime = (value = new Date()) => {
     date.getHours()
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 };
-const getBridgeCallbackReference = (payload = {}) =>
+const normalizeBridgeReference = (value = "") =>
+  String(value || "")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+const getBridgeCallbackReferenceCandidates = (payload = {}) =>
   [
-    payload.transaction_id,
-    payload.trans_id,
     payload.trans_ref,
+    payload.transaction_id,
     payload.client_ref,
     payload.reference,
     payload.collection_trans_id,
+    payload.trans_id,
   ]
-    .map((value) => String(value || "").trim())
-    .find(Boolean) || "";
+    .map((value) => normalizeBridgeReference(value))
+    .filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
+const getBridgeCallbackReference = (payload = {}) =>
+  getBridgeCallbackReferenceCandidates(payload)[0] || "";
 const getBridgeCallbackStatus = (payload = {}) =>
   String(payload.trans_status || payload.status_code || payload.status || payload.code || "").trim();
 const getBridgeCallbackMessage = (payload = {}) =>
@@ -389,17 +397,34 @@ router.patch("/repayLoan/:id", async (request, responses) => {
 
 router.post("/bridge/legacy-repayment-webhook", async (request, responses) => {
   try {
-    const reference = getBridgeCallbackReference(request.body);
+    const referenceCandidates = getBridgeCallbackReferenceCandidates(request.body);
     const callbackStatus = getBridgeCallbackStatus(request.body);
     const callbackMessage = getBridgeCallbackMessage(request.body) || "Bridge callback received.";
 
-    if (!reference) {
+    if (referenceCandidates.length === 0) {
       return responses.sendStatus(200);
     }
 
-    const transaction = await GatewayTransactions.findOne({ reference, provider: "bridge" });
+    const transaction = await GatewayTransactions.findOne({
+      reference: { $in: referenceCandidates },
+      provider: "bridge",
+    });
 
     if (!transaction || transaction.transactionType !== "repayment") {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "loan.legacyRepaymentWebhook",
+        action: "webhook-unmatched",
+        status: "ignored",
+        message: "Bridge legacy repayment webhook did not match any saved repayment transaction.",
+        metadata: {
+          bridgeStatus: callbackStatus,
+          callbackReference: getBridgeCallbackReference(request.body),
+          referenceCandidates,
+        },
+        details: request.body,
+      });
       return responses.sendStatus(200);
     }
 

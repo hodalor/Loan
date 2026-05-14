@@ -529,17 +529,24 @@ const formatBridgeRequestTime = (value = new Date()) => {
 };
 const buildBridgeAuthHeader = (username = "", password = "") =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
-const getBridgeCallbackReference = (payload = {}) =>
+const normalizeBridgeReference = (value = "") =>
+  String(value || "")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+const getBridgeCallbackReferenceCandidates = (payload = {}) =>
   [
-    payload.transaction_id,
-    payload.trans_id,
     payload.trans_ref,
+    payload.transaction_id,
     payload.client_ref,
     payload.reference,
     payload.collection_trans_id,
+    payload.trans_id,
   ]
-    .map((value) => String(value || "").trim())
-    .find(Boolean) || "";
+    .map((value) => normalizeBridgeReference(value))
+    .filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
+const getBridgeCallbackReference = (payload = {}) =>
+  getBridgeCallbackReferenceCandidates(payload)[0] || "";
 const getBridgeCallbackStatus = (payload = {}) =>
   String(payload.trans_status || payload.status_code || payload.status || payload.code || "").trim();
 const getBridgeCallbackMessage = (payload = {}) =>
@@ -2739,15 +2746,33 @@ router.post("/portal/paystack/verify", handlePortalGatewayVerification);
 
 router.post("/portal/bridge/webhook", async (req, res) => {
   try {
-    const reference = getBridgeCallbackReference(req.body);
-    if (!reference) {
+    const referenceCandidates = getBridgeCallbackReferenceCandidates(req.body);
+    if (referenceCandidates.length === 0) {
       return res.sendStatus(200);
     }
 
-    const transaction = await GatewayTransactions.findOne({ reference });
+    const transaction = await GatewayTransactions.findOne({
+      reference: { $in: referenceCandidates },
+    });
     if (!transaction) {
+      await logSystemEvent({
+        level: "warn",
+        category: "payment",
+        source: "customer.portal.bridgeWebhook",
+        action: "webhook-unmatched",
+        status: "ignored",
+        message: "Bridge portal webhook did not match any saved repayment transaction.",
+        metadata: {
+          bridgeStatus: getBridgeCallbackStatus(req.body),
+          callbackReference: getBridgeCallbackReference(req.body),
+          referenceCandidates,
+        },
+        details: req.body,
+      });
       return res.sendStatus(200);
     }
+
+    const reference = transaction.reference;
 
     if (transaction.processed || String(transaction.status || "").trim().toLowerCase() === "success") {
       return res.sendStatus(200);
