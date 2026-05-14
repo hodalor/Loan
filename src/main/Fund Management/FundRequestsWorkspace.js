@@ -953,12 +953,12 @@ export default function FundRequestsWorkspace({
           onClick={() => setReviewModalOpen(false)}
         >
           <div
-            className="w-full max-w-3xl rounded-[24px] border border-slate-200 bg-white shadow-xl"
+            className="w-full max-w-xl rounded-[18px] border border-slate-200 bg-white shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <h4 className="text-xl font-semibold text-slate-900">{selectedRequest.requestCode}</h4>
+                <h4 className="text-lg font-semibold text-slate-900">{selectedRequest.requestCode}</h4>
                 <p className="text-sm text-slate-500">
                   {selectedRequest.employeeUserName} · {statusLabelMap[selectedRequest.status] || selectedRequest.status}
                 </p>
@@ -967,70 +967,79 @@ export default function FundRequestsWorkspace({
                 <i className="fa fa-times text-xl" />
               </button>
             </div>
-            <div className="grid gap-3 px-5 py-5 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Employee</p>
-                <p className="mt-2 font-semibold text-slate-900">{selectedRequest.employeeUserName}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Department</p>
-                <p className="mt-2 font-semibold text-slate-900">{selectedRequest.department || "-"}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Group</p>
-                <p className="mt-2 font-semibold text-slate-900">{selectedRequest.staffGroupName || "-"}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Amount</p>
-                <p className="mt-2 font-semibold text-slate-900">{formatMoney(selectedRequest.amount)}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Destination</p>
-                <p className="mt-2 font-semibold text-slate-900">{selectedRequest.destinationNumber}</p>
-              </div>
-              {requestType === "payment" ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">Service Provider</p>
-                  <p className="mt-2 font-semibold text-slate-900">
-                    {selectedRequest.destinationOperator || "-"}
+            <div className="max-h-[32vh] overflow-y-auto px-5 py-4">
+              <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Employee</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRequest.employeeUserName}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Department</p>
+                  <p className="mt-1 text-sm font-semibold capitalize text-slate-900">
+                    {selectedRequest.department || "-"}
                   </p>
                 </div>
-              ) : null}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Reason</p>
-                <p className="mt-2 font-semibold text-slate-900">{selectedRequest.reason}</p>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Group</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRequest.staffGroupName || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Amount</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{formatMoney(selectedRequest.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Destination</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRequest.destinationNumber}</p>
+                </div>
+                {requestType === "payment" ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
+                      Service Provider
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {selectedRequest.destinationOperator || "-"}
+                    </p>
+                  </div>
+                ) : null}
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Reason</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{selectedRequest.reason}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Initiator</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {selectedRequest.initiatedBy?.userName || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Gateway</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                    {selectedRequest.gatewayProvider || selectedRequest.gatewayStatus || "-"}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Initiator</p>
-                <p className="mt-2 font-semibold text-slate-900">
-                  {selectedRequest.initiatedBy?.userName || "-"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Gateway</p>
-                <p className="mt-2 font-semibold text-slate-900">
-                  {selectedRequest.gatewayProvider || selectedRequest.gatewayStatus || "-"}
-                </p>
-              </div>
-              <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Remark</p>
-                <p className="mt-2 text-slate-900">
-                  {selectedRequest.remark || selectedRequest.gatewayMessage || "-"}
-                </p>
-              </div>
-              <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Approver Names</p>
-                <p className="mt-2 text-slate-900">
-                  First: {selectedRequest.firstApproval?.actor?.userName || "-"} | Second:{" "}
-                  {selectedRequest.secondApproval?.actor?.userName || "-"}
-                </p>
+
+              <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Remark</p>
+                  <p className="mt-1 text-sm text-slate-900">
+                    {selectedRequest.remark || selectedRequest.gatewayMessage || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">Approver Names</p>
+                  <p className="mt-1 text-sm text-slate-900">
+                    First: {selectedRequest.firstApproval?.actor?.userName || "-"} | Second:{" "}
+                    {selectedRequest.secondApproval?.actor?.userName || "-"}
+                  </p>
+                </div>
               </div>
             </div>
             {!failedOnly && ["pending_first_approval", "pending_second_approval"].includes(selectedRequest.status) ? (
-              <div className="border-t border-slate-200 px-6 py-5">
+              <div className="border-t border-slate-200 px-5 py-4">
                 <label className="app-label">Decision Remark</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   className="app-input"
                   value={decisionRemark}
                   onChange={(event) => setDecisionRemark(event.target.value)}
