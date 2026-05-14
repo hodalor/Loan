@@ -346,11 +346,24 @@ const mergeLoanCollections = (user = {}, globalLoans = []) => {
 };
 const getUserLoanHistory = (user = {}, globalLoans = []) =>
   mergeLoanCollections(user, globalLoans);
+const isLoanSettled = (loan = {}) => {
+  const repaymentAmount = toMoney(loan?.repaymentAmount || 0);
+  const amountPaid = toMoney(loan?.amountPaid || 0);
+  const paymentStatus = String(loan?.paymentStatus || "").trim().toLowerCase();
+  const caseStatus = String(loan?.caseStatus || "").trim().toLowerCase();
+
+  return (
+    paymentStatus === "paid" ||
+    paymentStatus === "payed" ||
+    caseStatus === "completed" ||
+    (repaymentAmount > 0 && amountPaid + 0.009 >= repaymentAmount)
+  );
+};
 const getCurrentPortalLoan = (user = {}, globalLoans = []) => {
   const loans = getUserLoanHistory(user, globalLoans);
   return (
     loans.find((loan) => loan.loanStatus === "Review") ||
-    loans.find((loan) => loan.loanStatus === "Granted" && loan.paymentStatus !== "Paid") ||
+    loans.find((loan) => loan.loanStatus === "Granted" && !isLoanSettled(loan)) ||
     loans.find((loan) => loan.loanStatus === "Rejected") ||
     loans[0] ||
     null
@@ -387,6 +400,7 @@ const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
   const amount = toMoney(loan.amount || 0);
   const repaymentAmount = toMoney(loan.repaymentAmount || 0);
   const amountPaid = toMoney(loan.amountPaid || 0);
+  const isFullyPaid = isLoanSettled(loan);
   const outstandingBalance = Math.max(repaymentAmount - amountPaid, 0);
   const dueDate = loan.dop || null;
   const daysRemaining = dueDate ? getDayDifference(dueDate) : null;
@@ -424,7 +438,7 @@ const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
     title = "Loan approved, awaiting disbursement";
     message =
       "Your loan has been approved and the disbursement is still waiting for final confirmation.";
-  } else if (loan.loanStatus === "Granted" && loan.paymentStatus === "Paid") {
+  } else if (loan.loanStatus === "Granted" && isFullyPaid) {
     statusKey = "paid";
     title = "Loan fully paid";
     message = "Your loan is fully repaid. You can apply again if a new offer is available.";
