@@ -79,8 +79,9 @@ router.post("/bridge/webhook", async (req, res) => {
     }
 
     if (callbackStatus === "001" || callbackStatus === "003") {
+      const wasPendingCallback = String(loan.payoutStatus || "").trim().toLowerCase() === "pending";
       loan.isDisbursed = false;
-      loan.payoutStatus = "failed";
+      loan.payoutStatus = wasPendingCallback ? "bounced-back" : "failed";
       loan.payoutMessage = callbackMessage;
       await loan.save();
 
@@ -101,7 +102,7 @@ router.post("/bridge/webhook", async (req, res) => {
         category: "payment",
         source: "loan.bridgeWebhook",
         action: "disbursement-webhook",
-        status: "failed",
+        status: wasPendingCallback ? "bounced-back" : "failed",
         message: callbackMessage,
         metadata: {
           loanId: loan.ID,

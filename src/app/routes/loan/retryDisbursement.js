@@ -204,4 +204,99 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
   }
 });
 
+router.patch("/cancel-bounced-disbursement/:ID", async (req, res) => {
+  try {
+    const loanId = req.params.ID;
+    const loan = await Loan.findOne({ ID: loanId });
+
+    if (!loan) {
+      return res.status(404).json({
+        success: 0,
+        message: "Loan was not found",
+      });
+    }
+
+    if (loan.isDisbursed === true) {
+      return res.status(400).json({
+        success: 0,
+        message: "This loan is already disbursed and cannot be cancelled from the bounce queue.",
+      });
+    }
+
+    const currentStatus = String(loan.payoutStatus || "").trim().toLowerCase();
+    if (!["bounced-back", "pending"].includes(currentStatus)) {
+      return res.status(400).json({
+        success: 0,
+        message: "Only bounced-back or pending disbursements can be cancelled here.",
+      });
+    }
+
+    const cancellationMessage =
+      String(req.body?.remark || "").trim() ||
+      "Payout callback case cancelled by admin and removed from the bounce queue.";
+
+    loan.payoutStatus = "cancelled";
+    loan.payoutMessage = cancellationMessage;
+    await loan.save();
+
+    await syncUserLoanState({
+      userId: loan.userId,
+      loanId: loan.ID,
+      rootLoanStatus: loan.loanStatus,
+      updates: {
+        isDisbursed: false,
+        payoutStatus: loan.payoutStatus,
+        payoutReference: loan.payoutReference,
+        payoutMessage: loan.payoutMessage,
+      },
+    });
+
+    await logSystemEvent({
+      level: "warn",
+      category: "payment",
+      source: "loan.retryDisbursement",
+      action: "disbursement-cancel",
+      status: "cancelled",
+      req,
+      message: cancellationMessage,
+      metadata: {
+        loanId: loan.ID,
+        customerId: loan.userId,
+        payoutReference: loan.payoutReference || "",
+      },
+    });
+
+    return res.status(200).json({
+      success: 1,
+      message: "Bounced-back disbursement cancelled successfully.",
+      data: {
+        loanId: loan.ID,
+        payoutStatus: loan.payoutStatus,
+        payoutMessage: loan.payoutMessage,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "loan.retryDisbursement",
+      action: "disbursement-cancel",
+      status: "failed",
+      req,
+      message: error.message || "Cancelling bounced-back disbursement failed.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        loanId: req.params?.ID || "",
+      },
+    });
+    return res.status(500).json({
+      success: 0,
+      message: "Internal error: code(500)!",
+    });
+  }
+});
+
 module.exports = router;
