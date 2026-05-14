@@ -53,6 +53,29 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
         user,
         systemConfig,
       });
+
+      if (user && Array.isArray(user.paymentMethods) && String(loan.paymentMethod || "").trim()) {
+        const currentPaymentMethod = String(loan.paymentMethod || "").trim();
+        const currentOperator = String(loan.paymentOperator || "").trim();
+
+        if (
+          !user.paymentMethods.some(
+            (item) => String(item?.method || "").trim() === currentPaymentMethod
+          )
+        ) {
+          user.paymentMethods = [
+            ...user.paymentMethods,
+            {
+              method: currentPaymentMethod,
+              email: user?.email || "",
+              operator: currentOperator,
+              isVerified: false,
+            },
+          ];
+        }
+
+        await user.save();
+      }
     }
 
     const isAutoSuccess =
@@ -88,6 +111,8 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
           : "pending-manual",
       payoutReference: payoutResult.reference || ID,
       payoutMessage: payoutResult.message,
+      paymentMethod: loan.paymentMethod || "",
+      paymentOperator: loan.paymentOperator || "",
     };
 
     if (!officer)
@@ -153,6 +178,8 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
         customerId: loan.userId,
         provider: payoutResult.provider,
         channel: payoutResult.channel,
+        paymentMethod: loan.paymentMethod || "",
+        operator: loan.paymentOperator || "",
         payoutReference: payoutResult.reference || ID,
       },
       details: payoutResult.raw || null,

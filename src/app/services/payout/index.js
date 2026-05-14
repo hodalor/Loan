@@ -240,6 +240,10 @@ const resolvePaymentMethod = (user, loan) => {
     null;
 
   if (matchedMethod) {
+    if (!String(loan?.paymentMethod || "").trim()) {
+      loan.paymentMethod = String(matchedMethod.method || "").trim();
+    }
+
     return {
       ...matchedMethod,
       operator: normalizedOperator || matchedMethod.operator || "",
@@ -256,6 +260,8 @@ const resolvePaymentMethod = (user, loan) => {
   }
 
   if (fallbackMobileMethod) {
+    loan.paymentMethod = String(fallbackMobileMethod.method || "").trim();
+
     return {
       ...fallbackMobileMethod,
       operator: normalizedOperator || fallbackMobileMethod.operator || "",
@@ -264,6 +270,8 @@ const resolvePaymentMethod = (user, loan) => {
 
   const fallbackPhone = String(user?.phone || "").trim();
   if (fallbackPhone) {
+    loan.paymentMethod = fallbackPhone;
+
     return {
       method: fallbackPhone,
       operator: normalizedOperator,
