@@ -2,6 +2,8 @@ import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
+import { readSystemConfig } from "../../../libs/systemConfig";
+import _updateCustomerPaymentOperator from "../../../handlers/updates/updateCustomerPaymentOperator";
 
 const TAB_ITEMS = [
   { id: "basic", label: "Basic info" },
@@ -46,6 +48,9 @@ function UserQuery() {
     _loadCustomerDetails,
   } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("basic");
+  const [paymentOperatorDrafts, setPaymentOperatorDrafts] = React.useState({});
+  const [paymentMethodNotice, setPaymentMethodNotice] = React.useState(null);
+  const [savingPaymentMethod, setSavingPaymentMethod] = React.useState("");
 
   const canViewCustomer = _hasAccess("action:customer:view");
   const canEditCustomer = _hasAccess("action:customer:update");
@@ -78,6 +83,19 @@ function UserQuery() {
   React.useEffect(() => {
     setActiveTab("basic");
   }, [customer?.userId]);
+
+  React.useEffect(() => {
+    const nextDrafts = Object.fromEntries(
+      (Array.isArray(customer?.paymentMethods) ? customer.paymentMethods : []).map((method) => [
+        method?.method || "",
+        method?.operator || "",
+      ])
+    );
+
+    setPaymentOperatorDrafts(nextDrafts);
+    setPaymentMethodNotice(null);
+    setSavingPaymentMethod("");
+  }, [customer?.paymentMethods, customer?.userId]);
 
   React.useEffect(() => {
     if (!searchTermsActive) return;
@@ -122,8 +140,9 @@ function UserQuery() {
       Array.isArray(customer?.paymentMethods)
         ? customer.paymentMethods.map((method, index) => ({
             id: index + 1,
-            type: "Mobile money",
-            operator: method?.operator || "-",
+            type: String(method?.method || "").includes("@") ? "Card / Email" : "Mobile money",
+            operatorLabel: method?.operator || "Not set",
+            operatorValue: method?.operator || "",
             method: method?.method || "-",
             email: method?.email || "-",
             bindDate: formatDate(method?.createdAt),
@@ -131,6 +150,66 @@ function UserQuery() {
         : [],
     [customer?.paymentMethods]
   );
+  const paymentOperatorOptions = React.useMemo(() => {
+    const systemConfig = readSystemConfig();
+    const countries = Array.isArray(systemConfig?.countries) ? systemConfig.countries : [];
+    const preferredCountryCode = String(
+      customer?.countryCode || systemConfig?.activeCountryCode || ""
+    ).trim();
+    const activeCountry =
+      countries.find((item) => String(item?.code || "").trim() === preferredCountryCode) ||
+      countries.find((item) => String(item?.code || "").trim() === String(systemConfig?.activeCountryCode || "").trim()) ||
+      countries[0] ||
+      {};
+    const networks = Array.isArray(activeCountry?.mobileMoneyNetworks)
+      ? activeCountry.mobileMoneyNetworks
+      : [];
+
+    return networks
+      .map((item) => ({
+        value: item?.label || item?.key || "",
+        label: item?.label || item?.key || "",
+      }))
+      .filter((item) => item.value)
+      .filter(
+        (item, index, array) =>
+          array.findIndex((entry) => entry.value === item.value) === index
+      );
+  }, [customer?.countryCode]);
+
+  const handleSavePaymentOperator = async (row) => {
+    const nextOperator = String(paymentOperatorDrafts[row.method] || "").trim();
+
+    if (!nextOperator) {
+      setPaymentMethodNotice({
+        type: "error",
+        text: "Select a mobile money provider before saving.",
+      });
+      return;
+    }
+
+    setSavingPaymentMethod(row.method);
+    const response = await _updateCustomerPaymentOperator({
+      userId: customer?.userId,
+      method: row.method,
+      operator: nextOperator,
+    });
+    setSavingPaymentMethod("");
+
+    if (response.success === 1) {
+      setPaymentMethodNotice({
+        type: "success",
+        text: response.message || "Mobile money provider updated successfully.",
+      });
+      await _loadCustomerDetails(customer, { silent: true });
+      return;
+    }
+
+    setPaymentMethodNotice({
+      type: "error",
+      text: response.message || "Could not update the mobile money provider.",
+    });
+  };
 
   const loanRows = React.useMemo(
     () =>
@@ -360,10 +439,64 @@ function UserQuery() {
 
   const paymentColumns = [
     { key: "type", label: "Type" },
-    { key: "operator", label: "Name" },
+    {
+      key: "operatorLabel",
+      label: "Service provider",
+      render: (row) =>
+        row.type !== "Mobile money" ? (
+          row.operatorLabel
+        ) : isEdit && canEditCustomer && paymentOperatorOptions.length > 0 ? (
+          <select
+            className="min-h-[38px] min-w-[170px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+            value={paymentOperatorDrafts[row.method] || ""}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) =>
+              setPaymentOperatorDrafts((current) => ({
+                ...current,
+                [row.method]: event.target.value,
+              }))
+            }
+          >
+            <option value="">Select provider</option>
+            {paymentOperatorOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          row.operatorLabel
+        ),
+    },
     { key: "method", label: "Account number" },
     { key: "email", label: "User email" },
     { key: "bindDate", label: "Bind date" },
+    {
+      key: "action",
+      label: "Action",
+      render: (row) =>
+        row.type !== "Mobile money" ? (
+          "-"
+        ) : isEdit && canEditCustomer ? (
+          <button
+            type="button"
+            className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={
+              savingPaymentMethod === row.method ||
+              !String(paymentOperatorDrafts[row.method] || "").trim() ||
+              paymentOperatorDrafts[row.method] === row.operatorValue
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              handleSavePaymentOperator(row);
+            }}
+          >
+            {savingPaymentMethod === row.method ? "Saving..." : "Save provider"}
+          </button>
+        ) : (
+          <span className="text-xs text-slate-500">Enable edit mode to update</span>
+        ),
+    },
   ];
 
   const loanColumns = [
@@ -627,6 +760,17 @@ function UserQuery() {
               {activeTab === "collection" ? (
                 <SectionCard title="Collection method information">
                   <SectionHint text={`${paymentMethodRows.length} payment method${paymentMethodRows.length === 1 ? "" : "s"} linked`} />
+                  {paymentMethodNotice ? (
+                    <div
+                      className={`mb-4 rounded-2xl px-4 py-3 text-sm ${
+                        paymentMethodNotice.type === "success"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-rose-50 text-rose-700"
+                      }`}
+                    >
+                      {paymentMethodNotice.text}
+                    </div>
+                  ) : null}
                   <SimpleDataTable
                     columns={paymentColumns}
                     rows={paymentMethodRows}

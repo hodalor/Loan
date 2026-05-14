@@ -8,6 +8,7 @@ import _createUser from "./creates/addUser";
 import _retryDisbursement from "./creates/retryDisbursement";
 import _deleteStaffGroup from "./deletes/deleteStaffGroup";
 import _updateUser from "./updates/updateUser";
+import _updateCustomerPaymentOperator from "./updates/updateCustomerPaymentOperator";
 import _updateStaffGroup from "./updates/updateStaffGroup";
 import _updateSystemConfig from "./updates/updateSystemConfig";
 import _markManualDisbursement from "./updates/markManualDisbursement";
@@ -37,6 +38,7 @@ export {
   _retryDisbursement,
   _deleteStaffGroup,
   _updateUser,
+  _updateCustomerPaymentOperator,
   _updateStaffGroup,
   _updateSystemConfig,
   _markManualDisbursement,

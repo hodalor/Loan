@@ -8,17 +8,19 @@ export default function PaymentMethod() {
   const paymentMethods = Array.isArray(customer?.paymentMethods)
     ? customer.paymentMethods
     : loan?.paymentMethod
-    ? [{ method: loan.paymentMethod, createdAt: loan.doa }]
+    ? [{ method: loan.paymentMethod, operator: loan.paymentOperator || "", createdAt: loan.doa }]
     : [];
   const getMethodLabel = (item = {}) =>
     String(item.method || "").includes("@") ? "Card / Email" : "Mobile Money";
+  const getOperatorLabel = (item = {}) => String(item.operator || "").trim() || "Not set";
 
   const columns = [
     {
-      key: "operator",
+      key: "type",
       label: "Collection methods",
       cellClassName: "font-semibold text-slate-900",
     },
+    { key: "operator", label: "Service provider" },
     { key: "method", label: "Card number/Account number/Collection code" },
     { key: "createdAt", label: "Bind time" },
     { key: "autoDeduction", label: "Whether sign deduction agreement" },
@@ -39,7 +41,8 @@ export default function PaymentMethod() {
   const rows = paymentMethods.map((paymentMethod, index) => ({
     ...paymentMethod,
     id: index + 1,
-    operator: getMethodLabel(paymentMethod),
+    type: getMethodLabel(paymentMethod),
+    operator: getOperatorLabel(paymentMethod),
     createdAt: paymentMethod?.createdAt
       ? new Date(paymentMethod.createdAt).toLocaleDateString()
       : "-",

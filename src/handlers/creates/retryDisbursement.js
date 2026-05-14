@@ -1,6 +1,6 @@
 import { dataBaseUrl } from "../../libs/endpoints";
 
-const _retryDisbursement = async ({ loanId, channel }) => {
+const _retryDisbursement = async ({ loanId, channel, operator }) => {
   let resp = {};
 
   try {
@@ -10,7 +10,7 @@ const _retryDisbursement = async ({ loanId, channel }) => {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ channel }),
+      body: JSON.stringify({ channel, operator }),
     });
 
     resp = await request.json();

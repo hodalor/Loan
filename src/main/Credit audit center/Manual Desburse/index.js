@@ -44,7 +44,7 @@ export default function ManualDisburse() {
                 ? `${customer.IDinfo.firstName || ""} ${customer.IDinfo.lastName || ""}`.trim()
                 : "-",
               accountNumber: paymentMethod?.method || loan.paymentMethod || "-",
-              accountIssuer: paymentMethod?.operator || "Unknown",
+              accountIssuer: loan.paymentOperator || paymentMethod?.operator || "Unknown",
               description: "Pathway loans disbursement",
               disbursementProvider: loan.disbursementProvider || "Pending",
               payoutStatus: loan.payoutStatus || "Pending",

@@ -21,6 +21,8 @@ export default function FailedDisbursements() {
     "bridge",
   ]);
   const [selectedChannels, setSelectedChannels] = React.useState({});
+  const [operatorOptions, setOperatorOptions] = React.useState([]);
+  const [selectedOperators, setSelectedOperators] = React.useState({});
   const [activeRow, setActiveRow] = React.useState("");
 
   React.useEffect(() => {
@@ -29,6 +31,24 @@ export default function FailedDisbursements() {
       if (response.success === 1 && Array.isArray(response.data?.implementedChannels)) {
         setImplementedChannels(response.data.implementedChannels);
       }
+
+      const countries = Array.isArray(response.data?.countries) ? response.data.countries : [];
+      const activeCountry =
+        countries.find((item) => item?.code === response.data?.activeCountryCode) ||
+        countries[0] ||
+        {};
+      const networks = Array.isArray(activeCountry?.mobileMoneyNetworks)
+        ? activeCountry.mobileMoneyNetworks
+        : [];
+
+      setOperatorOptions(
+        networks
+          .map((item) => ({
+            value: item?.label || item?.key || "",
+            label: item?.label || item?.key || "",
+          }))
+          .filter((item) => item.value)
+      );
     };
 
     loadConfig();
@@ -49,6 +69,9 @@ export default function FailedDisbursements() {
         Array.isArray(customers) && customers.length > 0
           ? customers.find((person) => person.userId === loan.userId)
           : null;
+      const paymentMethod = Array.isArray(customer?.paymentMethods)
+        ? customer.paymentMethods.find((method) => method.method === loan.paymentMethod)
+        : null;
 
       return {
         ...loan,
@@ -59,6 +82,7 @@ export default function FailedDisbursements() {
           : "",
         phone: customer?.phone || "",
         provider: loan.disbursementProvider || "Pending",
+        paymentOperator: loan.paymentOperator || paymentMethod?.operator || "",
         message: loan.payoutMessage || "Gateway request failed",
       };
     });
@@ -71,6 +95,31 @@ export default function FailedDisbursements() {
     { key: "phone", label: "Phone" },
     { key: "amount", label: "Amount" },
     { key: "provider", label: "Last Channel" },
+    {
+      key: "paymentOperator",
+      label: "Service Provider",
+      render: (row) => (
+        <select
+          className="app-input h-10 min-w-[170px] py-2 text-sm"
+          disabled={!canRetryDisbursement || operatorOptions.length === 0}
+          value={selectedOperators[row.loanId] || row.paymentOperator || ""}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) =>
+            setSelectedOperators((current) => ({
+              ...current,
+              [row.loanId]: event.target.value,
+            }))
+          }
+        >
+          <option value="">Select provider</option>
+          {operatorOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ),
+    },
     { key: "message", label: "Failure Reason" },
     {
       key: "switchChannel",
@@ -112,6 +161,7 @@ export default function FailedDisbursements() {
             _retryFailedDisbursement({
               loanId: row.loanId,
               channel,
+              operator: selectedOperators[row.loanId] || row.paymentOperator || "",
             }).finally(() => setActiveRow(""));
           }}
         >
