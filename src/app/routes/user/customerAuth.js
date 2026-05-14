@@ -274,26 +274,84 @@ const getPaystackReferenceFromPayload = (payload = {}) =>
   ).trim();
 const getPaystackVerificationUrl = (reference = "") =>
   `${config.paystackBaseUrl}/transaction/verify/${encodeURIComponent(reference)}`;
+const toLoanTime = (value) => {
+  const timestamp = new Date(value || 0).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+const buildCanonicalEmbeddedLoanState = (globalLoans = [], currentLoan = {}) => {
+  const normalizedLoans = (Array.isArray(globalLoans) ? globalLoans : [])
+    .map((loan) => ({ ...loan }))
+    .sort((left, right) => toLoanTime(right.doa || right.createdAt) - toLoanTime(left.doa || left.createdAt));
+  const activeLoan =
+    normalizedLoans.find((loan) => loan.loanStatus === "Review") ||
+    normalizedLoans.find((loan) => loan.loanStatus === "Granted" && loan.paymentStatus !== "Paid") ||
+    normalizedLoans[0] ||
+    null;
+
+  return {
+    isApplied: Boolean(
+      activeLoan &&
+        (activeLoan.loanStatus === "Review" ||
+          (activeLoan.loanStatus === "Granted" && activeLoan.paymentStatus !== "Paid"))
+    ),
+    loanStatus: activeLoan?.loanStatus || "Not applied",
+    paymentStatus: activeLoan?.paymentStatus || "Not payed",
+    acumulatedOverDue: Number(currentLoan?.acumulatedOverDue || 0),
+    loans: normalizedLoans,
+  };
+};
+const normalizeLoanSnapshot = (loan = {}) => ({
+  isApplied: Boolean(loan?.isApplied),
+  loanStatus: String(loan?.loanStatus || "Not applied"),
+  paymentStatus: String(loan?.paymentStatus || "Not payed"),
+  acumulatedOverDue: Number(loan?.acumulatedOverDue || 0),
+  loans: (Array.isArray(loan?.loans) ? loan.loans : []).map((item) => ({
+    ...item,
+    _id: item?._id ? String(item._id) : undefined,
+  })),
+});
+const syncUserLoanSnapshotWithCollection = async (user = null, globalLoans = []) => {
+  if (!user?._id) {
+    return user;
+  }
+
+  const canonicalLoan = buildCanonicalEmbeddedLoanState(globalLoans, user.loan);
+  const currentLoan = normalizeLoanSnapshot(user.loan || {});
+  const nextLoan = normalizeLoanSnapshot(canonicalLoan);
+
+  if (JSON.stringify(currentLoan) === JSON.stringify(nextLoan)) {
+    return {
+      ...user,
+      loan: canonicalLoan,
+    };
+  }
+
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        loan: canonicalLoan,
+      },
+    }
+  );
+
+  return {
+    ...user,
+    loan: canonicalLoan,
+  };
+};
 const mergeLoanCollections = (user = {}, globalLoans = []) => {
   const embeddedLoans = Array.isArray(user.loan?.loans) ? user.loan.loans : [];
-  const globalMap = new Map(
-    (Array.isArray(globalLoans) ? globalLoans : []).map((loan) => [loan.ID, loan])
-  );
+  const embeddedMap = new Map(embeddedLoans.map((loan) => [loan.ID, loan]));
 
-  const mergedLoans = embeddedLoans.map((loan) => ({
-    ...loan,
-    ...(globalMap.get(loan.ID) || {}),
-  }));
-
-  const knownIds = new Set(mergedLoans.map((loan) => loan.ID));
-  const extraGlobalLoans = (Array.isArray(globalLoans) ? globalLoans : []).filter(
-    (loan) => loan?.ID && !knownIds.has(loan.ID)
-  );
-
-  return [...mergedLoans, ...extraGlobalLoans].sort(
-    (left, right) =>
-      new Date(right.doa || right.createdAt || 0) - new Date(left.doa || left.createdAt || 0)
-  );
+  return (Array.isArray(globalLoans) ? globalLoans : [])
+    .map((loan) => ({
+      ...(embeddedMap.get(loan.ID) || {}),
+      ...loan,
+    }))
+    .sort(
+      (left, right) => toLoanTime(right.doa || right.createdAt) - toLoanTime(left.doa || left.createdAt)
+    );
 };
 const getUserLoanHistory = (user = {}, globalLoans = []) =>
   mergeLoanCollections(user, globalLoans);
@@ -1378,19 +1436,20 @@ const buildPortalSummaryData = async (phone) => {
   if (!updatedUser) return null;
 
   const refreshedLoans = await Loans.find({ userId: updatedUser.userId }).lean();
+  const syncedUser = await syncUserLoanSnapshotWithCollection(updatedUser, refreshedLoans);
 
   return {
     loanHistory: refreshedLoans,
-    activeLoan: buildActiveLoanView(updatedUser, refreshedConfig, refreshedLoans),
-    offer: buildPortalOffer(updatedUser, refreshedConfig, refreshedLoans),
+    activeLoan: buildActiveLoanView(syncedUser, refreshedConfig, refreshedLoans),
+    offer: buildPortalOffer(syncedUser, refreshedConfig, refreshedLoans),
     content: buildPortalContent(refreshedConfig),
     lifecycleConfig: buildLifecycleConfig(refreshedConfig),
     country: resolveCountryProfile({
       systemConfig: refreshedConfig,
-      customer: updatedUser,
+      customer: syncedUser,
       access: refreshedAccess,
     }),
-    customer: updatedUser,
+    customer: syncedUser,
     transaction: null,
   };
 };
@@ -1802,24 +1861,30 @@ router.post("/portal/summary", async (req, res) => {
     const globalLoans = customer?.userId
       ? await Loans.find({ userId: customer.userId }).lean()
       : [];
+    const syncedCustomer =
+      customer && customer.userId
+        ? await syncUserLoanSnapshotWithCollection(customer, globalLoans)
+        : customer;
 
     return res.status(200).json({
       success: 1,
       data: {
         phone,
-        hasProfile: Boolean(customer),
-        customer: customer || null,
+        hasProfile: Boolean(syncedCustomer),
+        customer: syncedCustomer || null,
         loanHistory: globalLoans,
         draftApplication: access.draftApplication || null,
         country: resolveCountryProfile({
           systemConfig,
-          customer,
+          customer: syncedCustomer,
           access,
         }),
-        offer: customer ? buildPortalOffer(customer, systemConfig, globalLoans) : null,
+        offer: syncedCustomer ? buildPortalOffer(syncedCustomer, systemConfig, globalLoans) : null,
         content: buildPortalContent(systemConfig),
         lifecycleConfig: buildLifecycleConfig(systemConfig),
-        activeLoan: customer ? buildActiveLoanView(customer, systemConfig, globalLoans) : null,
+        activeLoan: syncedCustomer
+          ? buildActiveLoanView(syncedCustomer, systemConfig, globalLoans)
+          : null,
       },
     });
   } catch (error) {
