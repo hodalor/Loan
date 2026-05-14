@@ -6,6 +6,11 @@ const toNumber = (value = 0) => {
 };
 
 const roundMoney = (value = 0) => Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+const toValidDate = (value) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+const hasActiveDueTimeline = (loan = {}) => Boolean(loan?.isDisbursed) && Boolean(toValidDate(loan?.dop));
 
 const getPenaltyRate = (loan = {}) => {
   const configuredRate = toNumber(loan?.overduePenaltyRate);
@@ -24,6 +29,10 @@ const getAmountPaidBeforeFinalClearance = (loan = {}) => {
 };
 
 const getOverdueDays = (loan = {}, countryProfile = {}) => {
+  if (!hasActiveDueTimeline(loan)) {
+    return 0;
+  }
+
   if (loan?.caseStatus === "Completed" && loan?.dp) {
     return Math.max(
       0,
@@ -39,9 +48,12 @@ const getCollectionMetrics = (loan = {}, countryProfile = {}) => {
   const amountPaid = roundMoney(loan?.amountPaid);
   const paidBeforeFinalClearance = roundMoney(getAmountPaidBeforeFinalClearance(loan));
   const overdueDays = getOverdueDays(loan, countryProfile);
+  const hasLiveCollectionTimeline = hasActiveDueTimeline(loan);
   const principalForPenalty = roundMoney(Math.max(repaymentAmount - paidBeforeFinalClearance, 0));
   const overduePenalty = roundMoney(
-    principalForPenalty * (getPenaltyRate(loan) / 100) * overdueDays
+    hasLiveCollectionTimeline
+      ? principalForPenalty * (getPenaltyRate(loan) / 100) * overdueDays
+      : 0
   );
   const amountPayable = roundMoney(principalForPenalty + overduePenalty);
   const amountLeft = roundMoney(Math.max(repaymentAmount - amountPaid, 0));

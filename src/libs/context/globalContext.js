@@ -558,10 +558,11 @@ export default function GlobalContextProvider(props) {
       ]);
       const sortedLoans = [...rawLoans]
         .map((loan) => {
-          const loanDate = new Date(loan.dop);
-          const timeDiff = loanDate.getTime() - tda.getTime();
-          const diffDate = timeDiff / (1000 * 3600 * 24);
-          const dur = parseInt(diffDate, 10);
+          const loanDate = loan?.dop ? new Date(loan.dop) : null;
+          const hasValidDueDate = loanDate && !Number.isNaN(loanDate.getTime());
+          const timeDiff = hasValidDueDate ? loanDate.getTime() - tda.getTime() : 0;
+          const diffDate = hasValidDueDate ? timeDiff / (1000 * 3600 * 24) : 0;
+          const dur = loan?.isDisbursed === true && hasValidDueDate ? parseInt(diffDate, 10) : 0;
 
           return {
             ...loan,
@@ -3469,21 +3470,19 @@ export default function GlobalContextProvider(props) {
     localStorage.setItem("loan", JSON.stringify(row));
     setLoan(row);
 
-    let tda = new Date();
-
-    let loanDate = new Date(row.dop);
-
-    let timeDiff = loanDate.getTime() - tda.getTime();
-
-    let diffDate = timeDiff / (1000 * 3600 * 24);
-
-    let dur = parseInt(diffDate);
-
-    let actDur = dur === -0 ? -1 : dur;
+    const tda = new Date();
+    const loanDate = row?.dop ? new Date(row.dop) : null;
+    const hasValidDueDate = loanDate && !Number.isNaN(loanDate.getTime());
+    const timeDiff = hasValidDueDate ? loanDate.getTime() - tda.getTime() : 0;
+    const diffDate = hasValidDueDate ? timeDiff / (1000 * 3600 * 24) : 0;
+    const dur = row?.isDisbursed === true && hasValidDueDate ? parseInt(diffDate, 10) : 0;
+    const actDur = dur === -0 ? -1 : dur;
 
     if (
       row.loanStatus === "Review" ||
       row.loanStatus === "Rejected" ||
+      row?.isDisbursed !== true ||
+      !hasValidDueDate ||
       actDur > 2
     )
       return _routeToPage("/loan-details");

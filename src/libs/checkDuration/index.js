@@ -177,7 +177,7 @@ const _getPreColLoans = async (loanData, customers = []) => {
   if (loanData === undefined || loanData.length === 0) return (loans = []);
 
   loanData.forEach((loan) => {
-    if (loan.caseStatus !== "Completed") {
+    if (loan.caseStatus !== "Completed" && loan.isDisbursed === true && loan.dop) {
       const actDur = getCalendarDayDifferenceByCountry(
         loan.dop,
         new Date(),
@@ -201,7 +201,12 @@ const _getColLoans = async (loanData, customers = []) => {
   if (loanData === undefined || loanData.length === 0) return (loans = []);
 
   loanData.forEach((loan) => {
-    if (loan.caseStatus !== "Completed" && loan.loanStatus !== "Review") {
+    if (
+      loan.caseStatus !== "Completed" &&
+      loan.loanStatus !== "Review" &&
+      loan.isDisbursed === true &&
+      loan.dop
+    ) {
       const actDur = getCalendarDayDifferenceByCountry(
         loan.dop,
         new Date(),
