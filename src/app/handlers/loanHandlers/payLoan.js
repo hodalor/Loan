@@ -1,4 +1,5 @@
 const Loans = require("../../models/loans");
+const { dedupeLoanRecords } = require("../../../libs/loanRecords");
 
 const normalizeLoanIdentifier = (value = "") => String(value || "").trim();
 
@@ -7,10 +8,18 @@ const _payLoan = async ({ id, payAmount }) => {
     const normalizedId = normalizeLoanIdentifier(id);
     if (!normalizedId) return false;
 
-    const loan =
-      (await Loans.findOne({ loanId: normalizedId })) ||
-      (await Loans.findOne({ ID: normalizedId })) ||
-      (await Loans.findById(normalizedId).catch(() => null));
+    let matchingLoans = await Loans.find({
+      $or: [{ loanId: normalizedId }, { ID: normalizedId }],
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    if (matchingLoans.length === 0) {
+      const directMatch = await Loans.findById(normalizedId).catch(() => null);
+      matchingLoans = directMatch ? [directMatch.toObject ? directMatch.toObject() : directMatch] : [];
+    }
+
+    const loan = dedupeLoanRecords(matchingLoans)[0];
 
     if (!loan) return false;
 
@@ -26,8 +35,15 @@ const _payLoan = async ({ id, payAmount }) => {
 
     let result = parseFloat(rep) - (parseFloat(amtPa) + parseFloat(payAmount));
 
-    const savedLoan = await Loans.findOneAndUpdate(
-      { _id: loan._id },
+    const nextPaymentRecords =
+      loan.paymentRecords === undefined
+        ? [{ datePaid: new Date(), amountPaid: payAmount }]
+        : [...loan.paymentRecords, { datePaid: new Date(), amountPaid: payAmount }];
+
+    const savedLoan = await Loans.updateMany(
+      {
+        $or: [{ loanId: normalizedId }, { ID: normalizedId }, { _id: loan._id }],
+      },
       {
         $set: {
           loanStatus: "Granted",
@@ -36,21 +52,12 @@ const _payLoan = async ({ id, payAmount }) => {
           dp: new Date(),
           amountPaid: JSON.stringify(parseFloat(amtPa) + parseFloat(payAmount)),
           caseStatus: result > 0 ? "Colection" : "Completed",
-          paymentRecords:
-            loan.paymentRecords === undefined
-              ? [{ datePaid: new Date(), amountPaid: payAmount }]
-              : [
-                  ...loan.paymentRecords,
-                  { datePaid: new Date(), amountPaid: payAmount },
-                ],
+          paymentRecords: nextPaymentRecords,
         },
-      },
-      {
-        new: true,
       }
     );
 
-    if (savedLoan) return true;
+    if (savedLoan?.modifiedCount >= 1 || savedLoan?.matchedCount >= 1) return true;
 
     if (!savedLoan) return false;
   } catch (error) {

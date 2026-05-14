@@ -21,6 +21,7 @@ const {
 const { getSystemConfig, getActiveCountryConfig } = require("../../services/systemConfig");
 const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
 const { logSystemEvent } = require("../../../libs/logger");
+const { dedupeLoanRecords, normalizeLoanBusinessId } = require("../../../libs/loanRecords");
 
 const router = express.Router();
 
@@ -259,15 +260,21 @@ const findGatewayTransactionByReference = async (reference = "") => {
   );
 };
 const findLoanRecordByBusinessId = async (loanId = "") => {
-  const normalizedLoanId = normalizeTransactionReference(loanId);
+  const normalizedLoanId = normalizeLoanBusinessId(loanId);
 
   if (!normalizedLoanId) return null;
 
-  return (
-    (await Loans.findOne({ ID: normalizedLoanId })) ||
-    (await Loans.findOne({ loanId: normalizedLoanId })) ||
-    (await Loans.findById(normalizedLoanId).catch(() => null))
-  );
+  const matchingLoans = await Loans.find({
+    $or: [{ ID: normalizedLoanId }, { loanId: normalizedLoanId }],
+  })
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .lean();
+
+  if (matchingLoans.length > 0) {
+    return dedupeLoanRecords(matchingLoans)[0] || null;
+  }
+
+  return await Loans.findById(normalizedLoanId).catch(() => null);
 };
 const ensureLoanLedgerRecord = async ({ userId = "", loanId = "", sourceLoan = null }) => {
   const normalizedLoanId = normalizeTransactionReference(loanId || sourceLoan?.ID || "");
@@ -982,7 +989,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
   const systemConfig = await getSystemConfig();
   const currentUserData = user.toObject();
-  const globalLoans = await Loans.find({ userId: user.userId }).lean();
+  const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
   const loanHistory = getUserLoanHistory(currentUserData, globalLoans);
   const transactionLoanId = normalizeTransactionReference(transaction.loanId || "");
   const sourceLoan = getLoanByBusinessId(loanHistory, transactionLoanId);
@@ -1968,7 +1975,7 @@ router.post("/portal/repayment-summary", async (req, res) => {
       });
     }
 
-    const globalLoans = await Loans.find({ userId: user.userId }).lean();
+    const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
     const activeLoan = buildActiveLoanView(user, systemConfig, globalLoans);
     if (!activeLoan || !activeLoan.canMakePayment) {
       return res.status(400).json({
@@ -2028,7 +2035,7 @@ router.post("/portal/extension-summary", async (req, res) => {
       });
     }
 
-    const globalLoans = await Loans.find({ userId: user.userId }).lean();
+    const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
     const activeLoan = buildActiveLoanView(user, systemConfig, globalLoans);
     if (!activeLoan || !activeLoan.canExtend) {
       return res.status(400).json({
