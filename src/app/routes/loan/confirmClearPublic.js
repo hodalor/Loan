@@ -1,6 +1,7 @@
 const express = require("express");
 const Loans = require("../../models/loans");
 const { upload } = require("../../../libs/uploadImage");
+const { applyRepaymentToLoanLedger } = require("../../services/loanRepayment");
 
 const router = express.Router();
 const _clearLoan = require("../../handlers/userHandlers/clearUserLoan");
@@ -65,34 +66,18 @@ router.patch("/confirmClearCaseP/:ID", upload.single("proof2"), async (req, res)
     const isPartialClear = loan.clearanceRecord.clearRemainingAmount === false;
     const amountJustCleared = Number.parseFloat(loan.clearanceRecord.amountPaid || 0);
 
-    loan.isNewLoan = isPartialClear;
-    loan.paymentStatus = isPartialClear ? "Not paid" : "Paid";
-    loan.loanStatus = "Granted";
-    loan.dp = new Date();
-    loan.caseStatus = isPartialClear ? "Colection" : "Completed";
-    loan.amountPaid = Number.parseFloat(loan.amountPaid || 0) + amountJustCleared;
-    loan.paymentRecords =
-      loan.paymentRecords === undefined
-        ? [
-            {
-              datePaid: new Date(),
-              amountPaid: amountJustCleared,
-            },
-          ]
-        : [
-            ...loan.paymentRecords,
-            {
-              datePaid: new Date(),
-              amountPaid: amountJustCleared,
-            },
-          ];
+    const paidAt = new Date();
+    const ledgerResult = await applyRepaymentToLoanLedger({
+      loanId: ID,
+      amountJustCleared,
+      paidAt,
+      clearOverride: !isPartialClear,
+    });
 
-    let savedLoan = await loan.save();
-
-    if (savedLoan) {
+    if (ledgerResult) {
       const resp = await _clearLoan({
         ID,
-        dp: loan.dp,
+        dp: paidAt,
         userId: loan.userId,
         clear: loan.clearanceRecord.clearRemainingAmount,
         amt: amountJustCleared,
@@ -111,7 +96,7 @@ router.patch("/confirmClearCaseP/:ID", upload.single("proof2"), async (req, res)
         });
     }
 
-    if (!savedLoan)
+    if (!ledgerResult)
       return res.status(400).json({
         success: 0,
         message: "could not clear loan",

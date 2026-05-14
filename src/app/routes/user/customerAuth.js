@@ -9,7 +9,6 @@ const { upload } = require("../../../libs/uploadImage");
 const config = require("../../../config");
 const { _encrypt, _decrypt } = require("../../../libs/encrypt");
 const _generateString = require("../../../libs/generateID");
-const _payLoan = require("../../handlers/loanHandlers/payLoan");
 const _saveLoan = require("../../handlers/loanHandlers/saveLoan");
 const _clearLoan = require("../../handlers/userHandlers/clearUserLoan");
 const _createExt = require("../../handlers/userHandlers/createExt");
@@ -22,6 +21,7 @@ const { getSystemConfig, getActiveCountryConfig } = require("../../services/syst
 const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
 const { logSystemEvent } = require("../../../libs/logger");
 const { dedupeLoanRecords, normalizeLoanBusinessId } = require("../../../libs/loanRecords");
+const { applyRepaymentToLoanLedger } = require("../../services/loanRepayment");
 
 const router = express.Router();
 
@@ -339,7 +339,7 @@ const mergeLoanCollections = (user = {}, globalLoans = []) => {
     (loan) => loan?.ID && !knownIds.has(loan.ID)
   );
 
-  return [...mergedLoans, ...extraGlobalLoans].sort(
+  return dedupeLoanRecords([...mergedLoans, ...extraGlobalLoans]).sort(
     (left, right) =>
       new Date(right.doa || right.createdAt || 0) - new Date(left.doa || left.createdAt || 0)
   );
@@ -1001,13 +1001,19 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
   if (transaction.transactionType === "repayment") {
     const payAmount = toMoney(transaction.amount || 0);
+    const ledgerResult = await applyRepaymentToLoanLedger({
+      loanId: targetLoanView.loanId,
+      amountJustCleared: payAmount,
+      paidAt: new Date(),
+      clearOverride: payAmount >= toMoney(targetLoanView.totalDue || 0),
+    });
     const globalLoan = await ensureLoanLedgerRecord({
       userId: user.userId,
       loanId: targetLoanView.loanId,
       sourceLoan,
     });
 
-    if (!globalLoan) {
+    if (!globalLoan || !ledgerResult) {
       throw new Error("Loan record not found.");
     }
 
@@ -1018,12 +1024,8 @@ const applyPortalGatewayTransaction = async (transaction) => {
       clear: payAmount >= toMoney(targetLoanView.totalDue || 0),
       amt: payAmount,
     });
-    const loanResult = await _payLoan({
-      id: targetLoanView.loanId || globalLoan.ID || globalLoan.loanId || globalLoan._id,
-      payAmount,
-    });
 
-    if (!userResult || !loanResult) {
+    if (!userResult) {
       throw new Error("Payment was confirmed but the loan record could not be updated.");
     }
   }
@@ -1479,7 +1481,9 @@ const buildPortalSummaryData = async (phone) => {
 
   if (!updatedUser) return null;
 
-  const refreshedLoans = await Loans.find({ userId: updatedUser.userId }).lean();
+  const refreshedLoans = dedupeLoanRecords(
+    await Loans.find({ userId: updatedUser.userId }).lean()
+  );
 
   return {
     loanHistory: refreshedLoans,
@@ -2276,6 +2280,12 @@ router.post("/portal/pay-loan", async (req, res) => {
       });
     }
 
+    const ledgerResult = await applyRepaymentToLoanLedger({
+      loanId: activeLoanView.loanId,
+      amountJustCleared: payAmount,
+      paidAt: new Date(),
+      clearOverride: payAmount >= toMoney(activeLoanView.totalDue || 0),
+    });
     const userResult = await _clearLoan({
       ID: activeLoanView.loanId,
       dp: new Date(),
@@ -2283,12 +2293,8 @@ router.post("/portal/pay-loan", async (req, res) => {
       clear: payAmount >= toMoney(activeLoanView.totalDue || 0),
       amt: payAmount,
     });
-    const loanResult = await _payLoan({
-      id: activeLoanView.loanId || globalLoan.ID || globalLoan.loanId || globalLoan._id,
-      payAmount,
-    });
 
-    if (!userResult || !loanResult) {
+    if (!userResult || !ledgerResult) {
       await logSystemEvent({
         level: "error",
         category: "payment",
