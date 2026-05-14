@@ -1,20 +1,28 @@
+const mongoose = require("mongoose");
 const Loans = require("../../models/loans");
+
+const toNumber = (value = 0) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
 const _payLoan = async ({ id, payAmount }) => {
   try {
-    const loan = await Loans.findOne({ loanId: id.toString() });
+    const lookupValue = String(id || "").trim();
+    if (!lookupValue) return false;
 
-    let rep =
-      loan.repaymentAmount === "" || loan.repaymentAmount === undefined
-        ? 0
-        : loan.repaymentAmount;
+    const matchers = [{ loanId: lookupValue }, { ID: lookupValue }];
+    if (mongoose.Types.ObjectId.isValid(lookupValue)) {
+      matchers.push({ _id: lookupValue });
+    }
 
-    let amtPa =
-      loan.amountPaid === "" || loan.amountPaid === undefined
-        ? 0
-        : loan.amountPaid;
+    const loan = await Loans.findOne({ $or: matchers });
+    if (!loan) return false;
 
-    let result = parseFloat(rep) - (parseFloat(amtPa) + parseFloat(payAmount));
+    const rep = toNumber(loan.repaymentAmount);
+    const amtPa = toNumber(loan.amountPaid);
+    const nextPaidAmount = amtPa + toNumber(payAmount);
+    const result = rep - nextPaidAmount;
 
     const savedLoan = await Loans.findOneAndUpdate(
       { _id: loan._id },
@@ -24,14 +32,14 @@ const _payLoan = async ({ id, payAmount }) => {
           paymentStatus: result > 0 ? "Not paid" : "Paid",
           isNewLoan: result > 0 ? true : false,
           dp: new Date(),
-          amountPaid: JSON.stringify(parseFloat(amtPa) + parseFloat(payAmount)),
+          amountPaid: JSON.stringify(nextPaidAmount),
           caseStatus: result > 0 ? "Colection" : "Completed",
           paymentRecords:
             loan.paymentRecords === undefined
-              ? [{ datePaid: new Date(), amountPaid: payAmount }]
+              ? [{ datePaid: new Date(), amountPaid: toNumber(payAmount) }]
               : [
                   ...loan.paymentRecords,
-                  { datePaid: new Date(), amountPaid: payAmount },
+                  { datePaid: new Date(), amountPaid: toNumber(payAmount) },
                 ],
         },
       },
