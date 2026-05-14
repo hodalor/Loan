@@ -15,6 +15,7 @@ import OrderRepayment from "./Order Center/order repayment";
 import OrderRepaymentReview from "./Order Center/order repayment review";
 import ApplyExtension from "./Order Center/apply extension";
 import FailedDisbursements from "./Order Center/failed disburse";
+import BouncedBackDisbursements from "./Order Center/Bounced Back";
 import DistributeCreditCases from "./Credit audit center/Distribute credit cases";
 import ListOfCreditCases from "./Credit audit center/List of credit cases";
 import AnalysisOfCreditAudit from "./Credit audit center/analysis of credit audit";
@@ -253,6 +254,10 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
             <Route
               path="/failed-disbursements"
               component={FailedDisbursements}
+            />
+            <Route
+              path="/bounced-back-disbursements"
+              component={BouncedBackDisbursements}
             />
             <Route
               path="/manual-disbursement"

@@ -11,6 +11,7 @@ import {
   _createPreCollCallRecord,
   _createStaffGroup,
   _createUser,
+  _cancelBouncedDisbursement,
   _deleteStaffGroup,
   _fetchDataHandler,
   _getCustomerById,
@@ -3449,6 +3450,62 @@ export default function GlobalContextProvider(props) {
     return response;
   };
 
+  const _cancelBouncedDisbursementAction = async ({ loanId, remark }) => {
+    if (!_hasAccess("action:disbursement:retry"))
+      return setAlerts({
+        ...alerts,
+        type: "warning",
+        msg: "You do not have permission to cancel bounced-back disbursements",
+        open: true,
+      });
+
+    setGlobalLoader(true);
+    const response = await _cancelBouncedDisbursement({ loanId, remark });
+
+    if (response?.data?.loanId) {
+      setLoans((current) =>
+        (Array.isArray(current) ? current : []).map((item) =>
+          item?.ID === response.data.loanId
+            ? {
+                ...item,
+                isDisbursed: false,
+                payoutStatus: response.data.payoutStatus || item.payoutStatus,
+                payoutMessage: response.data.payoutMessage || item.payoutMessage,
+              }
+            : item
+        )
+      );
+
+      setLoan((current) => {
+        if (!current?.ID || current.ID !== response.data.loanId) {
+          return current;
+        }
+
+        const nextLoan = {
+          ...current,
+          isDisbursed: false,
+          payoutStatus: response.data.payoutStatus || current.payoutStatus,
+          payoutMessage: response.data.payoutMessage || current.payoutMessage,
+        };
+
+        localStorage.setItem("loan", JSON.stringify(nextLoan));
+        return nextLoan;
+      });
+    }
+
+    await _getData();
+    setGlobalLoader(false);
+
+    setAlerts({
+      ...alerts,
+      type: response.success === 1 ? "success" : "error",
+      msg: response.message,
+      open: true,
+    });
+
+    return response;
+  };
+
   const _handleSeachDis = async () => {
     setGlobalLoader(true);
 
@@ -5058,6 +5115,7 @@ export default function GlobalContextProvider(props) {
         handleClearDisbursed,
         handleMarkManualDisbursed,
         _retryFailedDisbursement,
+        _cancelBouncedDisbursement: _cancelBouncedDisbursementAction,
         _handleSeachDis,
         disbursed,
         _handleClearSearch,

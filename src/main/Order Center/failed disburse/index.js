@@ -4,13 +4,18 @@ import { _getSystemConfig } from "../../../handlers";
 import { channelLabels } from "../../../libs/systemConfig";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 
-export default function FailedDisbursements() {
+export default function FailedDisbursements({
+  queueMode = "failed",
+  title = "Failed Disbursements",
+  description = "Retry approved loans that failed on automatic payout",
+}) {
   const {
     customers,
     loans,
     globalLoader,
     _handleOrderlistDetails,
     _retryFailedDisbursement,
+    _cancelBouncedDisbursement,
     _hasAccess,
   } = React.useContext(GlobalContext);
   const canRetryDisbursement = _hasAccess("action:disbursement:retry");
@@ -55,16 +60,18 @@ export default function FailedDisbursements() {
   }, []);
 
   const rows = React.useMemo(() => {
-    const failedLoans = Array.isArray(loans)
-      ? loans.filter(
-          (loan) =>
+    const queueLoans = Array.isArray(loans)
+      ? loans.filter((loan) => {
+          const payoutStatus = String(loan?.payoutStatus || "").trim().toLowerCase();
+          return (
             loan.loanStatus === "Granted" &&
             loan.isDisbursed !== true &&
-            loan.payoutStatus === "failed"
-        )
+            payoutStatus === String(queueMode || "").trim().toLowerCase()
+          );
+        })
       : [];
 
-    return failedLoans.map((loan, index) => {
+    return queueLoans.map((loan, index) => {
       const customer =
         Array.isArray(customers) && customers.length > 0
           ? customers.find((person) => person.userId === loan.userId)
@@ -86,7 +93,7 @@ export default function FailedDisbursements() {
         message: loan.payoutMessage || "Gateway request failed",
       };
     });
-  }, [customers, loans]);
+  }, [customers, loans, queueMode]);
 
   const columns = [
     { key: "loanId", label: "Order ID", cellClassName: "font-semibold text-slate-900" },
@@ -149,29 +156,52 @@ export default function FailedDisbursements() {
       key: "actions",
       label: "Action",
       render: (row) => (
-        <button
-          type="button"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!canRetryDisbursement || activeRow === row.loanId}
-          onClick={(event) => {
-            event.stopPropagation();
-            const channel =
-              selectedChannels[row.loanId] || row.provider || "zynlepay";
-            setActiveRow(row.loanId);
-            _retryFailedDisbursement({
-              loanId: row.loanId,
-              channel,
-              operator: selectedOperators[row.loanId] || row.paymentOperator || "",
-            }).finally(() => setActiveRow(""));
-          }}
-        >
-          <i
-            className={`fa ${
-              activeRow === row.loanId ? "fa-spinner fa-spin" : "fa-rotate-right"
-            } text-sm`}
-          />
-          {activeRow === row.loanId ? "Sending..." : "Resend"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!canRetryDisbursement || activeRow === row.loanId}
+            onClick={(event) => {
+              event.stopPropagation();
+              const channel =
+                selectedChannels[row.loanId] || row.provider || "zynlepay";
+              setActiveRow(row.loanId);
+              _retryFailedDisbursement({
+                loanId: row.loanId,
+                channel,
+                operator: selectedOperators[row.loanId] || row.paymentOperator || "",
+              }).finally(() => setActiveRow(""));
+            }}
+          >
+            <i
+              className={`fa ${
+                activeRow === row.loanId ? "fa-spinner fa-spin" : "fa-rotate-right"
+              } text-sm`}
+            />
+            {activeRow === row.loanId ? "Sending..." : "Retry"}
+          </button>
+          {queueMode === "bounced-back" ? (
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canRetryDisbursement || activeRow === row.loanId}
+              onClick={(event) => {
+                event.stopPropagation();
+                setActiveRow(row.loanId);
+                _cancelBouncedDisbursement({
+                  loanId: row.loanId,
+                }).finally(() => setActiveRow(""));
+              }}
+            >
+              <i
+                className={`fa ${
+                  activeRow === row.loanId ? "fa-spinner fa-spin" : "fa-ban"
+                } text-sm`}
+              />
+              {activeRow === row.loanId ? "Saving..." : "Cancel"}
+            </button>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -182,15 +212,15 @@ export default function FailedDisbursements() {
         <div className="app-panel-header">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">
-              Failed Disbursements
+              {title}
             </h3>
             <p className="text-sm text-slate-500">
-              Retry approved loans that failed on automatic payout
+              {description}
             </p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
             <i className="fa fa-circle-exclamation text-sm" />
-            {rows.length} failed loans
+            {rows.length} {queueMode === "bounced-back" ? "bounced-back" : "failed"} loans
           </div>
         </div>
         {!canRetryDisbursement ? (
@@ -200,7 +230,9 @@ export default function FailedDisbursements() {
         ) : null}
         <div className="app-panel-body space-y-4">
           <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Choose a channel and click resend, or open a row to inspect the full order.
+            {queueMode === "bounced-back"
+              ? "These loans were first accepted as pending, then later came back failed from the callback. Retry them or cancel them from this queue."
+              : "Choose a channel and click retry, or open a row to inspect the full order."}
           </div>
           {globalLoader ? <div className="text-sm text-slate-500">Loading failed payouts...</div> : null}
           <SimpleDataTable
@@ -208,7 +240,11 @@ export default function FailedDisbursements() {
             rows={rows}
             rowKey="id"
             dense
-            emptyMessage="No failed disbursements found."
+            emptyMessage={
+              queueMode === "bounced-back"
+                ? "No bounced-back disbursements found."
+                : "No failed disbursements found."
+            }
             onRowClick={(row) => _handleOrderlistDetails(row)}
           />
         </div>

@@ -76,6 +76,11 @@ const rawNavigationItems = [
         path: "/failed-disbursements",
         roles: ["super-admin", "admin"],
       },
+      {
+        label: "Bounced Back",
+        path: "/bounced-back-disbursements",
+        roles: ["super-admin", "admin"],
+      },
     ],
   },
   {
