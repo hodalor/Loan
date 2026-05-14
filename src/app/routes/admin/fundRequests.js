@@ -47,6 +47,41 @@ const buildHistoryEntry = ({ status, message, actor }) => ({
   actor: buildActor(actor),
 });
 
+const syncRequestDestinationFromEmployee = async (record = {}) => {
+  const employeeUserId = String(record.employeeUserId || "").trim();
+  if (!employeeUserId) {
+    return null;
+  }
+
+  const employee = await Admins.findOne({ userId: employeeUserId }).lean();
+  if (!employee) {
+    return null;
+  }
+
+  record.employeeUserName = String(employee.userName || record.employeeUserName || "").trim();
+  record.employeeName =
+    `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || record.employeeName || "";
+  record.department = String(employee.department || record.department || "").trim();
+  record.staffGroupId = String(employee.staffGroupId || record.staffGroupId || "").trim();
+  record.staffGroupName = String(employee.staffGroupName || record.staffGroupName || "").trim();
+  record.phoneNumber = String(employee.phone || record.phoneNumber || "").trim();
+  record.salaryNumber = String(employee.salaryNumber || record.salaryNumber || "").trim();
+  record.salaryOperator = String(employee.salaryOperator || record.salaryOperator || "").trim();
+
+  if (record.requestType === "payment") {
+    record.destinationNumber = String(
+      record.destinationNumber || employee.salaryNumber || ""
+    ).trim();
+    record.destinationOperator = String(
+      record.destinationOperator || employee.salaryOperator || ""
+    ).trim();
+  } else {
+    record.destinationNumber = String(record.destinationNumber || employee.phone || "").trim();
+  }
+
+  return employee;
+};
+
 const nextStatusAfterFirstApproval = (request = {}) =>
   request.requestType === "payment" ? "pending_second_approval" : "completed";
 
@@ -385,12 +420,45 @@ router.patch("/fund-requests/decision", async (req, res) => {
             })
           );
         } else {
+          await syncRequestDestinationFromEmployee(record);
           record.secondApproval = {
             status: "approved",
             remark,
             actedAt: new Date(),
             actor: buildActor(actor),
           };
+
+          if (!String(record.destinationNumber || "").trim()) {
+            record.gatewayStatus = "validation-error";
+            record.gatewayMessage = "Destination number is required before payment can be sent.";
+            record.status = "failed";
+            record.history.push(
+              buildHistoryEntry({
+                status: "failed",
+                message: "Payment failed because the destination number is missing.",
+                actor,
+              })
+            );
+            await record.save();
+            updated.push(serializeRequest(record.toObject()));
+            continue;
+          }
+
+          if (!String(record.destinationOperator || "").trim()) {
+            record.gatewayStatus = "validation-error";
+            record.gatewayMessage = "Destination operator is required before payment can be sent.";
+            record.status = "failed";
+            record.history.push(
+              buildHistoryEntry({
+                status: "failed",
+                message: "Payment failed because the destination operator is missing.",
+                actor,
+              })
+            );
+            await record.save();
+            updated.push(serializeRequest(record.toObject()));
+            continue;
+          }
 
           const payoutResult = await processInternalTransfer({
             amount: record.amount,
@@ -473,6 +541,32 @@ router.post("/fund-requests/:id/resend", async (req, res) => {
     }
 
     if (record.requestType === "payment") {
+      await syncRequestDestinationFromEmployee(record);
+
+      if (!String(record.destinationNumber || "").trim()) {
+        record.gatewayStatus = "validation-error";
+        record.gatewayMessage =
+          "Salary number is still missing on this employee profile. Update it before resend.";
+        await record.save();
+        return res.status(400).json({
+          success: 0,
+          message: record.gatewayMessage,
+          data: serializeRequest(record.toObject()),
+        });
+      }
+
+      if (!String(record.destinationOperator || "").trim()) {
+        record.gatewayStatus = "validation-error";
+        record.gatewayMessage =
+          "Salary operator is still missing on this employee profile. Update it before resend.";
+        await record.save();
+        return res.status(400).json({
+          success: 0,
+          message: record.gatewayMessage,
+          data: serializeRequest(record.toObject()),
+        });
+      }
+
       record.status = "pending_second_approval";
       record.history.push(
         buildHistoryEntry({
