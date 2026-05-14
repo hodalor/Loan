@@ -47,6 +47,26 @@ const buildHistoryEntry = ({ status, message, actor }) => ({
   actor: buildActor(actor),
 });
 
+const findEmployeeRecord = async ({
+  employeeUserId = "",
+  employeeUserName = "",
+} = {}) => {
+  const normalizedUserId = String(employeeUserId || "").trim();
+  const normalizedUserName = String(employeeUserName || "").trim();
+
+  if (normalizedUserId) {
+    const byUserId = await Admins.findOne({ userId: normalizedUserId }).lean();
+    if (byUserId) return byUserId;
+  }
+
+  if (normalizedUserName) {
+    const byUserName = await Admins.findOne({ userName: normalizedUserName }).lean();
+    if (byUserName) return byUserName;
+  }
+
+  return null;
+};
+
 const syncRequestDestinationFromEmployee = async (record = {}) => {
   const employeeUserId = String(record.employeeUserId || "").trim();
   if (!employeeUserId) {
@@ -166,9 +186,12 @@ router.get("/fund-requests", async (req, res) => {
 
 router.post("/fund-requests", async (req, res) => {
   try {
-    const { employeeUserId = "" } = req.body;
+    const { employeeUserId = "", employeeUserName = "" } = req.body;
     const actor = await getActorFromRequest(req);
-    const employee = await Admins.findOne({ userId: String(employeeUserId).trim() }).lean();
+    const employee = await findEmployeeRecord({
+      employeeUserId,
+      employeeUserName,
+    });
 
     if (!employee) {
       return res.status(404).json({
