@@ -77,7 +77,8 @@ const getLoanOfficerPool = (loan = {}) =>
     .filter(Boolean);
 
 const getPaymentEvents = (loan = {}) => {
-  const events = (Array.isArray(loan.paymentRecords) ? loan.paymentRecords : [])
+  const repaymentTarget = toNumber(loan?.repaymentAmount);
+  const rawEvents = (Array.isArray(loan.paymentRecords) ? loan.paymentRecords : [])
     .map((record, index) => {
       const paidDate = toStartOfDay(record?.datePaid);
       const amountPaid = toNumber(record?.amountPaid);
@@ -93,6 +94,40 @@ const getPaymentEvents = (loan = {}) => {
     .filter(Boolean)
     .sort((left, right) => left.paidDate - right.paidDate);
 
+  const seen = new Set();
+  const events = [];
+  let runningApplied = 0;
+
+  rawEvents.forEach((event) => {
+    const dedupeKey = `${event.paidDate.toISOString()}|${event.amountPaid.toFixed(2)}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+
+    let nextAmount = event.amountPaid;
+    const remaining = repaymentTarget > 0 ? Math.max(repaymentTarget - runningApplied, 0) : nextAmount;
+
+    if (repaymentTarget > 0) {
+      if (nextAmount > remaining && nextAmount > runningApplied) {
+        const snapshotIncrement = nextAmount - runningApplied;
+        if (snapshotIncrement > 0 && snapshotIncrement <= remaining + 0.009) {
+          nextAmount = snapshotIncrement;
+        } else {
+          nextAmount = remaining;
+        }
+      } else {
+        nextAmount = Math.min(nextAmount, remaining);
+      }
+    }
+
+    if (nextAmount <= 0) return;
+
+    runningApplied += nextAmount;
+    events.push({
+      ...event,
+      amountPaid: nextAmount,
+    });
+  });
+
   if (events.length > 0) return events;
 
   const fallbackPaidDate = toStartOfDay(loan.dp);
@@ -104,7 +139,8 @@ const getPaymentEvents = (loan = {}) => {
     {
       id: `${loan.ID || loan.loanId || "loan"}-fallback`,
       paidDate: fallbackPaidDate,
-      amountPaid: fallbackAmountPaid,
+      amountPaid:
+        repaymentTarget > 0 ? Math.min(fallbackAmountPaid, repaymentTarget) : fallbackAmountPaid,
     },
   ];
 };
@@ -153,7 +189,12 @@ const buildRecoveryRows = ({
 
     existing.grantDate = existing.grantDate < grantDate ? existing.grantDate : grantDate;
     existing.totalRepayment += repaymentAmount;
-    existing.totalRecovered += toNumber(loan?.amountPaid);
+    const recoveredForLoan = Math.min(
+      repaymentAmount,
+      getPaymentEvents(loan).reduce((sum, event) => sum + toNumber(event.amountPaid), 0)
+    );
+
+    existing.totalRecovered += recoveredForLoan;
     existing.loans.push({
       ...loan,
       grantDate,

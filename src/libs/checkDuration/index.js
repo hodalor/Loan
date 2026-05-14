@@ -38,7 +38,8 @@ const getLatestCallRecordBeforePayment = (records = [], field = "", paidDate = n
 };
 
 const normalizePaymentEvents = (loan = {}) => {
-  const events = (Array.isArray(loan?.paymentRecords) ? loan.paymentRecords : [])
+  const repaymentTarget = toNumber(loan?.repaymentAmount);
+  const rawEvents = (Array.isArray(loan?.paymentRecords) ? loan.paymentRecords : [])
     .map((record, index) => {
       const paidDate = toValidDate(record?.datePaid);
       const amountPaid = toNumber(record?.amountPaid);
@@ -51,10 +52,45 @@ const normalizePaymentEvents = (loan = {}) => {
         amountPaid,
       };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .sort((left, right) => left.paidDate - right.paidDate);
+
+  const seen = new Set();
+  const events = [];
+  let runningApplied = 0;
+
+  rawEvents.forEach((event) => {
+    const dedupeKey = `${event.paidDate.toISOString()}|${event.amountPaid.toFixed(2)}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+
+    let nextAmount = event.amountPaid;
+    const remaining = repaymentTarget > 0 ? Math.max(repaymentTarget - runningApplied, 0) : nextAmount;
+
+    if (repaymentTarget > 0) {
+      if (nextAmount > remaining && nextAmount > runningApplied) {
+        const snapshotIncrement = nextAmount - runningApplied;
+        if (snapshotIncrement > 0 && snapshotIncrement <= remaining + 0.009) {
+          nextAmount = snapshotIncrement;
+        } else {
+          nextAmount = remaining;
+        }
+      } else {
+        nextAmount = Math.min(nextAmount, remaining);
+      }
+    }
+
+    if (nextAmount <= 0) return;
+
+    runningApplied += nextAmount;
+    events.push({
+      ...event,
+      amountPaid: nextAmount,
+    });
+  });
 
   if (events.length > 0) {
-    return events.sort((left, right) => left.paidDate - right.paidDate);
+    return events;
   }
 
   const fallbackPaidDate = toValidDate(loan?.dp);
@@ -66,7 +102,8 @@ const normalizePaymentEvents = (loan = {}) => {
     {
       id: `${loan.ID || loan.loanId || "loan"}-payment-fallback`,
       paidDate: fallbackPaidDate,
-      amountPaid: fallbackAmountPaid,
+      amountPaid:
+        repaymentTarget > 0 ? Math.min(fallbackAmountPaid, repaymentTarget) : fallbackAmountPaid,
     },
   ];
 };
@@ -159,7 +196,7 @@ const buildDepartmentPaymentSummaries = (loan = {}) => {
 
   return Object.values(aggregated).map((summary) => ({
     ...summary,
-    overallAmountPaid: toNumber(loan?.amountPaid).toFixed(2),
+    overallAmountPaid: Math.min(toNumber(loan?.amountPaid), repaymentAmount || Number.MAX_SAFE_INTEGER).toFixed(2),
     amountPaid: summary.amountPaid.toFixed(2),
     departmentPaymentStatus:
       isSettledPayment(loan?.paymentStatus) &&
