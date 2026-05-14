@@ -197,11 +197,29 @@ const mapOperatorToPaystackBankCode = (operator = "") => {
 };
 
 const resolvePaymentMethod = (user, loan) => {
-  if (!user || !Array.isArray(user.paymentMethods)) return null;
+  const matchedMethod =
+    user && Array.isArray(user.paymentMethods)
+      ? user.paymentMethods.find((item) => item.method === loan.paymentMethod) || null
+      : null;
+  const normalizedOperator = String(loan?.paymentOperator || "").trim();
 
-  return (
-    user.paymentMethods.find((item) => item.method === loan.paymentMethod) || null
-  );
+  if (matchedMethod) {
+    return {
+      ...matchedMethod,
+      operator: normalizedOperator || matchedMethod.operator || "",
+    };
+  }
+
+  if (loan?.paymentMethod) {
+    return {
+      method: loan.paymentMethod,
+      operator: normalizedOperator,
+      email: "",
+      isVerified: false,
+    };
+  }
+
+  return null;
 };
 
 const isTruthyGatewayResponse = (response = {}) => {

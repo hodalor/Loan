@@ -359,6 +359,11 @@ const loanSchema = new mongoose.Schema({
     required: false,
     unique: false,
   },
+  paymentOperator: {
+    type: String,
+    required: false,
+    unique: false,
+  },
   whereHeard: {
     type: String,
     required: false,

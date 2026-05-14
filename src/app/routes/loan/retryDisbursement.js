@@ -11,7 +11,7 @@ const router = express.Router();
 router.post("/retry-disbursement/:ID", async (req, res) => {
   try {
     const loanId = req.params.ID;
-    const { channel } = req.body || {};
+    const { channel, operator } = req.body || {};
 
     const loan = await Loan.findOne({ ID: loanId });
     if (!loan) {
@@ -28,6 +28,23 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
         : systemConfig.disbursementGateway || systemConfig.activeChannel;
 
     const user = await Users.findOne({ userId: loan.userId });
+    const selectedOperator = String(operator || "").trim();
+
+    if (selectedOperator) {
+      loan.paymentOperator = selectedOperator;
+
+      if (user && Array.isArray(user.paymentMethods)) {
+        user.paymentMethods = user.paymentMethods.map((item) =>
+          String(item?.method || "").trim() === String(loan.paymentMethod || "").trim()
+            ? {
+                ...item,
+                operator: selectedOperator,
+              }
+            : item
+        );
+      }
+    }
+
     const payoutResult = await processLoanDisbursement({
       loan,
       user,
@@ -50,6 +67,9 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
     loan.payoutMessage = payoutResult.message;
 
     await loan.save();
+    if (selectedOperator && user) {
+      await user.save();
+    }
 
     await syncUserLoanState({
       userId: loan.userId,
@@ -62,6 +82,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
         payoutStatus: loan.payoutStatus,
         payoutReference: loan.payoutReference,
         payoutMessage: loan.payoutMessage,
+        paymentOperator: loan.paymentOperator || "",
       },
     });
 
@@ -82,6 +103,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
         loanId: loan.ID,
         customerId: loan.userId,
         provider: selectedChannel,
+        operator: loan.paymentOperator || "",
         payoutReference: loan.payoutReference,
       },
       details: payoutResult.raw || null,
@@ -97,6 +119,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
       data: {
         loanId: loan.ID,
         provider: loan.disbursementProvider,
+        operator: loan.paymentOperator || "",
         payoutStatus: loan.payoutStatus,
         payoutMessage: loan.payoutMessage,
       },
@@ -117,6 +140,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
       metadata: {
         loanId: req.params?.ID || "",
         requestedChannel: req.body?.channel || "",
+        requestedOperator: req.body?.operator || "",
       },
     });
     return res.status(500).json({

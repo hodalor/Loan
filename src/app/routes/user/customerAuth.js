@@ -84,7 +84,7 @@ const countSettledLoans = (user = {}) =>
   ).length;
 const getDefaultPaymentMethod = (user = {}) => ({
   method: sanitizePhone(user.phone || ""),
-  operator: "Default",
+  operator: "",
   email: user.email || "",
   isVerified: false,
 });
@@ -2904,6 +2904,7 @@ router.post("/portal/apply-loan", async (req, res) => {
     const useLoan = String(req.body?.useLoan || "Personal needs").trim();
     const acceptedTerms = Boolean(req.body?.acceptedTerms);
     const selectedMethod = sanitizePhone(req.body?.paymentMethod || "");
+    const selectedOperator = String(req.body?.paymentOperator || "").trim();
 
     if (!phone || !termKey || Number.isNaN(amount)) {
       return res.status(400).json({
@@ -2965,11 +2966,30 @@ router.post("/portal/apply-loan", async (req, res) => {
     const paymentMethods = getPortalPaymentMethods(user);
     const payoutMethod =
       paymentMethods.find((method) => method.method === selectedMethod) || paymentMethods[0];
+    const activeCountryProfile = resolveCountryProfile({
+      systemConfig,
+      customer: user,
+      access,
+    });
+    const availableNetworks = Array.isArray(activeCountryProfile.mobileMoneyNetworks)
+      ? activeCountryProfile.mobileMoneyNetworks
+      : [];
+    const isMobileMoneyPayout = !String(payoutMethod?.method || "").includes("@");
+    const resolvedPaymentOperator = String(
+      selectedOperator || payoutMethod?.operator || ""
+    ).trim();
 
     if (!payoutMethod?.method) {
       return res.status(400).json({
         success: 0,
         message: "No payout method is available on this profile yet.",
+      });
+    }
+
+    if (isMobileMoneyPayout && availableNetworks.length > 0 && !resolvedPaymentOperator) {
+      return res.status(400).json({
+        success: 0,
+        message: "Select the mobile money provider for this payout number before continuing.",
       });
     }
 
@@ -2985,6 +3005,7 @@ router.post("/portal/apply-loan", async (req, res) => {
       repaymentAmount: calculations.totalRepayment,
       usage: useLoan,
       paymentMethod: payoutMethod.method,
+      paymentOperator: resolvedPaymentOperator,
       whereHeard: "Web Portal",
       facialRecog: user.userImage || "",
       dop: null,
@@ -3011,9 +3032,25 @@ router.post("/portal/apply-loan", async (req, res) => {
     };
 
     user.loan = loanData;
-    if (!Array.isArray(user.paymentMethods) || user.paymentMethods.length === 0) {
-      user.paymentMethods = paymentMethods;
+    const normalizedPaymentMethods = Array.isArray(user.paymentMethods) ? [...user.paymentMethods] : [];
+    const matchedMethodIndex = normalizedPaymentMethods.findIndex(
+      (method) => method?.method === payoutMethod.method
+    );
+
+    if (matchedMethodIndex >= 0) {
+      normalizedPaymentMethods[matchedMethodIndex] = {
+        ...normalizedPaymentMethods[matchedMethodIndex],
+        operator:
+          resolvedPaymentOperator || normalizedPaymentMethods[matchedMethodIndex]?.operator || "",
+      };
+    } else if (payoutMethod?.method) {
+      normalizedPaymentMethods.push({
+        ...payoutMethod,
+        operator: resolvedPaymentOperator,
+      });
     }
+
+    user.paymentMethods = normalizedPaymentMethods.length > 0 ? normalizedPaymentMethods : paymentMethods;
 
     await user.save();
     loans.paymentStatus = loanData.paymentStatus;
