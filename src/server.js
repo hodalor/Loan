@@ -107,6 +107,7 @@ app.use("/loans", loan.unassignPreColCases);
 app.use("/loans", loan.getLoans);
 app.use("/loans", loan.getLoansByAdminID);
 app.use("/loans", loan.retryDisbursement);
+app.use("/loans", loan.bridgeWebhook);
 app.use("/loans", loan.manualDisbursement);
 app.use("/loans", loan.adminExtension);
 app.use("/admin", admin.createAdmin);

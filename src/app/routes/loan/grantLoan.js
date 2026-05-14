@@ -48,10 +48,42 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
 
     if (systemConfig.disbursementMode === "automatic") {
       const user = await Users.findOne({ userId: loan.userId });
+      const selectedOperator = String(loan.paymentOperator || "").trim();
+      const availablePaymentMethods = Array.isArray(user?.paymentMethods) ? user.paymentMethods : [];
+      const recoveredPaymentMethod =
+        availablePaymentMethods.find((item) => {
+          const method = String(item?.method || "").trim();
+          const itemOperator = String(item?.operator || "").trim().toLowerCase();
+          if (!method || method.includes("@")) return false;
+          if (!selectedOperator) return true;
+          return itemOperator === selectedOperator.toLowerCase();
+        }) ||
+        availablePaymentMethods.find((item) => {
+          const method = String(item?.method || "").trim();
+          return method && !method.includes("@");
+        }) ||
+        null;
+
+      if (!String(loan.paymentMethod || "").trim()) {
+        loan.paymentMethod = String(
+          recoveredPaymentMethod?.method || user?.phone || ""
+        ).trim();
+      }
+
+      const payoutMethodForGrant = {
+        method: String(loan.paymentMethod || recoveredPaymentMethod?.method || user?.phone || "").trim(),
+        operator: String(
+          loan.paymentOperator || recoveredPaymentMethod?.operator || selectedOperator || ""
+        ).trim(),
+        email: recoveredPaymentMethod?.email || user?.email || "",
+        isVerified: Boolean(recoveredPaymentMethod?.isVerified),
+      };
+
       payoutResult = await processLoanDisbursement({
         loan,
         user,
         systemConfig,
+        paymentMethodOverride: payoutMethodForGrant,
       });
 
       if (user && Array.isArray(user.paymentMethods) && String(loan.paymentMethod || "").trim()) {
@@ -182,7 +214,16 @@ router.patch("/grantLoan/:ID", async (request, responses) => {
         operator: loan.paymentOperator || "",
         payoutReference: payoutResult.reference || ID,
       },
-      details: payoutResult.raw || null,
+      details: {
+        ...(payoutResult.raw || {}),
+        resolvedGrantMethod:
+          systemConfig.disbursementMode === "automatic"
+            ? {
+                method: loan.paymentMethod || "",
+                operator: loan.paymentOperator || "",
+              }
+            : null,
+      },
     });
 
     return responses.status(200).json({
