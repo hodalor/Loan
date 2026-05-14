@@ -566,6 +566,8 @@ const isBridgeAcceptedInitialization = (response, payload = {}) => {
 
   return response.status === 202 || normalizedStatus === "202";
 };
+const getCanonicalLoanWritebackId = (loan = {}) =>
+  String(loan?.loanId || loan?.ID || loan?._id || "").trim();
 const normalizeGatewayKey = (value = "") => String(value || "").trim().toLowerCase();
 const getBridgeCredentials = (systemConfig = {}) => ({
   username: String(systemConfig.apiKey || config.bridgeApiUsername || "").trim(),
@@ -1014,13 +1016,36 @@ const applyPortalGatewayTransaction = async (transaction) => {
       clear: isFullSettlement,
       amt: amountToApply,
     });
+    const canonicalLoanWritebackId = getCanonicalLoanWritebackId(globalLoan);
     const loanResult = await _payLoan({
-      id: globalLoan.loanId,
+      id: canonicalLoanWritebackId,
       payAmount: amountToApply,
     });
 
     if (!userResult || !loanResult) {
-      throw new Error("Payment was confirmed but the loan record could not be updated.");
+      const error = new Error("Payment was confirmed but the loan record could not be updated.");
+      error.details = {
+        attemptedLoanIdentifiers: {
+          transactionLoanId: transaction.loanId || "",
+          activeLoanViewLoanId: activeLoanView.loanId || "",
+          globalLoanLoanId: globalLoan.loanId || "",
+          globalLoanID: globalLoan.ID || "",
+          globalLoanMongoId: String(globalLoan._id || ""),
+          canonicalLoanWritebackId,
+        },
+        repaymentValues: {
+          gatewayAmount: payAmount,
+          amountToApply,
+          outstandingBalance: toMoney(activeLoanView.outstandingBalance || 0),
+          totalDue: toMoney(activeLoanView.totalDue || 0),
+          isFullSettlement,
+        },
+        updateResults: {
+          userResult: Boolean(userResult),
+          loanResult: Boolean(loanResult),
+        },
+      };
+      throw error;
     }
   }
 
@@ -1276,6 +1301,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
       },
       details: {
         stack: error.stack || "",
+        ...(error.details || {}),
       },
     });
 
@@ -2276,7 +2302,7 @@ router.post("/portal/pay-loan", async (req, res) => {
       amt: payAmount,
     });
     const loanResult = await _payLoan({
-      id: globalLoan.loanId,
+      id: getCanonicalLoanWritebackId(globalLoan),
       payAmount,
     });
 
