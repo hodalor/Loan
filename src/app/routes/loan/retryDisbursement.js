@@ -29,6 +29,26 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
 
     const user = await Users.findOne({ userId: loan.userId });
     const selectedOperator = String(operator || "").trim();
+    const availablePaymentMethods = Array.isArray(user?.paymentMethods) ? user.paymentMethods : [];
+    const recoveredPaymentMethod =
+      availablePaymentMethods.find((item) => {
+        const method = String(item?.method || "").trim();
+        const itemOperator = String(item?.operator || "").trim().toLowerCase();
+        if (!method || method.includes("@")) return false;
+        if (!selectedOperator) return true;
+        return itemOperator === selectedOperator.toLowerCase();
+      }) ||
+      availablePaymentMethods.find((item) => {
+        const method = String(item?.method || "").trim();
+        return method && !method.includes("@");
+      }) ||
+      null;
+
+    if (!String(loan.paymentMethod || "").trim()) {
+      loan.paymentMethod = String(
+        recoveredPaymentMethod?.method || user?.phone || ""
+      ).trim();
+    }
 
     if (selectedOperator) {
       loan.paymentOperator = selectedOperator;
@@ -42,6 +62,23 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
               }
             : item
         );
+
+        if (
+          !user.paymentMethods.some(
+            (item) => String(item?.method || "").trim() === String(loan.paymentMethod || "").trim()
+          ) &&
+          String(loan.paymentMethod || "").trim()
+        ) {
+          user.paymentMethods = [
+            ...user.paymentMethods,
+            {
+              method: String(loan.paymentMethod || "").trim(),
+              email: user?.email || "",
+              operator: selectedOperator,
+              isVerified: false,
+            },
+          ];
+        }
       }
     }
 
@@ -103,6 +140,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
         loanId: loan.ID,
         customerId: loan.userId,
         provider: selectedChannel,
+        paymentMethod: loan.paymentMethod || "",
         operator: loan.paymentOperator || "",
         payoutReference: loan.payoutReference,
       },
@@ -120,6 +158,7 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
         loanId: loan.ID,
         provider: loan.disbursementProvider,
         disbursementChannel: loan.disbursementChannel,
+        paymentMethod: loan.paymentMethod || "",
         operator: loan.paymentOperator || "",
         isDisbursed: loan.isDisbursed,
         payoutStatus: loan.payoutStatus,

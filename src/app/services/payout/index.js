@@ -218,11 +218,26 @@ const mapOperatorToPaystackBankCode = (operator = "") => {
 };
 
 const resolvePaymentMethod = (user, loan) => {
-  const matchedMethod =
-    user && Array.isArray(user.paymentMethods)
-      ? user.paymentMethods.find((item) => item.method === loan.paymentMethod) || null
-      : null;
   const normalizedOperator = String(loan?.paymentOperator || "").trim();
+  const availableMethods =
+    user && Array.isArray(user.paymentMethods)
+      ? user.paymentMethods.filter((item) => String(item?.method || "").trim())
+      : [];
+  const matchedMethod =
+    availableMethods.find((item) => item.method === loan.paymentMethod) || null;
+  const fallbackMobileMethod =
+    availableMethods.find((item) => {
+      const method = String(item?.method || "").trim();
+      const operator = String(item?.operator || "").trim();
+      if (!method || method.includes("@")) return false;
+      if (!normalizedOperator) return true;
+      return normalizeOperator(operator) === normalizeOperator(normalizedOperator);
+    }) ||
+    availableMethods.find((item) => {
+      const method = String(item?.method || "").trim();
+      return method && !method.includes("@");
+    }) ||
+    null;
 
   if (matchedMethod) {
     return {
@@ -236,6 +251,23 @@ const resolvePaymentMethod = (user, loan) => {
       method: loan.paymentMethod,
       operator: normalizedOperator,
       email: "",
+      isVerified: false,
+    };
+  }
+
+  if (fallbackMobileMethod) {
+    return {
+      ...fallbackMobileMethod,
+      operator: normalizedOperator || fallbackMobileMethod.operator || "",
+    };
+  }
+
+  const fallbackPhone = String(user?.phone || "").trim();
+  if (fallbackPhone) {
+    return {
+      method: fallbackPhone,
+      operator: normalizedOperator,
+      email: user?.email || "",
       isVerified: false,
     };
   }
