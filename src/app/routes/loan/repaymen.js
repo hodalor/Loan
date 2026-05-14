@@ -25,6 +25,28 @@ const formatBridgeRequestTime = (value = new Date()) => {
     date.getHours()
   )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 };
+const getBridgeCallbackReference = (payload = {}) =>
+  [
+    payload.transaction_id,
+    payload.trans_id,
+    payload.trans_ref,
+    payload.client_ref,
+    payload.reference,
+    payload.collection_trans_id,
+  ]
+    .map((value) => String(value || "").trim())
+    .find(Boolean) || "";
+const getBridgeCallbackStatus = (payload = {}) =>
+  String(payload.trans_status || payload.status_code || payload.status || payload.code || "").trim();
+const getBridgeCallbackMessage = (payload = {}) =>
+  String(payload.status_desc || payload.description || payload.message || "").trim();
+const isBridgeAcceptedInitialization = (response, payload = {}) => {
+  const normalizedStatus = String(
+    payload?.response_code || payload?.status || payload?.code || ""
+  ).trim();
+
+  return response.status === 202 || normalizedStatus === "202";
+};
 const mapOperatorToBridgeNetworkCode = (operator = "") => {
   const normalized = normalizeOperator(operator);
 
@@ -278,10 +300,7 @@ router.patch("/repayLoan/:id", async (request, responses) => {
         }),
       });
       const payload = await response.json().catch(() => ({}));
-      const accepted =
-        response.status === 202 ||
-        String(payload?.status || "").trim() === "202" ||
-        String(payload?.code || "").trim() === "202";
+      const accepted = isBridgeAcceptedInitialization(response, payload);
 
       if (!response.ok && !accepted) {
         return responses.status(400).json({
@@ -370,15 +389,9 @@ router.patch("/repayLoan/:id", async (request, responses) => {
 
 router.post("/bridge/legacy-repayment-webhook", async (request, responses) => {
   try {
-    const reference = String(
-      request.body?.transaction_id || request.body?.client_ref || request.body?.reference || ""
-    ).trim();
-    const callbackStatus = String(
-      request.body?.status_code || request.body?.status || request.body?.code || ""
-    ).trim();
-    const callbackMessage = String(
-      request.body?.message || request.body?.description || "Bridge callback received."
-    ).trim();
+    const reference = getBridgeCallbackReference(request.body);
+    const callbackStatus = getBridgeCallbackStatus(request.body);
+    const callbackMessage = getBridgeCallbackMessage(request.body) || "Bridge callback received.";
 
     if (!reference) {
       return responses.sendStatus(200);
