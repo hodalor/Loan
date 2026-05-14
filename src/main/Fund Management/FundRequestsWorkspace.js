@@ -953,7 +953,7 @@ export default function FundRequestsWorkspace({
           onClick={() => setReviewModalOpen(false)}
         >
           <div
-            className="w-full max-w-5xl rounded-[28px] border border-slate-200 bg-white"
+            className="w-full max-w-3xl rounded-[24px] border border-slate-200 bg-white shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
@@ -967,7 +967,7 @@ export default function FundRequestsWorkspace({
                 <i className="fa fa-times text-xl" />
               </button>
             </div>
-            <div className="grid gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 px-5 py-5 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Employee</p>
                 <p className="mt-2 font-semibold text-slate-900">{selectedRequest.employeeUserName}</p>
@@ -1012,13 +1012,13 @@ export default function FundRequestsWorkspace({
                   {selectedRequest.gatewayProvider || selectedRequest.gatewayStatus || "-"}
                 </p>
               </div>
-              <div className="md:col-span-2 xl:col-span-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Remark</p>
                 <p className="mt-2 text-slate-900">
                   {selectedRequest.remark || selectedRequest.gatewayMessage || "-"}
                 </p>
               </div>
-              <div className="md:col-span-2 xl:col-span-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="sm:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Approver Names</p>
                 <p className="mt-2 text-slate-900">
                   First: {selectedRequest.firstApproval?.actor?.userName || "-"} | Second:{" "}
