@@ -353,6 +353,27 @@ export default function FundRequestsWorkspace({
       });
     }
 
+    if (!String(singleForm.destinationNumber || "").trim()) {
+      return setAlerts({
+        ...alerts,
+        open: true,
+        type: "warning",
+        msg:
+          requestType === "payment"
+            ? "Salary number is required before a payment request can be submitted."
+            : "Phone number is required before an airtime request can be submitted.",
+      });
+    }
+
+    if (requestType === "payment" && !String(singleForm.destinationOperator || "").trim()) {
+      return setAlerts({
+        ...alerts,
+        open: true,
+        type: "warning",
+        msg: "Salary operator is required before a payment request can be submitted.",
+      });
+    }
+
     setSubmitting(true);
     const response = await createFundRequest({
       requestType,
@@ -956,6 +977,14 @@ export default function FundRequestsWorkspace({
                 <p className="text-sm text-slate-500">Destination</p>
                 <p className="mt-2 font-semibold text-slate-900">{selectedRequest.destinationNumber}</p>
               </div>
+              {requestType === "payment" ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Service Provider</p>
+                  <p className="mt-2 font-semibold text-slate-900">
+                    {selectedRequest.destinationOperator || "-"}
+                  </p>
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Reason</p>
                 <p className="mt-2 font-semibold text-slate-900">{selectedRequest.reason}</p>
