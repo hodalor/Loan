@@ -320,7 +320,11 @@ export default function FundRequestsWorkspace({
   };
 
   const handleEmployeeChange = (employeeUserId) => {
-    const employee = admins.find((admin) => admin.userId === employeeUserId);
+    const employee = admins.find(
+      (admin) =>
+        String(admin.userId || "").trim() === String(employeeUserId || "").trim() ||
+        String(admin.userName || "").trim() === String(employeeUserId || "").trim()
+    );
 
     if (!employee) {
       updateSingleForm("employeeUserId", "");
@@ -374,11 +378,18 @@ export default function FundRequestsWorkspace({
       });
     }
 
+    const selectedEmployee = admins.find(
+      (admin) =>
+        String(admin.userId || "").trim() === String(singleForm.employeeUserId || "").trim() ||
+        String(admin.userName || "").trim() === String(singleForm.employeeUserId || "").trim()
+    );
+
     setSubmitting(true);
     const response = await createFundRequest({
       requestType,
       requestMode,
       employeeUserId: singleForm.employeeUserId,
+      employeeUserName: selectedEmployee?.userName || "",
       amount: Number(singleForm.amount || 0),
       reason: singleForm.reason,
       remark: singleForm.remark,
