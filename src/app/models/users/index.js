@@ -203,77 +203,102 @@ const collCallRecords = new mongoose.Schema({
 const paymentRecords = new mongoose.Schema({
   recordType: {
     type: String, //balance , public transfare
-    required: true,
+    required: false,
     unique: false,
   },
   loanId: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   userId: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   clearanceDate: {
     type: Date,
-    required: true,
+    required: false,
+    unique: false,
+  },
+  datePaid: {
+    type: Date,
+    required: false,
     unique: false,
   },
   remainingAmount: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   amountPaid: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   actualAmount: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   clearRemainingAmount: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   remarks: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   recordProofAudit: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   recordProofConfirm: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   rejectRemarks: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   auditResults: {
     type: String, //pass(clear and close case) , reject(case still open for collection)
-    required: true,
+    required: false,
     unique: false,
   },
   reviewedBy: {
     type: String,
-    required: true,
+    required: false,
     unique: false,
   },
   confirmedBy: {
     type: String,
-    required: true,
+    required: false,
+    unique: false,
+  },
+  source: {
+    type: String,
+    required: false,
+    unique: false,
+  },
+  provider: {
+    type: String,
+    required: false,
+    unique: false,
+  },
+  reference: {
+    type: String,
+    required: false,
+    unique: false,
+  },
+  transactionId: {
+    type: String,
+    required: false,
     unique: false,
   },
 });

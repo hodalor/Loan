@@ -54,6 +54,73 @@ const buildRepaymentLedgerState = ({
   };
 };
 
+const hasRepaymentRecord = ({
+  paymentRecords = [],
+  paidAt = new Date(),
+  amountPaid = 0,
+  toleranceMs = 1000 * 60 * 60,
+}) => {
+  const targetTime = new Date(paidAt).getTime();
+  const targetAmount = toNumber(amountPaid);
+
+  return (Array.isArray(paymentRecords) ? paymentRecords : []).some((record) => {
+    const recordTime = new Date(record?.datePaid || 0).getTime();
+    const recordAmount = toNumber(record?.amountPaid);
+
+    if (!Number.isFinite(recordTime) || !Number.isFinite(targetTime)) {
+      return recordAmount === targetAmount;
+    }
+
+    return recordAmount === targetAmount && Math.abs(recordTime - targetTime) <= toleranceMs;
+  });
+};
+
+const ensureRepaymentEventInLoanLedger = async ({
+  loanId = "",
+  amountPaid = 0,
+  paidAt = new Date(),
+}) => {
+  const matchingLoans = await findMatchingLoanDocs(loanId);
+  if (matchingLoans.length === 0) return null;
+
+  const canonicalLoan = matchingLoans[0];
+  const normalizedLoanId = normalizeLoanIdentifier(
+    canonicalLoan.ID || canonicalLoan.loanId || canonicalLoan._id
+  );
+  const nextPaymentRecords = Array.isArray(canonicalLoan?.paymentRecords)
+    ? [...canonicalLoan.paymentRecords]
+    : [];
+
+  if (
+    !hasRepaymentRecord({
+      paymentRecords: nextPaymentRecords,
+      paidAt,
+      amountPaid,
+    })
+  ) {
+    nextPaymentRecords.push({
+      datePaid: paidAt,
+      amountPaid: toNumber(amountPaid),
+    });
+
+    await Loans.updateMany(
+      {
+        $or: [{ ID: normalizedLoanId }, { loanId: normalizedLoanId }, { _id: canonicalLoan._id }],
+      },
+      {
+        $set: {
+          paymentRecords: nextPaymentRecords,
+        },
+      }
+    );
+  }
+
+  return {
+    loan: canonicalLoan,
+    paymentRecords: nextPaymentRecords,
+  };
+};
+
 const applyRepaymentToLoanLedger = async ({
   loanId = "",
   amountJustCleared = 0,
@@ -101,5 +168,6 @@ const applyRepaymentToLoanLedger = async ({
 module.exports = {
   applyRepaymentToLoanLedger,
   buildRepaymentLedgerState,
+  ensureRepaymentEventInLoanLedger,
   findMatchingLoanDocs,
 };

@@ -205,4 +205,77 @@ router.post("/portal-payments/:reference/restore", async (req, res) => {
   }
 });
 
+router.post("/portal-payments/:reference/backfill", async (req, res) => {
+  try {
+    const reference = normalizeReference(req.params?.reference || req.body?.reference || "");
+
+    if (!reference) {
+      return res.status(400).json({
+        success: 0,
+        message: "Transaction reference is required.",
+      });
+    }
+
+    if (typeof customerAuthRoute.backfillPortalRepaymentRecords !== "function") {
+      throw new Error("Portal backfill helper is not available.");
+    }
+
+    const response = await customerAuthRoute.backfillPortalRepaymentRecords({ reference });
+    const latestTransaction = await GatewayTransactions.findOne({ reference }).lean();
+
+    await logSystemEvent({
+      level: response.success === 1 ? "info" : "error",
+      category: "payment",
+      source: "admin.portalPayments",
+      action: "backfill",
+      status: response.success === 1 ? "success" : "failed",
+      message:
+        response.message ||
+        (response.success === 1
+          ? "Portal payment backfill completed successfully."
+          : "Portal payment backfill failed."),
+      req,
+      metadata: {
+        reference,
+        provider: latestTransaction?.provider || "",
+        phone: latestTransaction?.phone || "",
+        userId: latestTransaction?.userId || "",
+        loanId: latestTransaction?.loanId || "",
+      },
+      details: {
+        response,
+      },
+    });
+
+    return res.status(response.success === 1 ? 200 : 400).json({
+      ...response,
+      data: {
+        ...(response.data || {}),
+        record: buildPortalPaymentRow(latestTransaction || {}),
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "payment",
+      source: "admin.portalPayments",
+      action: "backfill",
+      status: "failed",
+      message: error.message || "Portal payment backfill failed with an internal error.",
+      req,
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        reference: normalizeReference(req.params?.reference || req.body?.reference || ""),
+      },
+    });
+    return res.status(500).json({
+      success: 0,
+      message: "Internal error: code(500)!",
+    });
+  }
+});
+
 module.exports = router;

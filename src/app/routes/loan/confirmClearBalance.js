@@ -53,12 +53,27 @@ router.patch("/confirmClearB/:ID", async (req, res) => {
     });
 
     if (ledgerResult) {
+      const embeddedPaymentRecord = {
+        ...(loan.clearanceRecord?.toObject ? loan.clearanceRecord.toObject() : loan.clearanceRecord),
+        recordType: loan.clearanceRecord?.recordType || "balance",
+        loanId: ID,
+        userId: loan.userId,
+        clearanceDate: loan.clearanceRecord?.clearanceDate || paidAt,
+        datePaid: paidAt,
+        amountPaid: `${amountJustCleared}`,
+        actualAmount: `${loan.clearanceRecord?.actualAmount || amountJustCleared}`,
+        clearRemainingAmount: "true",
+        auditResults: auditResults || "pass",
+        confirmedBy: confirmedBy || loan.clearanceRecord?.confirmedBy || "",
+        source: "manual-clearance",
+      };
       const resp = await _clearLoan({
         ID,
         dp: paidAt,
         userId: loan.userId,
         clear: true,
         amt: amountJustCleared,
+        paymentRecord: embeddedPaymentRecord,
       });
 
       if (resp)

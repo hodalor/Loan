@@ -21,7 +21,10 @@ const { getSystemConfig, getActiveCountryConfig } = require("../../services/syst
 const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
 const { logSystemEvent } = require("../../../libs/logger");
 const { dedupeLoanRecords, normalizeLoanBusinessId } = require("../../../libs/loanRecords");
-const { applyRepaymentToLoanLedger } = require("../../services/loanRepayment");
+const {
+  applyRepaymentToLoanLedger,
+  ensureRepaymentEventInLoanLedger,
+} = require("../../services/loanRepayment");
 
 const router = express.Router();
 
@@ -487,6 +490,32 @@ const buildPortalLoanView = (loan = {}, systemConfig = {}) => {
     extensionOptions,
   };
 };
+const buildPortalRepaymentRecord = ({
+  transaction = {},
+  loanView = {},
+  userId = "",
+  amount = 0,
+  paidAt = new Date(),
+  clear = false,
+}) => ({
+  recordType: "portal-repayment",
+  loanId: loanView.loanId || normalizeTransactionReference(transaction.loanId || ""),
+  userId: String(userId || transaction.userId || "").trim(),
+  clearanceDate: paidAt,
+  datePaid: paidAt,
+  remainingAmount: `${Math.max(toMoney(loanView.outstandingBalance || 0) - toMoney(amount), 0)}`,
+  amountPaid: `${toMoney(amount)}`,
+  actualAmount: `${toMoney(amount)}`,
+  clearRemainingAmount: `${clear}`,
+  remarks: "Customer portal gateway repayment",
+  auditResults: "pass",
+  reviewedBy: "System",
+  confirmedBy: "System",
+  source: "portal-gateway",
+  provider: transaction.provider || "",
+  reference: transaction.reference || "",
+  transactionId: transaction.reference || "",
+});
 const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => {
   const loan = getCurrentPortalLoan(user, globalLoans);
   return buildPortalLoanView(loan, systemConfig);
@@ -1015,16 +1044,17 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
   if (transaction.transactionType === "repayment") {
     const payAmount = toMoney(transaction.amount || 0);
-    const ledgerResult = await applyRepaymentToLoanLedger({
-      loanId: targetLoanView.loanId,
-      amountJustCleared: payAmount,
-      paidAt: new Date(),
-      clearOverride: payAmount >= toMoney(targetLoanView.totalDue || 0),
-    });
     const globalLoan = await ensureLoanLedgerRecord({
       userId: user.userId,
       loanId: targetLoanView.loanId,
       sourceLoan,
+    });
+    const paidAt = new Date();
+    const ledgerResult = await applyRepaymentToLoanLedger({
+      loanId: targetLoanView.loanId,
+      amountJustCleared: payAmount,
+      paidAt,
+      clearOverride: payAmount >= toMoney(targetLoanView.totalDue || 0),
     });
 
     if (!globalLoan || !ledgerResult) {
@@ -1033,10 +1063,18 @@ const applyPortalGatewayTransaction = async (transaction) => {
 
     const userResult = await _clearLoan({
       ID: targetLoanView.loanId,
-      dp: new Date(),
+      dp: paidAt,
       userId: user.userId,
       clear: payAmount >= toMoney(targetLoanView.totalDue || 0),
       amt: payAmount,
+      paymentRecord: buildPortalRepaymentRecord({
+        transaction,
+        loanView: targetLoanView,
+        userId: user.userId,
+        amount: payAmount,
+        paidAt,
+        clear: payAmount >= toMoney(targetLoanView.totalDue || 0),
+      }),
     });
 
     if (!userResult) {
@@ -1103,6 +1141,104 @@ const applyPortalGatewayTransaction = async (transaction) => {
   }
 
   return summary;
+};
+const backfillPortalRepaymentRecords = async ({ reference = "" }) => {
+  const normalizedReference = normalizeTransactionReference(reference);
+  if (!normalizedReference) {
+    throw new Error("Transaction reference is required.");
+  }
+
+  const transaction = await findGatewayTransactionByReference(normalizedReference);
+  if (!transaction) {
+    throw new Error("Stored transaction was not found.");
+  }
+
+  if (transaction.transactionType !== "repayment") {
+    throw new Error("Only repayment transactions can be backfilled.");
+  }
+
+  const normalizedStatus = String(transaction.status || "").trim().toLowerCase();
+  if (
+    !transaction.processed &&
+    !["success", "verified"].includes(normalizedStatus) &&
+    !transaction.rawWebhookEvent &&
+    !transaction.rawVerifyResponse
+  ) {
+    throw new Error("This transaction has not been confirmed by the gateway yet.");
+  }
+
+  const user =
+    (transaction.userId && (await User.findOne({ userId: transaction.userId }))) ||
+    (transaction.phone && (await User.findOne({ phone: transaction.phone })));
+  if (!user) {
+    throw new Error("Customer profile not found for this payment.");
+  }
+
+  const systemConfig = await getSystemConfig();
+  const globalLoans = dedupeLoanRecords(await Loans.find({ userId: user.userId }).lean());
+  const loanHistory = getUserLoanHistory(user.toObject(), globalLoans);
+  const transactionLoanId = normalizeTransactionReference(transaction.loanId || "");
+  const sourceLoan = getLoanByBusinessId(loanHistory, transactionLoanId);
+  const targetLoanView = buildPortalLoanView(sourceLoan, systemConfig);
+
+  if (!targetLoanView || targetLoanView.loanId !== transactionLoanId) {
+    throw new Error("Loan record not found.");
+  }
+
+  const payAmount = toMoney(transaction.amount || 0);
+  const paidAt = new Date(
+    transaction.processedAt ||
+      transaction.verifiedAt ||
+      transaction.updatedAt ||
+      transaction.createdAt ||
+      new Date()
+  );
+
+  await ensureLoanLedgerRecord({
+    userId: user.userId,
+    loanId: targetLoanView.loanId,
+    sourceLoan,
+  });
+
+  const ledgerSync = await ensureRepaymentEventInLoanLedger({
+    loanId: targetLoanView.loanId,
+    amountPaid: payAmount,
+    paidAt,
+  });
+
+  const currentGlobalLoan = await findLoanRecordByBusinessId(targetLoanView.loanId);
+  const clear = isLoanSettled(currentGlobalLoan || sourceLoan || {});
+  const userSync = await _clearLoan({
+    ID: targetLoanView.loanId,
+    dp: paidAt,
+    userId: user.userId,
+    clear,
+    amt: 0,
+    paymentRecord: buildPortalRepaymentRecord({
+      transaction,
+      loanView: buildPortalLoanView(currentGlobalLoan || sourceLoan, systemConfig) || targetLoanView,
+      userId: user.userId,
+      amount: payAmount,
+      paidAt,
+      clear,
+    }),
+  });
+
+  if (!ledgerSync || !userSync) {
+    throw new Error("Portal payment backfill could not be completed.");
+  }
+
+  const summary = await buildPortalSummaryData(transaction.phone);
+
+  return {
+    success: 1,
+    message: "Portal payment records backfilled successfully.",
+    status: "success",
+    data: {
+      ...(summary || {}),
+      transaction: sanitizePortalTransaction(transaction.toObject()),
+    },
+  };
 };
 const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null }) => {
   const normalizedReference = normalizeTransactionReference(reference);
@@ -2294,18 +2430,38 @@ router.post("/portal/pay-loan", async (req, res) => {
       });
     }
 
+    const paidAt = new Date();
     const ledgerResult = await applyRepaymentToLoanLedger({
       loanId: activeLoanView.loanId,
       amountJustCleared: payAmount,
-      paidAt: new Date(),
+      paidAt,
       clearOverride: payAmount >= toMoney(activeLoanView.totalDue || 0),
     });
     const userResult = await _clearLoan({
       ID: activeLoanView.loanId,
-      dp: new Date(),
+      dp: paidAt,
       userId: user.userId,
       clear: payAmount >= toMoney(activeLoanView.totalDue || 0),
       amt: payAmount,
+      paymentRecord: {
+        recordType: "portal-repayment",
+        loanId: activeLoanView.loanId,
+        userId: user.userId,
+        clearanceDate: paidAt,
+        datePaid: paidAt,
+        remainingAmount: `${Math.max(toMoney(activeLoanView.outstandingBalance || 0) - payAmount, 0)}`,
+        amountPaid: `${payAmount}`,
+        actualAmount: `${payAmount}`,
+        clearRemainingAmount: `${payAmount >= toMoney(activeLoanView.totalDue || 0)}`,
+        remarks: "Customer portal gateway repayment",
+        auditResults: "pass",
+        reviewedBy: "System",
+        confirmedBy: "System",
+        source: "portal-gateway",
+        provider: gatewayResult.provider || "",
+        reference: gatewayResult.reference || "",
+        transactionId: gatewayResult.reference || "",
+      },
     });
 
     if (!userResult || !ledgerResult) {
@@ -3322,5 +3478,6 @@ router.post(
 );
 
 router.finalizePortalGatewayTransaction = finalizePortalGatewayTransaction;
+router.backfillPortalRepaymentRecords = backfillPortalRepaymentRecords;
 
 module.exports = router;
