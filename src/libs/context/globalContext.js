@@ -67,7 +67,7 @@ export const GlobalContext = React.createContext();
 
 export default function GlobalContextProvider(props) {
   const history = useHistory();
-  const ADMIN_CACHE_VERSION = 3;
+  const ADMIN_CACHE_VERSION = 2;
 
   const { setIsLogged } = React.useContext(AuthContext);
 

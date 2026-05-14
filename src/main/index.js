@@ -40,7 +40,6 @@ import { AuthContext } from "../libs/context/authContext";
 import Auth from "../auth";
 import Balance from "../components/rowDetails/balance";
 import ManualPaymentPool from "./Order Center/Manual payment pool";
-import PaidNotUpdated from "./Order Center/Paid not updated";
 import PublicTransfare from "../components/rowDetails/publicTransfare";
 import GlobalContextProvider, { GlobalContext } from "../libs/context/globalContext";
 import CustomizedSnackbars from "../components/alerts";
@@ -254,11 +253,6 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
             <Route
               path="/failed-disbursements"
               component={FailedDisbursements}
-            />
-            <GuardedRoute
-              path="/order-paid-not-updated"
-              component={PaidNotUpdated}
-              allow={canOpenPath("/order-paid-not-updated")}
             />
             <Route
               path="/manual-disbursement"

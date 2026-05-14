@@ -76,11 +76,6 @@ const rawNavigationItems = [
         path: "/failed-disbursements",
         roles: ["super-admin", "admin"],
       },
-      {
-        label: "Paid Not Updated",
-        path: "/order-paid-not-updated",
-        roles: ["super-admin", "admin"],
-      },
     ],
   },
   {
@@ -387,13 +382,6 @@ const actionPermissionGroups = [
           "col-personel",
         ],
       },
-      {
-        key: "action:payment:restore",
-        label: "Restore Gateway Payments",
-        description:
-          "Retry loan posting for portal payments already confirmed by the gateway but not yet completed inside the loan records.",
-        defaultRoles: ["super-admin", "admin"],
-      },
     ],
   },
   {
@@ -674,13 +662,6 @@ const actionPermissionGroups = [
         description:
           "See recovery columns before DAY-1 on the data center recovery matrix and assign this visibility to specific staff.",
         defaultRoles: ["super-admin", "admin", "rv-team-lead", "pre-team-lead", "col-team-lead"],
-      },
-      {
-        key: "action:system:portal-recover",
-        label: "Recover Portal Payments",
-        description:
-          "Replay stored Bridge portal payment confirmation for pending transactions when a callback was received but not applied.",
-        defaultRoles: ["super-admin"],
       },
     ],
   },
