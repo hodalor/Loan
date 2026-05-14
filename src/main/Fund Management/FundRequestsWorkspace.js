@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import SimpleDataTable from "../../components/tables/SimpleDataTable";
 import { GlobalContext } from "../../libs/context/globalContext";
 import {
+  cancelFundRequest,
   createFundBatch,
   createFundRequest,
   decideFundRequests,
@@ -130,6 +131,7 @@ export default function FundRequestsWorkspace({
       ),
     [_hasAccess, requestMode, requestType]
   );
+  const canCancelRow = canResendRow;
 
   const loadRequests = React.useCallback(async () => {
     setLoading(true);
@@ -476,6 +478,36 @@ export default function FundRequestsWorkspace({
       });
     }
 
+    await loadRequests();
+    setAlerts({
+      ...alerts,
+      open: true,
+      type: "success",
+      msg: response.message,
+    });
+  };
+
+  const handleCancel = async (row) => {
+    setSubmitting(true);
+    const response = await cancelFundRequest(row.id, {
+      remark: decisionRemark,
+      actorUserId: user?.userId || "",
+      actorUserName: user?.userName || "",
+    });
+    setSubmitting(false);
+
+    if (response.success === 0) {
+      return setAlerts({
+        ...alerts,
+        open: true,
+        type: "error",
+        msg: response.message,
+      });
+    }
+
+    setReviewModalOpen(false);
+    setSelectedRequest(null);
+    setDecisionRemark("");
     await loadRequests();
     setAlerts({
       ...alerts,
@@ -1090,17 +1122,36 @@ export default function FundRequestsWorkspace({
                   </button>
                 </div>
               </div>
-            ) : failedOnly && canResendRow(selectedRequest) ? (
+            ) : failedOnly && (canResendRow(selectedRequest) || canCancelRow(selectedRequest)) ? (
               <div className="border-t border-slate-200 px-6 py-5">
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="app-btn-primary"
-                    disabled={submitting}
-                    onClick={() => handleResend(selectedRequest)}
-                  >
-                    Resend
-                  </button>
+                <label className="app-label">Decision Remark</label>
+                <textarea
+                  rows={2}
+                  className="app-input"
+                  value={decisionRemark}
+                  onChange={(event) => setDecisionRemark(event.target.value)}
+                />
+                <div className="mt-4 flex justify-end gap-3">
+                  {canCancelRow(selectedRequest) ? (
+                    <button
+                      type="button"
+                      className="app-btn-secondary"
+                      disabled={submitting}
+                      onClick={() => handleCancel(selectedRequest)}
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
+                  {canResendRow(selectedRequest) ? (
+                    <button
+                      type="button"
+                      className="app-btn-primary"
+                      disabled={submitting}
+                      onClick={() => handleResend(selectedRequest)}
+                    >
+                      Resend
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}

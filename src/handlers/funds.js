@@ -68,3 +68,9 @@ export const resendFundRequest = async (id, payload = {}) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+export const cancelFundRequest = async (id, payload = {}) =>
+  request(`fund-requests/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
