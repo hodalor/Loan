@@ -624,8 +624,13 @@ const payWithBridge = async ({ loan, user, paymentMethod, systemConfig }) => {
   }
 };
 
-const processLoanDisbursement = async ({ loan, user, systemConfig }) => {
-  const paymentMethod = resolvePaymentMethod(user, loan);
+const processLoanDisbursement = async ({
+  loan,
+  user,
+  systemConfig,
+  paymentMethodOverride = null,
+}) => {
+  const paymentMethod = paymentMethodOverride || resolvePaymentMethod(user, loan);
   const disbursementGateway = String(
     systemConfig.disbursementGateway || systemConfig.activeChannel || ""
   ).trim();

@@ -82,9 +82,19 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
       }
     }
 
+    const payoutMethodForRetry = {
+      method: String(loan.paymentMethod || recoveredPaymentMethod?.method || user?.phone || "").trim(),
+      operator: String(
+        loan.paymentOperator || recoveredPaymentMethod?.operator || selectedOperator || ""
+      ).trim(),
+      email: recoveredPaymentMethod?.email || user?.email || "",
+      isVerified: Boolean(recoveredPaymentMethod?.isVerified),
+    };
+
     const payoutResult = await processLoanDisbursement({
       loan,
       user,
+      paymentMethodOverride: payoutMethodForRetry,
       systemConfig: {
         ...systemConfig,
         disbursementGateway: selectedChannel,
@@ -144,7 +154,10 @@ router.post("/retry-disbursement/:ID", async (req, res) => {
         operator: loan.paymentOperator || "",
         payoutReference: loan.payoutReference,
       },
-      details: payoutResult.raw || null,
+      details: {
+        ...(payoutResult.raw || {}),
+        resolvedRetryMethod: payoutMethodForRetry,
+      },
     });
 
     return res.status(200).json({
