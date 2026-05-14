@@ -414,18 +414,7 @@ const syncLoanRequestWithOffer = (currentRequest, offer) => {
 
 const buildLoanRecords = (loans = []) =>
   [...loans]
-    .filter(
-      (loan, index, items) =>
-        items.findIndex(
-          (item) => String(item?.ID || item?.loanId || "").trim() === String(loan?.ID || loan?.loanId || "").trim()
-        ) === index
-    )
     .flatMap((loan, index) => {
-      const repaymentAmount = Number(loan.repaymentAmount || 0);
-      const displayAmountPaid =
-        repaymentAmount > 0
-          ? Math.min(Number(loan.amountPaid || 0), repaymentAmount)
-          : Number(loan.amountPaid || 0);
       const records = [
         {
           id: `loan-${loan.ID || index}`,
@@ -437,7 +426,7 @@ const buildLoanRecords = (loans = []) =>
           subtitle: `Loan Application - ${loan.duration || "Term not specified"} (${loan.ID || "Pending"})`,
           badges: getRecordBadges(loan),
           metaRows: [
-            { label: "Repayment Amount", value: formatCurrency(repaymentAmount) },
+            { label: "Repayment Amount", value: formatCurrency(Number(loan.repaymentAmount || 0)) },
             { label: "Due Date", value: formatDate(loan.dop) },
             { label: "Provider", value: loan.disbursementProvider || "-" },
             { label: "Channel", value: loan.disbursementChannel || "-" },
@@ -445,12 +434,12 @@ const buildLoanRecords = (loans = []) =>
         },
       ];
 
-      if (displayAmountPaid > 0) {
+      if (Number(loan.amountPaid || 0) > 0) {
         records.push({
           id: `repayment-${loan.ID || index}`,
           type: "Repayment",
           status: loan.paymentStatus === "Paid" ? "Completed" : "In progress",
-          amount: displayAmountPaid,
+          amount: Number(loan.amountPaid || 0),
           direction: "debit",
           date: loan.dp || loan.updatedAt || loan.doa,
           subtitle: `Loan repayment${loan.ID ? ` (${loan.ID})` : ""}`,
@@ -462,11 +451,11 @@ const buildLoanRecords = (loans = []) =>
           ],
           metaRows: [
             { label: "Loan ID", value: loan.ID || "-" },
-            { label: "Amount Paid", value: formatCurrency(displayAmountPaid) },
+            { label: "Amount Paid", value: formatCurrency(Number(loan.amountPaid || 0)) },
             {
               label: "Balance",
               value: formatCurrency(
-                Math.max(repaymentAmount - displayAmountPaid, 0)
+                Math.max(Number(loan.repaymentAmount || 0) - Number(loan.amountPaid || 0), 0)
               ),
             },
           ],
@@ -1026,11 +1015,6 @@ function App() {
         pendingGatewayTransaction?.type ||
         fallbackType;
       const receiptType = transactionType === "extension" ? "Extension" : "Repayment";
-      const phone = formData.personal.phone || sessionAccount?.phone || formData.login.phone;
-      const verifiedSummary =
-        response.data?.customer || response.data?.loanHistory || response.data?.activeLoan
-          ? response.data
-          : null;
 
       setTransactionReceipt({
         type: receiptType,
@@ -1065,11 +1049,10 @@ function App() {
           receiptType === "Extension" ? response.data?.activeLoan?.dueDate || null : undefined,
       });
 
-      if (verifiedSummary) {
-        hydratePortalData(verifiedSummary, phone);
-      } else {
-        await loadPortalSummary(phone, { quiet: true });
-      }
+      await loadPortalSummary(
+        formData.personal.phone || sessionAccount?.phone || formData.login.phone,
+        { quiet: true }
+      );
       setLifecycleAction("");
       setRepaymentSummaryData(null);
       setExtensionSummaryData(null);
@@ -1084,7 +1067,6 @@ function App() {
       extensionSummaryData?.extension?.feeAmount,
       formData.login.phone,
       formData.personal.phone,
-      hydratePortalData,
       loadPortalSummary,
       pendingGatewayTransaction,
       repaymentSummaryData?.amount,
@@ -2262,7 +2244,6 @@ function App() {
                   lifecycleLoading={lifecycleLoading}
                   lifecycleAction={lifecycleAction}
                   lifecycleConfig={lifecycleConfig}
-                  pendingGatewayTransaction={pendingGatewayTransaction}
                   repaymentDraft={repaymentDraft}
                   extensionDraft={extensionDraft}
                   repaymentSummaryData={repaymentSummaryData}
@@ -2537,7 +2518,6 @@ function LoanApplyTab({
   lifecycleLoading,
   lifecycleAction,
   lifecycleConfig,
-  pendingGatewayTransaction,
   repaymentDraft,
   extensionDraft,
   repaymentSummaryData,
@@ -2565,12 +2545,6 @@ function LoanApplyTab({
   const collectionGateway = String(lifecycleConfig?.collectionGateway || "").trim();
   const requiresMobileMoneyOperator =
     lifecycleConfig?.requiresMobileMoneyOperator === true;
-  const isAwaitingRepaymentConfirmation =
-    pendingGatewayTransaction?.reference &&
-    pendingGatewayTransaction?.type === "repayment";
-  const isAwaitingExtensionConfirmation =
-    pendingGatewayTransaction?.reference &&
-    pendingGatewayTransaction?.type === "extension";
 
   if (!offer.canApply) {
     if (activeLoan?.statusKey === "review") {
@@ -2764,36 +2738,14 @@ function LoanApplyTab({
                     value={formatCurrency(repaymentSummaryData.amount || 0)}
                     emphasis
                   />
-                  <div
-                    className={`warning-note ${
-                      isAwaitingRepaymentConfirmation ? "warning-note-info" : ""
-                    }`}
-                  >
-                    {isAwaitingRepaymentConfirmation ? (
-                      <div className="waiting-indicator">
-                        <span className="waiting-spinner" aria-hidden="true" />
-                        <span>
-                          <strong>Waiting:</strong> the payment prompt was sent and this page is
-                          checking Bridge callback confirmation now.
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <strong>Next step:</strong> customer self-service gateway charge is
-                        prepared from this summary. Final gateway submission is the next phase.
-                      </>
-                    )}
+                  <div className="warning-note">
+                    <strong>Next step:</strong> customer self-service gateway charge is prepared from this summary. Final gateway submission is the next phase.
                   </div>
                 </div>
               ) : null}
 
               <div className="actions portal-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={onClearLifecycleAction}
-                  disabled={isAwaitingRepaymentConfirmation}
-                >
+                <button type="button" className="ghost-btn" onClick={onClearLifecycleAction}>
                   Back
                 </button>
                 <button
@@ -2802,7 +2754,6 @@ function LoanApplyTab({
                   onClick={repaymentSummaryData ? onSubmitRepayment : onReviewRepayment}
                   disabled={
                     lifecycleLoading ||
-                    isAwaitingRepaymentConfirmation ||
                     !repaymentDraft.methodKey ||
                     (repaymentDraft.methodKey === "mobile-money" &&
                       requiresMobileMoneyOperator &&
@@ -2810,9 +2761,7 @@ function LoanApplyTab({
                     (repaymentDraft.repaymentType === "partial" && !repaymentDraft.amount)
                   }
                 >
-                  {isAwaitingRepaymentConfirmation
-                    ? "Waiting for confirmation..."
-                    : lifecycleLoading
+                  {lifecycleLoading
                     ? "Processing..."
                     : repaymentSummaryData
                     ? "Pay Now"
@@ -2916,12 +2865,7 @@ function LoanApplyTab({
               </div>
 
               <div className="actions portal-actions">
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={onClearLifecycleAction}
-                  disabled={isAwaitingExtensionConfirmation}
-                >
+                <button type="button" className="ghost-btn" onClick={onClearLifecycleAction}>
                   Back
                 </button>
                 <button
@@ -2930,7 +2874,6 @@ function LoanApplyTab({
                   onClick={extensionSummaryData ? onSubmitExtension : () => onReviewExtension(extensionDraft.extensionKey)}
                   disabled={
                     lifecycleLoading ||
-                    isAwaitingExtensionConfirmation ||
                     !extensionDraft.methodKey ||
                     (extensionDraft.methodKey === "mobile-money" &&
                       requiresMobileMoneyOperator &&
@@ -2938,26 +2881,13 @@ function LoanApplyTab({
                     !extensionDraft.extensionKey
                   }
                 >
-                  {isAwaitingExtensionConfirmation
-                    ? "Waiting for confirmation..."
-                    : lifecycleLoading
+                  {lifecycleLoading
                     ? "Processing..."
                     : extensionSummaryData
                     ? "Pay Extension Fee"
                     : "Review Extension"}
                 </button>
               </div>
-              {isAwaitingExtensionConfirmation ? (
-                <div className="warning-note warning-note-info">
-                  <div className="waiting-indicator">
-                    <span className="waiting-spinner" aria-hidden="true" />
-                    <span>
-                      <strong>Waiting:</strong> the extension charge was sent and this page is
-                      checking Bridge callback confirmation now.
-                    </span>
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
 
