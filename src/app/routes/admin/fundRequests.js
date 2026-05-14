@@ -710,6 +710,52 @@ router.post("/fund-requests/:id/resend", async (req, res) => {
   }
 });
 
+router.post("/fund-requests/:id/cancel", async (req, res) => {
+  try {
+    const actor = await getActorFromRequest(req);
+    const record = await FundRequest.findById(req.params.id);
+    const remark = String(req.body?.remark || "").trim();
+
+    if (!record) {
+      return res.status(404).json({
+        success: 0,
+        message: "Request not found.",
+      });
+    }
+
+    if (record.requestType !== "payment" || record.status !== "failed") {
+      return res.status(400).json({
+        success: 0,
+        message: "Only failed payment requests can be cancelled here.",
+        data: serializeRequest(record.toObject()),
+      });
+    }
+
+    record.status = "rejected";
+    record.gatewayMessage = remark || record.gatewayMessage || "Failed payment was cancelled.";
+    record.history.push(
+      buildHistoryEntry({
+        status: "rejected",
+        message: remark || "Failed payment was cancelled and closed as rejected.",
+        actor,
+      })
+    );
+    await record.save();
+
+    return res.status(200).json({
+      success: 1,
+      message: "Failed payment cancelled successfully.",
+      data: serializeRequest(record.toObject()),
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: 0,
+      message: "Internal error: code(500)!",
+    });
+  }
+});
+
 router.post("/fund-requests/bridge-webhook", async (req, res) => {
   try {
     const referenceCandidates = getFundBridgeCallbackReferenceCandidates(req.body);

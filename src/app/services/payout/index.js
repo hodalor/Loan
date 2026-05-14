@@ -82,7 +82,12 @@ const formatBridgeRequestTime = (value = new Date()) => {
 
 const buildBridgeAuthHeader = (username = "", password = "") =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
-const resolveBridgeCallbackUrl = (configuredUrl = "", fallbackUrl = "") => {
+const resolveBridgeCallbackUrl = (
+  configuredUrl = "",
+  fallbackUrl = "",
+  options = {}
+) => {
+  const { replacePath = false } = options;
   const rawValue = String(configuredUrl || "").trim();
 
   if (!rawValue) return fallbackUrl;
@@ -90,7 +95,7 @@ const resolveBridgeCallbackUrl = (configuredUrl = "", fallbackUrl = "") => {
   try {
     const parsed = new URL(rawValue);
 
-    if (parsed.pathname && parsed.pathname !== "/") {
+    if (!replacePath && parsed.pathname && parsed.pathname !== "/") {
       return parsed.toString();
     }
 
@@ -921,7 +926,8 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
   try {
     const callbackUrl = resolveBridgeCallbackUrl(
       config.bridgeCallbackUrl,
-      `${config.baseUrl}/admin/fund-requests/bridge-webhook`
+      `${config.baseUrl}/admin/fund-requests/bridge-webhook`,
+      { replacePath: true }
     );
     const requestBody = {
       service_id: bridgeCredentials.serviceId,
