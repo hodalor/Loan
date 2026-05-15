@@ -37,6 +37,7 @@ const formatDueDateLabel = (value) => {
 const formatAmount = (value = 0) => toNumber(value).toFixed(2);
 const formatPercent = (value = 0) => `${toNumber(value).toFixed(2)}%`;
 const parseDisplayValue = (value = "") => toNumber(String(value).replace("%", ""));
+const normalizeNameKey = (value = "") => String(value || "").trim().toLowerCase();
 
 const formatDayLabel = (offset) => `DAY${offset >= 0 ? offset : offset}`;
 
@@ -73,7 +74,7 @@ const getLoanOfficerPool = (loan = {}) =>
     loan?.loanOfficer,
     loan?.userName,
   ]
-    .map((value) => String(value || "").trim())
+    .map((value) => normalizeNameKey(value))
     .filter(Boolean);
 
 const getPaymentEvents = (loan = {}) => {
@@ -287,9 +288,11 @@ export default function RecoveryDataCenter() {
   const { loans, globalLoader, user, admins, staffGroups, _hasAccess } = React.useContext(GlobalContext);
   const [activeTab, setActiveTab] = React.useState("percentage");
   const [range, setRange] = React.useState(() => {
-    const endDate = toStartOfDay(new Date());
-    const startDate = new Date(endDate);
-    startDate.setDate(endDate.getDate() - 30);
+    const today = toStartOfDay(new Date());
+    const startDate = new Date(today);
+    const endDate = new Date(today);
+    startDate.setDate(today.getDate() - 30);
+    endDate.setDate(today.getDate() + 30);
     return [startDate, endDate];
   });
   const [offsetRange, setOffsetRange] = React.useState({
@@ -355,7 +358,7 @@ export default function RecoveryDataCenter() {
     if (selectedGroupId !== "all") {
       const groupMemberNames = new Set(
         (selectedGroup?.members || [])
-          .map((member) => String(member?.userName || member?.name || "").trim())
+          .map((member) => normalizeNameKey(member?.userName || member?.name || ""))
           .filter(Boolean)
       );
 
@@ -365,7 +368,7 @@ export default function RecoveryDataCenter() {
     }
 
     if (selectedStaff !== "all") {
-      const staffName = String(selectedStaffOption?.userName || "").trim();
+      const staffName = normalizeNameKey(selectedStaffOption?.userName || "");
       nextLoans = nextLoans.filter((loan) => getLoanOfficerPool(loan).includes(staffName));
     }
 
@@ -561,8 +564,10 @@ export default function RecoveryDataCenter() {
                 onClick={() => {
                   const today = toStartOfDay(new Date());
                   const start = new Date(today);
+                  const end = new Date(today);
                   start.setDate(today.getDate() - 30);
-                  setRange([start, today]);
+                  end.setDate(today.getDate() + 30);
+                  setRange([start, end]);
                   setOffsetRange({ start: -1, end: 30 });
                 }}
               >
