@@ -764,6 +764,18 @@ router.post("/fund-requests/bridge-webhook", async (req, res) => {
     const callbackMessage = getFundBridgeCallbackMessage(req.body) || "Bridge callback received.";
 
     if (referenceCandidates.length === 0) {
+      await logSystemEvent({
+        level: "warn",
+        category: "fund-management",
+        source: "admin.fundRequests.bridgeWebhook",
+        action: "webhook-unmatched",
+        status: "ignored",
+        message: "Fund Bridge webhook arrived without a usable reference.",
+        metadata: {
+          bridgeStatus,
+        },
+        details: req.body,
+      });
       return res.sendStatus(200);
     }
 
@@ -775,6 +787,20 @@ router.post("/fund-requests/bridge-webhook", async (req, res) => {
     });
 
     if (!record) {
+      await logSystemEvent({
+        level: "warn",
+        category: "fund-management",
+        source: "admin.fundRequests.bridgeWebhook",
+        action: "webhook-unmatched",
+        status: "ignored",
+        message: "Fund Bridge webhook did not match any saved request.",
+        metadata: {
+          bridgeStatus,
+          callbackReference: reference,
+          referenceCandidates,
+        },
+        details: req.body,
+      });
       return res.sendStatus(200);
     }
 
@@ -813,9 +839,36 @@ router.post("/fund-requests/bridge-webhook", async (req, res) => {
     }
 
     await record.save();
+    await logSystemEvent({
+      level: bridgeStatus === "000" ? "info" : bridgeStatus === "001" || bridgeStatus === "003" ? "error" : "warn",
+      category: "fund-management",
+      source: "admin.fundRequests.bridgeWebhook",
+      action: "webhook",
+      status: record.status,
+      message: callbackMessage,
+      metadata: {
+        requestCode: record.requestCode,
+        gatewayReference: record.gatewayReference,
+        bridgeStatus,
+      },
+      details: req.body,
+    });
     return res.sendStatus(200);
   } catch (error) {
     console.log(error);
+    await logSystemEvent({
+      level: "error",
+      category: "fund-management",
+      source: "admin.fundRequests.bridgeWebhook",
+      action: "webhook",
+      status: "failed",
+      req,
+      message: error.message || "Fund Bridge webhook processing failed.",
+      details: {
+        stack: error.stack || "",
+        body: req.body,
+      },
+    });
     return res.sendStatus(200);
   }
 });

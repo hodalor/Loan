@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 module.exports = {
+  baseUrl: process.env.BASE_URL || process.env.BACKEND_BASE_URL || "",
   merchantId: process.env.MERCHANT_ID,
   myApiKey: process.env.API_KEY,
   myApiID: process.env.API_ID,

@@ -924,9 +924,11 @@ const payWithBridgeTransfer = async ({ transfer, systemConfig }) => {
   }
 
   try {
+    const callbackBaseUrl =
+      config.bridgeCallbackUrl || systemConfig.callbackUrl || config.baseUrl || "";
     const callbackUrl = resolveBridgeCallbackUrl(
-      config.bridgeCallbackUrl,
-      `${config.baseUrl}/admin/fund-requests/bridge-webhook`,
+      callbackBaseUrl,
+      `${callbackBaseUrl.replace(/\/$/, "")}/admin/fund-requests/bridge-webhook`,
       { replacePath: true }
     );
     const requestBody = {
