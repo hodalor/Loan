@@ -1510,7 +1510,8 @@ function App() {
       return;
     }
 
-    setSessionAccount(response.data || { phone });
+    const accountPhone = response.data?.phone || phone;
+    setSessionAccount(response.data || { phone: accountPhone });
     setFormData((current) => ({
       ...current,
       otp: {
@@ -1518,7 +1519,7 @@ function App() {
         otp: "",
       },
       login: {
-        phone,
+        phone: accountPhone,
         pin,
         countryCode:
           response.data?.country?.code || current.login.countryCode || selectedCountryCode,
@@ -1529,7 +1530,7 @@ function App() {
       },
       personal: {
         ...current.personal,
-        phone,
+        phone: accountPhone,
         countryCode:
           response.data?.country?.code || current.personal.countryCode || selectedCountryCode,
       },
@@ -1580,7 +1581,8 @@ function App() {
       return;
     }
 
-    hydratePortalData(response.data, phone);
+    const accountPhone = response.data?.phone || phone;
+    hydratePortalData(response.data, accountPhone);
     setActiveTab("home");
     setScreen("portal");
     showMessage(
@@ -1592,7 +1594,7 @@ function App() {
         : "Signed in successfully. Complete your profile to continue."
     );
 
-    await loadPortalSummary(phone, { quiet: true });
+    await loadPortalSummary(accountPhone, { quiet: true });
   };
 
   const handleSaveDraft = async ({ showSuccess = true } = {}) => {
