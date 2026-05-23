@@ -1990,6 +1990,7 @@ function App() {
       paymentOperator: loanRequest.paymentOperator,
       useLoan: loanRequest.useLoan,
       acceptedTerms: loanRequest.acceptedTerms,
+      countryCode: sessionAccount?.country?.code || formData.personal.countryCode || selectedCountryCode,
     });
     setLoanApplying(false);
 
