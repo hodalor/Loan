@@ -29,7 +29,7 @@ export default function Login() {
             className="h-12 w-12 rounded-2xl object-cover"
           />
           <h2 className="text-[28px] font-semibold leading-none text-slate-900">
-            QUICK MULA
+            SPEED CASH
           </h2>
         </div>
 
@@ -75,36 +75,43 @@ export default function Login() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-            <div className="space-y-2 rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-2.5">
-              <input
-                type="text"
-                disabled={loader}
-                className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
-                placeholder="Enter code"
-                value={captchaInput}
-                onChange={(e) =>
-                  _handleOnchange({
-                    field: "captcha",
-                    value: e.target.value,
-                  })
-                }
-              />
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-lg font-semibold tracking-[0.3em] text-slate-900">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                  Security code
+                </p>
+                <span className="block break-all font-mono text-lg font-semibold tracking-[0.18em] text-slate-900 sm:text-xl sm:tracking-[0.3em]">
                   {captchaCode}
                 </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={resetCaptcha}
-                  className="shrink-0 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-sm text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                  aria-label="Reset captcha"
+                  title="Reset captcha"
                 >
-                  Reset
+                  <i className="fa fa-refresh" aria-hidden="true" />
                 </button>
-                <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-center text-xs font-semibold text-slate-600">
+                <span className="shrink-0 text-xs font-semibold text-slate-500">
                   {captchaExpiresIn}s
                 </span>
               </div>
             </div>
+            <input
+              type="text"
+              disabled={loader}
+              className="app-input py-2.5 text-sm"
+              placeholder="Enter code"
+              value={captchaInput}
+              onChange={(e) =>
+                _handleOnchange({
+                  field: "captcha",
+                  value: e.target.value,
+                })
+              }
+            />
           </div>
 
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
