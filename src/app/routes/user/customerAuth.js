@@ -3073,8 +3073,14 @@ router.post("/portal/apply-loan", async (req, res) => {
       });
     }
 
-    const access = await CustomerAccess.findOne({ phone });
-    const user = await User.findOne({ phone });
+    const systemConfig = await getSystemConfig();
+    const countryProfile = resolveCountryProfile({
+      systemConfig,
+      countryCode: req.body?.countryCode,
+    });
+    const phoneLookup = buildPhoneLookupQuery([phone], countryProfile.dialCode);
+    const access = await CustomerAccess.findOne(phoneLookup);
+    const user = await User.findOne(phoneLookup);
 
     if (!access || !access.isPinSet || !user) {
       return res.status(404).json({
@@ -3097,9 +3103,8 @@ router.post("/portal/apply-loan", async (req, res) => {
       });
     }
 
-    const systemConfig = await getSystemConfig();
-      const globalLoans = await Loans.find({ userId: user.userId }).lean();
-      const offer = buildPortalOffer(user, systemConfig, globalLoans);
+    const globalLoans = await Loans.find({ userId: user.userId }).lean();
+    const offer = buildPortalOffer(user, systemConfig, globalLoans);
     const term = offer.termOptions.find((item) => item.key === termKey);
 
     if (!term) {
@@ -3205,28 +3210,41 @@ router.post("/portal/apply-loan", async (req, res) => {
 
     user.paymentMethods = normalizedPaymentMethods.length > 0 ? normalizedPaymentMethods : paymentMethods;
 
-    await user.save();
+    const savedUser = await user.save();
+    const latestEmbeddedLoan = Array.isArray(savedUser.loan?.loans)
+      ? savedUser.loan.loans[savedUser.loan.loans.length - 1]
+      : null;
     loans.paymentStatus = loanData.paymentStatus;
     loans.loanStatus = loanData.loanStatus;
-    await _saveLoan(loans);
+    loans.loanId = latestEmbeddedLoan?._id ? String(latestEmbeddedLoan._id) : "";
+
+    const savedLoan = await _saveLoan(loans);
+    if (!savedLoan) {
+      return res.status(400).json({
+        success: 0,
+        message: "Loan application could not be saved. Please try again.",
+      });
+    }
+
+    const refreshedLoans = await Loans.find({ userId: user.userId }).lean();
 
     return res.status(200).json({
       success: 1,
       message: "Loan application submitted successfully.",
       data: {
         loan: loans,
-        loanHistory: await Loans.find({ userId: user.userId }).lean(),
+        loanHistory: refreshedLoans,
         offer: buildPortalOffer(
-          user,
+          savedUser,
           systemConfig,
-          await Loans.find({ userId: user.userId }).lean()
+          refreshedLoans
         ),
         content: buildPortalContent(systemConfig),
         lifecycleConfig: buildLifecycleConfig(systemConfig),
         activeLoan: buildActiveLoanView(
-          user,
+          savedUser,
           systemConfig,
-          await Loans.find({ userId: user.userId }).lean()
+          refreshedLoans
         ),
       },
     });
