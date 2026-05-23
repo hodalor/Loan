@@ -25,6 +25,61 @@ const { logSystemEvent } = require("../../../libs/logger");
 const router = express.Router();
 
 const sanitizePhone = (value = "") => String(value).trim();
+const normalizePhoneDigits = (value = "") => String(value || "").replace(/\D+/g, "");
+const buildPhoneLookupCandidates = (values = [], dialCode = "") => {
+  const countryDigits = normalizePhoneDigits(dialCode);
+  const candidates = new Set();
+
+  values.flat().forEach((value) => {
+    const rawValue = sanitizePhone(value);
+    const digits = normalizePhoneDigits(rawValue);
+
+    if (rawValue) {
+      candidates.add(rawValue);
+    }
+
+    if (!digits) {
+      return;
+    }
+
+    candidates.add(digits);
+
+    const localDigits = digits.startsWith("0") ? digits.slice(1) : digits;
+    if (localDigits) {
+      candidates.add(localDigits);
+      candidates.add(`0${localDigits}`);
+    }
+
+    if (countryDigits) {
+      const withoutCountryDigits = digits.startsWith(countryDigits)
+        ? digits.slice(countryDigits.length)
+        : localDigits;
+      const subscriberDigits = withoutCountryDigits.replace(/^0+/, "");
+
+      if (subscriberDigits) {
+        candidates.add(subscriberDigits);
+        candidates.add(`0${subscriberDigits}`);
+        candidates.add(`${countryDigits}${subscriberDigits}`);
+        candidates.add(`+${countryDigits}${subscriberDigits}`);
+      }
+    }
+  });
+
+  return Array.from(candidates).filter(Boolean);
+};
+const buildPhoneLookupQuery = (values = [], dialCode = "") => {
+  const candidates = buildPhoneLookupCandidates(values, dialCode);
+
+  if (candidates.length <= 1) {
+    return { phone: candidates[0] || sanitizePhone(values[0] || "") };
+  }
+
+  return {
+    phone: {
+      $in: candidates,
+    },
+  };
+};
 const buildFileUrl = (req, file) =>
   `${req.protocol}://${req.get("host")}/upload/${file.filename}`;
 const parseJsonField = (value) => {
@@ -1666,8 +1721,9 @@ router.post("/auth/request-otp", async (req, res) => {
       });
     }
 
-    const existingUser = await User.findOne({ phone }).lean();
-    const existingAccess = await CustomerAccess.findOne({ phone }).lean();
+    const phoneLookup = buildPhoneLookupQuery([phone], countryProfile.dialCode);
+    const existingUser = await User.findOne(phoneLookup).lean();
+    const existingAccess = await CustomerAccess.findOne(phoneLookup).lean();
 
     if (purpose === "signup" && existingAccess?.isPinSet) {
       return res.status(400).json({
@@ -1780,14 +1836,22 @@ router.post("/auth/set-pin", async (req, res) => {
       });
     }
 
-    const existingUser = await User.findOne({ phone });
+    const phoneLookup = buildPhoneLookupQuery(
+      [phone, verification?.phoneNumber],
+      countryProfile.dialCode
+    );
+    const existingUser = await User.findOne(phoneLookup);
+    const existingAccess = await CustomerAccess.findOne(phoneLookup);
+    const canonicalPhone = sanitizePhone(
+      existingAccess?.phone || existingUser?.phone || phone
+    );
     const encryptedPin = await _encrypt(pin);
 
     const access = await CustomerAccess.findOneAndUpdate(
-      { phone },
+      phoneLookup,
       {
         $set: {
-          phone,
+          phone: canonicalPhone,
           pin: encryptedPin,
           userId: existingUser?.userId || null,
           customerId: existingUser?._id || null,
@@ -1836,6 +1900,10 @@ router.post("/auth/login", async (req, res) => {
     const phone = sanitizePhone(req.body?.phone);
     const pin = sanitizePhone(req.body?.pin);
     const systemConfig = await getSystemConfig();
+    const countryProfile = resolveCountryProfile({
+      systemConfig,
+      countryCode: req.body?.countryCode,
+    });
 
     if (!phone || !/^\d{4}$/.test(pin)) {
       return res.status(400).json({
@@ -1844,7 +1912,8 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
-    const access = await CustomerAccess.findOne({ phone });
+    const phoneLookup = buildPhoneLookupQuery([phone], countryProfile.dialCode);
+    const access = await CustomerAccess.findOne(phoneLookup);
 
     if (!access || !access.pin) {
       return res.status(404).json({
@@ -1863,7 +1932,9 @@ router.post("/auth/login", async (req, res) => {
 
     access.lastLoginAt = new Date();
 
-    const existingUser = await User.findOne({ phone }).lean();
+    const existingUser = await User.findOne(
+      buildPhoneLookupQuery([phone, access.phone], countryProfile.dialCode)
+    ).lean();
     access.userId = existingUser?.userId || access.userId;
     access.customerId = existingUser?._id || access.customerId;
     await access.save();
@@ -1872,7 +1943,7 @@ router.post("/auth/login", async (req, res) => {
       success: 1,
       message: "Login successful.",
       data: {
-        phone,
+        phone: access.phone,
         userId: access.userId || "",
         customerId: access.customerId || "",
         hasProfile: Boolean(existingUser),

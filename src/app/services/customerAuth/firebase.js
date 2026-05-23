@@ -1,17 +1,29 @@
 const fetch = require("node-fetch");
 
 const normalizeDigits = (value = "") => String(value || "").replace(/\D+/g, "");
+const removeLeadingZero = (value = "") => String(value || "").replace(/^0+/, "");
+const getSubscriberNumber = (value = "") => {
+  const digits = normalizeDigits(value);
+  if (!digits) return "";
+
+  return removeLeadingZero(digits.slice(-10));
+};
 
 const phonesMatch = (left = "", right = "") => {
   const normalizedLeft = normalizeDigits(left);
   const normalizedRight = normalizeDigits(right);
+  const subscriberLeft = getSubscriberNumber(left);
+  const subscriberRight = getSubscriberNumber(right);
 
   if (!normalizedLeft || !normalizedRight) return false;
   if (normalizedLeft === normalizedRight) return true;
+  if (subscriberLeft && subscriberRight && subscriberLeft === subscriberRight) {
+    return true;
+  }
 
   return (
-    normalizedLeft.endsWith(normalizedRight) ||
-    normalizedRight.endsWith(normalizedLeft)
+    removeLeadingZero(normalizedLeft).endsWith(removeLeadingZero(normalizedRight)) ||
+    removeLeadingZero(normalizedRight).endsWith(removeLeadingZero(normalizedLeft))
   );
 };
 
