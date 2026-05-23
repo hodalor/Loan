@@ -1,5 +1,5 @@
 import React from "react";
-import { Switch, Route } from "react-router-dom";
+import { Switch, Route, Redirect } from "react-router-dom";
 import Aside from "../components/aside";
 import Footer from "../components/footer";
 import TopBar from "../components/topbar";
@@ -45,7 +45,11 @@ import PublicTransfare from "../components/rowDetails/publicTransfare";
 import GlobalContextProvider, { GlobalContext } from "../libs/context/globalContext";
 import CustomizedSnackbars from "../components/alerts";
 import ManualDisburse from "./Credit audit center/Manual Desburse";
-import { getVisibleNavigation, hasPermission } from "../config/navigation";
+import {
+  getFirstVisiblePath,
+  getVisibleNavigation,
+  hasPermission,
+} from "../config/navigation";
 import BigLoader from "../components/loaders/bigLoader";
 
 import ReviewLoanDetails from "./Credit audit center/rvLoanDetails";
@@ -63,16 +67,29 @@ import FailedAirtime from "./Fund Management/Failed Airtime";
 import BatchPayments from "./Fund Management/Batch Payments";
 import BatchTalktime from "./Fund Management/Batch Talktime";
 
-function GuardedRoute({ component: Component, allow, ...rest }) {
+function AccessFallback({ fallbackPath = "/" }) {
+  return <Redirect to={fallbackPath} />;
+}
+
+function GuardedRoute({ component: Component, allow, fallbackPath = "/", ...rest }) {
   return (
     <Route
       {...rest}
-      render={(props) => (allow ? <Component {...props} /> : <Home />)}
+      render={(props) =>
+        allow ? <Component {...props} /> : <AccessFallback fallbackPath={fallbackPath} />
+      }
     />
   );
 }
 
-function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath }) {
+function MainAppShell({
+  alerts,
+  sidebarOpen,
+  setSidebarOpen,
+  canDo,
+  canOpenPath,
+  fallbackPath,
+}) {
   const { bootstrapLoading } = React.useContext(GlobalContext);
 
   return (
@@ -99,11 +116,18 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
             </div>
           ) : null}
           <Switch>
-            <Route exact path="/" component={Home} />
+            <Route
+              exact
+              path="/"
+              render={() =>
+                canOpenPath("/") ? <Home /> : <AccessFallback fallbackPath={fallbackPath} />
+              }
+            />
             <GuardedRoute
               path="/dashboard"
               component={Dashboard}
               allow={canDo("action:dashboard:view") && canOpenPath("/dashboard")}
+              fallbackPath={fallbackPath}
             />
             <Route exact path="/user-query" component={UserQuery} />
             <Route path="/user-list" component={UserList} />
@@ -112,21 +136,25 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
               path="/system-config"
               component={SystemConfig}
               allow={canOpenPath("/system-config")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/system-audit-logs"
               component={AuditLogs}
               allow={canOpenPath("/system-audit-logs")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/system-error-logs"
               component={ErrorLogs}
               allow={canOpenPath("/system-error-logs")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/system-docs"
               component={SystemDocs}
               allow={canOpenPath("/system-docs")}
+              fallbackPath={fallbackPath}
             />
             <Route path="/order-list" component={OrderList} />
             <Route path="/order-lending" component={OrderLending} />
@@ -144,17 +172,29 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
                 canOpenPath("/order-repayment-review") ? (
                   <OrderRepaymentReview {...props} />
                 ) : (
-                  <Home />
+                  <AccessFallback fallbackPath={fallbackPath} />
                 )
               }
             />
             <Route
               path="/order-repayment-review/balance/"
-              children={canDo("action:payment:review") ? <Balance /> : <Home />}
+              children={
+                canDo("action:payment:review") ? (
+                  <Balance />
+                ) : (
+                  <AccessFallback fallbackPath={fallbackPath} />
+                )
+              }
             />
             <Route
               path="/order-repayment-review/public-transfare/"
-              children={canDo("action:payment:review") ? <PublicTransfare /> : <Home />}
+              children={
+                canDo("action:payment:review") ? (
+                  <PublicTransfare />
+                ) : (
+                  <AccessFallback fallbackPath={fallbackPath} />
+                )
+              }
             />
             <Route path="/apply-extension" component={ApplyExtension} />
             <Route
@@ -174,6 +214,7 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
               path="/advance-case-list"
               component={AdvanceCaseList}
               allow={canOpenPath("/advance-case-list")}
+              fallbackPath={fallbackPath}
             />
             <Route
               path="/prepayment-records"
@@ -189,6 +230,7 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
               path="/collection-cases"
               component={ListOfCollectionCases}
               allow={canOpenPath("/collection-cases")}
+              fallbackPath={fallbackPath}
             />
             <Route
               path="/collection-payment-records"
@@ -220,31 +262,37 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
               path="/fund-payments"
               component={FundPayments}
               allow={canOpenPath("/fund-payments")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/fund-failed-payments"
               component={FailedPayments}
               allow={canOpenPath("/fund-failed-payments")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/fund-airtime"
               component={FundAirtime}
               allow={canOpenPath("/fund-airtime")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/fund-failed-airtime"
               component={FailedAirtime}
               allow={canOpenPath("/fund-failed-airtime")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/fund-batch-payments"
               component={BatchPayments}
               allow={canOpenPath("/fund-batch-payments")}
+              fallbackPath={fallbackPath}
             />
             <GuardedRoute
               path="/fund-batch-talktime"
               component={BatchTalktime}
               allow={canOpenPath("/fund-batch-talktime")}
+              fallbackPath={fallbackPath}
             />
             <Route path="/order-lending2" component={OrderLending2} />
             <Route
@@ -266,7 +314,7 @@ function MainAppShell({ alerts, sidebarOpen, setSidebarOpen, canDo, canOpenPath 
                 canDo("action:disbursement:manual") ? (
                   <ManualDisburse {...props} />
                 ) : (
-                  <Home />
+                  <AccessFallback fallbackPath={fallbackPath} />
                 )
               }
             />
@@ -289,6 +337,10 @@ export default function Main() {
   );
   const visibleNavigation = React.useMemo(
     () => getVisibleNavigation(userRole, userPermissions),
+    [userPermissions, userRole]
+  );
+  const fallbackPath = React.useMemo(
+    () => getFirstVisiblePath(userRole, userPermissions),
     [userPermissions, userRole]
   );
 
@@ -323,6 +375,7 @@ export default function Main() {
           setSidebarOpen={setSidebarOpen}
           canDo={canDo}
           canOpenPath={canOpenPath}
+          fallbackPath={fallbackPath}
         />
       </GlobalContextProvider>
     );

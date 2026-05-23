@@ -2,7 +2,10 @@ import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import BigLoader from "../../loaders/bigLoader";
 import PermissionManager from "../../permissions/PermissionManager";
-import { getDefaultPermissionsForRole } from "../../../config/navigation";
+import {
+  getAssignablePermissionGroups,
+  getDefaultPermissionsForRoleFromGroups,
+} from "../../../config/navigation";
 import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 const initialFields = {
@@ -23,9 +26,13 @@ const initialFields = {
 };
 
 export default function AddUserDetial() {
-  const { roles, departments, genders, staffGroups, _handleCreateAdmin, bigLoader } =
+  const { roles, departments, genders, staffGroups, _handleCreateAdmin, bigLoader, user } =
     React.useContext(GlobalContext);
   const [fields, setFields] = React.useState(initialFields);
+  const assignablePermissionGroups = React.useMemo(
+    () => getAssignablePermissionGroups(user?.role || "", user?.permissions || []),
+    [user?.permissions, user?.role]
+  );
   const groupOptions = React.useMemo(
     () => getGroupOptionsByDepartment(staffGroups, fields.department),
     [fields.department, staffGroups]
@@ -192,7 +199,10 @@ export default function AddUserDetial() {
                     ...current,
                     role: nextRole,
                     permissions: nextRole
-                      ? getDefaultPermissionsForRole(nextRole)
+                      ? getDefaultPermissionsForRoleFromGroups(
+                          nextRole,
+                          assignablePermissionGroups
+                        )
                       : [],
                   }));
                 }}
@@ -289,6 +299,7 @@ export default function AddUserDetial() {
           role={fields.role}
           selectedPermissions={fields.permissions}
           onChange={(permissions) => updateField("permissions", permissions)}
+          permissionOptions={assignablePermissionGroups}
           title="Access Grants"
           subtitle="Group menu access, operational actions, and feature rights for this staff account."
         />

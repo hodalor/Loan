@@ -20,7 +20,7 @@ export default function AppToast({
   type = "info",
   onClose,
   autoHideDuration = 5000,
-  positionClassName = "top-4 right-4",
+  positionClassName = "top-3 left-3 right-3 sm:top-4 sm:right-4 sm:left-auto",
 }) {
   React.useEffect(() => {
     if (!open || typeof onClose !== "function") return undefined;
@@ -40,15 +40,17 @@ export default function AppToast({
   return (
     <div className={`pointer-events-none fixed z-[1600] ${positionClassName}`}>
       <div
-        className={`pointer-events-auto flex min-w-[280px] max-w-md items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_20px_50px_rgba(15,23,42,0.14)] ${tone}`}
+        className={`pointer-events-auto flex w-full min-w-0 max-w-md items-start gap-3 rounded-2xl border px-4 py-3 shadow-[0_20px_50px_rgba(15,23,42,0.14)] sm:min-w-[280px] sm:w-auto ${tone}`}
         role="alert"
       >
-        <i className={`${icon} mt-0.5 text-sm`} />
-        <div className="flex-1 text-sm font-medium">{message}</div>
+        <i className={`${icon} mt-0.5 shrink-0 text-sm`} />
+        <div className="min-w-0 flex-1 break-words text-sm font-medium leading-6">
+          {message}
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-current/70 transition hover:bg-black/5 hover:text-current"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-current/70 transition hover:bg-black/5 hover:text-current"
           aria-label="Close notification"
         >
           <i className="fa fa-times text-xs" />

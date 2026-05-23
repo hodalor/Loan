@@ -699,16 +699,22 @@ const menuPermissionGroups = navigationItems.map((item) => {
 
 export const permissionGroups = [...menuPermissionGroups, ...actionPermissionGroups];
 
-export const getDefaultPermissionsForRole = (role = "") =>
+export const getDefaultPermissionsForRoleFromGroups = (
+  role = "",
+  groups = permissionGroups
+) =>
   [
     ...new Set(
-      permissionGroups.flatMap((group) =>
-        group.items
+      (Array.isArray(groups) ? groups : []).flatMap((group) =>
+        (Array.isArray(group?.items) ? group.items : [])
           .filter((item) => canAccess(role, item.defaultRoles))
           .map((item) => item.key)
       )
     ),
   ];
+
+export const getDefaultPermissionsForRole = (role = "") =>
+  getDefaultPermissionsForRoleFromGroups(role, permissionGroups);
 
 export const normalizeUserPermissions = (role = "", permissions = []) => {
   if (isGodModeRole(role)) {
@@ -732,6 +738,16 @@ export const hasPermission = (role = "", permissions = [], permissionKey = "") =
   isGodModeRole(role) ||
   normalizeUserPermissions(role, permissions).includes(permissionKey);
 
+export const getAssignablePermissionGroups = (role = "", permissions = []) =>
+  permissionGroups
+    .map((group) => ({
+      ...group,
+      items: (Array.isArray(group?.items) ? group.items : []).filter((item) =>
+        hasPermission(role, permissions, item.key)
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
 const hasPermissionAccess = (role, permissions, item) => {
   if (!item.permissionKey) return canAccess(role, item.roles);
 
@@ -754,3 +770,16 @@ export const getVisibleNavigation = (role, permissions = []) =>
       return { ...item, children };
     })
     .filter((item) => item && (!item.children || item.children.length > 0));
+
+export const getFirstVisiblePath = (role = "", permissions = []) => {
+  const visibleNavigation = getVisibleNavigation(role, permissions);
+
+  for (const item of visibleNavigation) {
+    if (item?.path) return item.path;
+    if (Array.isArray(item?.children) && item.children[0]?.path) {
+      return item.children[0].path;
+    }
+  }
+
+  return "/";
+};

@@ -1,5 +1,8 @@
 import React from "react";
-import { getDefaultPermissionsForRole, permissionGroups } from "../../config/navigation";
+import {
+  getDefaultPermissionsForRoleFromGroups,
+  permissionGroups,
+} from "../../config/navigation";
 
 const countSelected = (group, selected) =>
   group.items.filter((item) => selected.includes(item.key)).length;
@@ -10,16 +13,38 @@ export default function PermissionManager({
   onChange,
   title = "Permissions",
   subtitle = "Choose menu access and operational actions for this staff account.",
+  permissionOptions = permissionGroups,
 }) {
   const allSelected = React.useMemo(
     () => (Array.isArray(selectedPermissions) ? selectedPermissions : []),
     [selectedPermissions]
   );
+  const availableGroups = React.useMemo(
+    () => (Array.isArray(permissionOptions) ? permissionOptions : permissionGroups),
+    [permissionOptions]
+  );
+  const visiblePermissionKeys = React.useMemo(
+    () =>
+      availableGroups.flatMap((group) =>
+        (Array.isArray(group?.items) ? group.items : []).map((item) => item.key)
+      ),
+    [availableGroups]
+  );
+  const hiddenSelected = React.useMemo(
+    () => allSelected.filter((permission) => !visiblePermissionKeys.includes(permission)),
+    [allSelected, visiblePermissionKeys]
+  );
   const checkboxRefs = React.useRef({});
 
   const handleGroupToggle = (group, checked) => {
     if (checked) {
-      const next = [...new Set([...allSelected, ...group.items.map((item) => item.key)])];
+      const next = [
+        ...new Set([
+          ...hiddenSelected,
+          ...allSelected,
+          ...group.items.map((item) => item.key),
+        ]),
+      ];
       onChange(next);
       return;
     }
@@ -27,23 +52,28 @@ export default function PermissionManager({
     const next = allSelected.filter(
       (permission) => !group.items.some((item) => item.key === permission)
     );
-    onChange(next);
+    onChange([...new Set([...hiddenSelected, ...next])]);
   };
 
   const handlePermissionToggle = (permissionKey, checked) => {
     const next = checked
-      ? [...new Set([...allSelected, permissionKey])]
+      ? [...new Set([...hiddenSelected, ...allSelected, permissionKey])]
       : allSelected.filter((permission) => permission !== permissionKey);
 
-    onChange(next);
+    onChange([...new Set([...hiddenSelected, ...next])]);
   };
 
   const applyRoleDefaults = () => {
-    onChange(getDefaultPermissionsForRole(role));
+    onChange([
+      ...new Set([
+        ...hiddenSelected,
+        ...getDefaultPermissionsForRoleFromGroups(role, availableGroups),
+      ]),
+    ]);
   };
 
   React.useEffect(() => {
-    permissionGroups.forEach((group) => {
+    availableGroups.forEach((group) => {
       const selectedCount = countSelected(group, allSelected);
       const input = checkboxRefs.current[group.id];
 
@@ -52,7 +82,7 @@ export default function PermissionManager({
           selectedCount > 0 && selectedCount < group.items.length;
       }
     });
-  }, [allSelected]);
+  }, [allSelected, availableGroups]);
 
   return (
     <div className="space-y-4">
@@ -76,7 +106,7 @@ export default function PermissionManager({
       </div>
 
       <div className="space-y-3">
-        {permissionGroups.map((group) => {
+        {availableGroups.map((group) => {
           const selectedCount = countSelected(group, allSelected);
           const isChecked = selectedCount === group.items.length && group.items.length > 0;
 

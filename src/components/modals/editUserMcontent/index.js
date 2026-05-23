@@ -2,7 +2,10 @@ import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import BigLoader from "../../loaders/bigLoader";
 import PermissionManager from "../../permissions/PermissionManager";
-import { normalizeUserPermissions } from "../../../config/navigation";
+import {
+  getAssignablePermissionGroups,
+  normalizeUserPermissions,
+} from "../../../config/navigation";
 import { getGroupOptionsByDepartment } from "../../../libs/staffGroups";
 
 const buildEditState = (userDetails = {}) => ({
@@ -41,6 +44,7 @@ export default function EditUserDetial() {
     userDetails,
     _handleDelete,
     _hasAccess,
+    user,
   } = React.useContext(GlobalContext);
   const canEditUser = _hasAccess("action:user:update");
   const canDeleteUser = _hasAccess("action:user:delete");
@@ -49,6 +53,10 @@ export default function EditUserDetial() {
   const groupOptions = React.useMemo(
     () => getGroupOptionsByDepartment(staffGroups, fields.department),
     [fields.department, staffGroups]
+  );
+  const assignablePermissionGroups = React.useMemo(
+    () => getAssignablePermissionGroups(user?.role || "", user?.permissions || []),
+    [user?.permissions, user?.role]
   );
   const payoutOperatorOptions = [
     { value: "MTN", label: "MTN" },
@@ -331,6 +339,7 @@ export default function EditUserDetial() {
               role={fields.role}
               selectedPermissions={fields.permissions}
               onChange={(permissions) => updateField("permissions", permissions)}
+              permissionOptions={assignablePermissionGroups}
               title="Access Grants"
               subtitle="Use role defaults as a starting point, then fine-tune what this staff member can open or perform."
             />

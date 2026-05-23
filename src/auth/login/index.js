@@ -20,15 +20,15 @@ export default function Login() {
   } = React.useContext(AuthContext);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
-      <div className="w-full max-w-sm rounded-[24px] border border-slate-800 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-7">
-        <div className="mb-6 flex items-center justify-center gap-3 text-center">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-3 py-6 sm:px-4 sm:py-10">
+      <div className="w-full max-w-sm rounded-[24px] border border-slate-800 bg-white p-4 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6 md:max-w-md md:p-7">
+        <div className="mb-5 flex flex-col items-center justify-center gap-3 text-center sm:mb-6 sm:flex-row">
           <img
             src={`${process.env.PUBLIC_URL}/pathwaylogo.png`}
             alt="Pathway Loans"
-            className="h-12 w-12 rounded-2xl object-cover"
+            className="h-12 w-12 rounded-2xl object-cover sm:h-12 sm:w-12"
           />
-          <h2 className="text-[28px] font-semibold leading-none text-slate-900">
+          <h2 className="text-center text-[24px] font-semibold leading-tight text-slate-900 sm:text-[28px] sm:leading-none">
             SPEED CASH
           </h2>
         </div>
@@ -80,7 +80,7 @@ export default function Login() {
                 <p className="mb-1 text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
                   Security code
                 </p>
-                <span className="block break-all font-mono text-lg font-semibold tracking-[0.18em] text-slate-900 sm:text-xl sm:tracking-[0.3em]">
+                <span className="block break-all font-mono text-base font-semibold tracking-[0.16em] text-slate-900 sm:text-xl sm:tracking-[0.3em]">
                   {captchaCode}
                 </span>
               </div>
@@ -88,7 +88,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={resetCaptcha}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-sm text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-900 bg-slate-900 text-sm text-white shadow-sm transition hover:border-black hover:bg-black"
                   aria-label="Reset captcha"
                   title="Reset captcha"
                 >
@@ -128,7 +128,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loader}
-              className="app-btn-primary min-w-[160px]"
+              className="app-btn-primary w-full sm:min-w-[160px] sm:w-auto"
             >
               {loader ? <DefaultLoader /> : "Sign In"}
             </button>
