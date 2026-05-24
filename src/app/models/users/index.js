@@ -278,6 +278,19 @@ const paymentRecords = new mongoose.Schema({
   },
 });
 
+const paymentRecs = new mongoose.Schema({
+  datePaid: {
+    type: Date,
+    required: false,
+    unique: false,
+  },
+  amountPaid: {
+    type: String,
+    required: false,
+    unique: false,
+  },
+});
+
 const loanSchema = new mongoose.Schema({
   userId: {
     type: String,
@@ -466,7 +479,7 @@ const loanSchema = new mongoose.Schema({
     required: false,
   },
   paymentRecords: {
-    type: [paymentRecords],
+    type: [paymentRecs],
     required: false,
   },
 });

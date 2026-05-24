@@ -3210,6 +3210,62 @@ router.post("/portal/apply-loan", async (req, res) => {
 
     user.paymentMethods = normalizedPaymentMethods.length > 0 ? normalizedPaymentMethods : paymentMethods;
 
+    // #region debug-point A:pre-user-save
+    (() => {
+      const fs = require("fs");
+      const envPath = ".dbg/apply-loan-payment-records.env";
+      let url = "http://127.0.0.1:7777/event";
+      let sessionId = "apply-loan-payment-records";
+
+      try {
+        const envContent = fs.readFileSync(envPath, "utf8");
+        url = envContent.match(/DEBUG_SERVER_URL=(.+)/)?.[1] || url;
+        sessionId = envContent.match(/DEBUG_SESSION_ID=(.+)/)?.[1] || sessionId;
+      } catch {}
+
+      const paymentRecordSummary = (Array.isArray(user.loan?.loans) ? user.loan.loans : []).map(
+        (loanItem, index) => ({
+          index,
+          id: loanItem?.ID || "",
+          paymentRecordsCount: Array.isArray(loanItem?.paymentRecords)
+            ? loanItem.paymentRecords.length
+            : 0,
+          invalidPaymentRecordIndexes: (
+            Array.isArray(loanItem?.paymentRecords) ? loanItem.paymentRecords : []
+          )
+            .map((record, recordIndex) => ({
+              recordIndex,
+              keys: Object.keys(record || {}),
+            }))
+            .filter(
+              (record) =>
+                !record.keys.includes("recordType") ||
+                !record.keys.includes("loanId") ||
+                !record.keys.includes("userId")
+            ),
+        })
+      );
+
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "backend/src/app/routes/user/customerAuth.js:3213",
+          msg: "[DEBUG] portal apply-loan before user save",
+          data: {
+            phone,
+            userId: user.userId,
+            loanCount: Array.isArray(user.loan?.loans) ? user.loan.loans.length : 0,
+            paymentRecordSummary,
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+    })();
+    // #endregion
     const savedUser = await user.save();
     const latestEmbeddedLoan = Array.isArray(savedUser.loan?.loans)
       ? savedUser.loan.loans[savedUser.loan.loans.length - 1]
@@ -3249,6 +3305,41 @@ router.post("/portal/apply-loan", async (req, res) => {
       },
     });
   } catch (error) {
+    // #region debug-point E:apply-loan-catch
+    (() => {
+      const fs = require("fs");
+      const envPath = ".dbg/apply-loan-payment-records.env";
+      let url = "http://127.0.0.1:7777/event";
+      let sessionId = "apply-loan-payment-records";
+
+      try {
+        const envContent = fs.readFileSync(envPath, "utf8");
+        url = envContent.match(/DEBUG_SERVER_URL=(.+)/)?.[1] || url;
+        sessionId = envContent.match(/DEBUG_SESSION_ID=(.+)/)?.[1] || sessionId;
+      } catch {}
+
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          runId: "pre-fix",
+          hypothesisId: "E",
+          location: "backend/src/app/routes/user/customerAuth.js:3255",
+          msg: "[DEBUG] portal apply-loan threw error",
+          data: {
+            name: error?.name || "",
+            message: error?.message || "",
+            validationKeys: error?.errors ? Object.keys(error.errors) : [],
+            firstValidationError: error?.errors
+              ? error.errors[Object.keys(error.errors)[0]]?.message || ""
+              : "",
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+    })();
+    // #endregion
     console.log(error);
     return res.status(500).json({
       success: 0,
