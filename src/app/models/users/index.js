@@ -89,7 +89,7 @@ const preCollCallRecords = new mongoose.Schema({
   },
   plannedRepayDate: {
     type: Date,
-    required: true,
+    required: false,
     unique: false,
   },
   callDate: {
@@ -180,7 +180,7 @@ const collCallRecords = new mongoose.Schema({
   },
   plannedRepayDate: {
     type: Date,
-    required: true,
+    required: false,
     unique: false,
   },
   callDate: {
