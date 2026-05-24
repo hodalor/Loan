@@ -133,9 +133,17 @@ const getConfiguredLevelDefinition = (level, systemConfig = {}) => {
 
   return exactLevel || getDefaultLevelDefinition(level);
 };
+const SETTLED_PAYMENT_STATUSES = ["Paid", "Payed"];
+const hasSettledPaymentStatus = (status = "") =>
+  SETTLED_PAYMENT_STATUSES.includes(String(status || "").trim());
+const isSettledLoan = (loan = {}) =>
+  hasSettledPaymentStatus(loan?.paymentStatus) ||
+  String(loan?.caseStatus || "").trim() === "Completed" ||
+  (toMoney(loan?.repaymentAmount || 0) > 0 &&
+    toMoney(loan?.amountPaid || 0) + 0.009 >= toMoney(loan?.repaymentAmount || 0));
 const countSettledLoans = (user = {}) =>
   (user.loan?.loans || []).filter(
-    (loan) => loan.loanStatus === "Granted" && loan.paymentStatus === "Paid"
+    (loan) => loan.loanStatus === "Granted" && isSettledLoan(loan)
   ).length;
 const getDefaultPaymentMethod = (user = {}) => ({
   method: sanitizePhone(user.phone || ""),
@@ -339,7 +347,7 @@ const buildCanonicalEmbeddedLoanState = (globalLoans = [], currentLoan = {}) => 
     .sort((left, right) => toLoanTime(right.doa || right.createdAt) - toLoanTime(left.doa || left.createdAt));
   const activeLoan =
     normalizedLoans.find((loan) => loan.loanStatus === "Review") ||
-    normalizedLoans.find((loan) => loan.loanStatus === "Granted" && loan.paymentStatus !== "Paid") ||
+    normalizedLoans.find((loan) => loan.loanStatus === "Granted" && !isSettledLoan(loan)) ||
     normalizedLoans[0] ||
     null;
 
@@ -347,7 +355,7 @@ const buildCanonicalEmbeddedLoanState = (globalLoans = [], currentLoan = {}) => 
     isApplied: Boolean(
       activeLoan &&
         (activeLoan.loanStatus === "Review" ||
-          (activeLoan.loanStatus === "Granted" && activeLoan.paymentStatus !== "Paid"))
+          (activeLoan.loanStatus === "Granted" && !isSettledLoan(activeLoan)))
     ),
     loanStatus: activeLoan?.loanStatus || "Not applied",
     paymentStatus: activeLoan?.paymentStatus || "Not payed",
@@ -414,7 +422,7 @@ const getCurrentPortalLoan = (user = {}, globalLoans = []) => {
   const loans = getUserLoanHistory(user, globalLoans);
   return (
     loans.find((loan) => loan.loanStatus === "Review") ||
-    loans.find((loan) => loan.loanStatus === "Granted" && loan.paymentStatus !== "Paid") ||
+    loans.find((loan) => loan.loanStatus === "Granted" && !isSettledLoan(loan)) ||
     loans.find((loan) => loan.loanStatus === "Rejected") ||
     loans[0] ||
     null
@@ -425,8 +433,8 @@ const startOfDay = (dateValue) => {
   if (Number.isNaN(date.getTime())) return null;
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 };
-const getDayDifference = (futureDateValue) => {
-  const today = startOfDay(new Date());
+const getDayDifference = (futureDateValue, compareDateValue = new Date()) => {
+  const today = startOfDay(compareDateValue);
   const targetDate = startOfDay(futureDateValue);
 
   if (!today || !targetDate) return null;
@@ -443,11 +451,15 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
   const amountPaid = toMoney(loan.amountPaid || 0);
   const outstandingBalance = Math.max(repaymentAmount - amountPaid, 0);
   const dueDate = loan.dop || null;
-  const daysRemaining = dueDate ? getDayDifference(dueDate) : null;
+  const settledLoan = isSettledLoan(loan);
+  const daysRemaining = dueDate
+    ? getDayDifference(dueDate, settledLoan && loan.dp ? loan.dp : new Date())
+    : null;
   const overdueDays = daysRemaining !== null && daysRemaining < 0 ? Math.abs(daysRemaining) : 0;
   const overduePenalty = toMoney(
     overdueDays > 0
-      ? ((Number(lifecycleConfig.overduePenaltyRate || 0) / 100) * amount) * overdueDays
+      ? ((Number(lifecycleConfig.overduePenaltyRate || 0) / 100) * outstandingBalance) *
+          overdueDays
       : 0
   );
   const totalDue = toMoney(outstandingBalance + overduePenalty);
@@ -478,7 +490,7 @@ const buildActiveLoanView = (user = {}, systemConfig = {}, globalLoans = []) => 
     title = "Loan approved, awaiting disbursement";
     message =
       "Your loan has been approved and the disbursement is still waiting for final confirmation.";
-  } else if (loan.loanStatus === "Granted" && loan.paymentStatus === "Paid") {
+  } else if (loan.loanStatus === "Granted" && settledLoan) {
     statusKey = "paid";
     title = "Loan fully paid";
     message = "Your loan is fully repaid. You can apply again if a new offer is available.";
