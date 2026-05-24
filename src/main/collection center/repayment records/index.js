@@ -8,6 +8,7 @@ import {
   getGroupOptionsByDepartment,
   getManagedGroupIdsForUser,
 } from "../../../libs/staffGroups";
+import { formatMoney, getCollectionMetrics } from "../../../libs/collectionMetrics";
 
 export default function CollectionPaymentRecords() {
   const {
@@ -102,15 +103,6 @@ export default function CollectionPaymentRecords() {
     [dateRange]
   );
 
-  const calcPenalty = (loan) => {
-    const dp = new Date(loan.dp);
-    const dop = new Date(loan.dop);
-    const timeDiff = dp.getTime() - dop.getTime();
-    const diffDate = timeDiff / (1000 * 3600 * 24);
-    const dur = parseInt(diffDate, 10);
-    return (2 / 100) * parseInt(loan.amount, 10) * dur;
-  };
-
   const rows = React.useMemo(
     () =>
       (Array.isArray(colPayRecs) ? colPayRecs : []).map((loan) => {
@@ -122,7 +114,8 @@ export default function CollectionPaymentRecords() {
           loan.collCallRecords === undefined || loan.collCallRecords.length === 0
             ? {}
             : loan.collCallRecords.slice(-1)[0];
-        const repaymentAmount = parseFloat(loan.repaymentAmount || 0) + calcPenalty(loan);
+        const metrics = getCollectionMetrics(loan, customer);
+        const repaymentAmount = metrics.repaymentAmount + metrics.overduePenalty;
         const overallAmountPaid = parseFloat(loan.overallAmountPaid || loan.amountPaid || 0);
 
         return {
@@ -130,8 +123,8 @@ export default function CollectionPaymentRecords() {
           id: loan.ID,
           orderId: loan.ID,
           phone: customer?.phone || "",
-          repAmount: repaymentAmount.toFixed(2),
-          amountLeft: `GHC${Math.max(repaymentAmount - overallAmountPaid, 0).toFixed(2)}`,
+          repAmount: formatMoney(repaymentAmount),
+          amountLeft: `GHC${formatMoney(Math.max(repaymentAmount - overallAmountPaid, 0))}`,
           dateApplied: loan.doa ? new Date(loan.doa).toLocaleDateString() : "-",
           datePaid: loan.dp ? new Date(loan.dp).toLocaleDateString() : "-",
           collOfficer: loan.collofficer || callRecord.collOfficer || "-",

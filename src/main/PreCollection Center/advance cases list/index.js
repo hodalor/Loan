@@ -8,6 +8,7 @@ import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import { _unassignPreColCases } from "../../../handlers";
 import { getAdminsByGroupIds, getManagedGroupIdsForUser } from "../../../libs/staffGroups";
+import { formatMoney, getCollectionMetrics } from "../../../libs/collectionMetrics";
 
 const TAB_ITEMS = [
   { id: "unassigned", label: "Unassigned Cases" },
@@ -108,21 +109,6 @@ export default function AdvanceCaseList() {
     [admins, currentOfficerName, preAssignedScope, preCompletedScope, scopedOfficerNames]
   );
 
-  const calcOverdueDays = React.useCallback((loan) => {
-    const dp = new Date(loan.dp);
-    const dop = new Date(loan.dop);
-    const timeDiff = dp.getTime() - dop.getTime();
-    return parseInt(timeDiff / (1000 * 3600 * 24), 10);
-  }, []);
-
-  const calcPenalty = React.useCallback(
-    (loan) => {
-      const dur = calcOverdueDays(loan);
-      return (2 / 100) * parseInt(loan.amount, 10) * dur;
-    },
-    [calcOverdueDays]
-  );
-
   const getCustomer = React.useCallback(
     (userId) =>
       customers === undefined || customers.length === 0
@@ -139,18 +125,15 @@ export default function AdvanceCaseList() {
           ? {}
           : loan.preCollCallRecords.slice(-1)[0];
       const loanType = customer?.loan?.loans?.length === 1 ? "First-Loan" : "Re-loan";
-      const amountLeftBase =
-        loan.amountPaid === undefined || loan.amountPaid === ""
-          ? parseFloat(loan.repaymentAmount || 0)
-          : parseFloat(loan.repaymentAmount || 0) - parseFloat(loan.amountPaid || 0);
-      const completedAmountLeft =
-        loan.amountPaid === undefined || loan.amountPaid === ""
-          ? parseFloat(loan.repaymentAmount || 0) + calcPenalty(loan)
-          : parseFloat(loan.repaymentAmount || 0) +
-            calcPenalty(loan) -
-            parseFloat(loan.amountPaid || 0);
+      const metrics = getCollectionMetrics(loan, customer);
+      const amountLeftBase = Math.max(
+        parseFloat(loan.repaymentAmount || 0) - parseFloat(loan.amountPaid || 0),
+        0
+      );
+      const completedExpectedAmount = metrics.repaymentAmount + metrics.overduePenalty;
+      const completedAmountLeft = Math.max(completedExpectedAmount - metrics.amountPaid, 0);
 
-      const rawDays = mode === "completed" ? calcOverdueDays(loan) : Number(loan.dur || 0);
+      const rawDays = mode === "completed" ? metrics.overdueDays : Number(loan.dur || 0);
       const daysTag = `T${Math.max(0, Math.min(2, Number(rawDays || 0)))}`;
 
       return {
@@ -166,11 +149,11 @@ export default function AdvanceCaseList() {
         paymentTerm: loan.duration || "-",
         loanAmount:
           mode === "completed"
-            ? (parseFloat(loan.repaymentAmount || 0) + calcPenalty(loan)).toFixed(2)
-            : loan.repaymentAmount || "0",
+            ? formatMoney(completedExpectedAmount)
+            : formatMoney(parseFloat(loan.repaymentAmount || 0)),
         days: rawDays,
         daysTag,
-        amountLeft: (mode === "completed" ? completedAmountLeft : amountLeftBase).toFixed(2),
+        amountLeft: formatMoney(mode === "completed" ? completedAmountLeft : amountLeftBase),
         repaymentDate: loan.dp ? new Date(loan.dp).toLocaleDateString() : "-",
         dueDate: loan.dop ? new Date(loan.dop).toLocaleDateString() : "-",
         callDate: callRecord.callDate ? new Date(callRecord.callDate).toLocaleDateString() : "-",
@@ -181,7 +164,7 @@ export default function AdvanceCaseList() {
         advanceEmployee: loan.preCollOfficer || "-",
       };
     },
-    [calcOverdueDays, calcPenalty, getCustomer]
+    [getCustomer]
   );
 
   const unassignedRows = React.useMemo(

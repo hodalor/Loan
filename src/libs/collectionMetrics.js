@@ -16,6 +16,9 @@ const getPenaltyRate = (loan = {}) => {
   const configuredRate = toNumber(loan?.overduePenaltyRate);
   return configuredRate > 0 ? configuredRate : 2;
 };
+const isSettledPayment = (loan = {}) =>
+  ["Paid", "Payed"].includes(String(loan?.paymentStatus || "").trim()) ||
+  toNumber(loan?.amountPaid) + 0.009 >= toNumber(loan?.repaymentAmount);
 
 const getAmountPaidBeforeFinalClearance = (loan = {}) => {
   const totalAmountPaid = toNumber(loan?.amountPaid);
@@ -33,7 +36,7 @@ const getOverdueDays = (loan = {}, countryProfile = {}) => {
     return 0;
   }
 
-  if (loan?.caseStatus === "Completed" && loan?.dp) {
+  if ((loan?.caseStatus === "Completed" || isSettledPayment(loan)) && loan?.dp) {
     return Math.max(
       0,
       -getCalendarDayDifferenceByCountry(loan?.dop, loan?.dp, countryProfile)

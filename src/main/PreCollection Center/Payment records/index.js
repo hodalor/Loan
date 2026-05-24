@@ -8,6 +8,7 @@ import {
   getGroupOptionsByDepartment,
   getManagedGroupIdsForUser,
 } from "../../../libs/staffGroups";
+import { formatMoney, getCollectionMetrics } from "../../../libs/collectionMetrics";
 
 export default function PrePaymentRecords() {
   const {
@@ -112,21 +113,6 @@ export default function PrePaymentRecords() {
     },
   ];
 
-  const _calcRep = (loan) => {
-    let dp = new Date(loan.dp);
-    let dop = new Date(loan.dop);
-
-    let timeDiff = dp.getTime() - dop.getTime();
-
-    let diffDate = timeDiff / (1000 * 3600 * 24);
-
-    let dur = parseInt(diffDate);
-
-    let pen = (2 / 100) * parseInt(loan.amount) * dur;
-
-    return pen;
-  };
-
   const rows = React.useMemo(
     () =>
       prePayment === undefined || prePayment.length === 0
@@ -143,17 +129,16 @@ export default function PrePaymentRecords() {
                 ? {}
                 : loan.preCollCallRecords.slice(-1)[0];
             const overallAmountPaid = parseFloat(loan.overallAmountPaid || loan.amountPaid || 0);
+            const metrics = getCollectionMetrics(loan, customer);
+            const expectedAmount = metrics.repaymentAmount + metrics.overduePenalty;
 
             return {
               ...loan,
               id: loan.ID,
               orderId: loan.ID,
               phone: customer === undefined ? "" : customer.phone,
-              repAmount: parseFloat(loan.repaymentAmount) + _calcRep(loan),
-              amountLeft:
-                parseFloat(loan.repaymentAmount) +
-                _calcRep(loan) -
-                overallAmountPaid,
+              repAmount: formatMoney(expectedAmount),
+              amountLeft: formatMoney(Math.max(expectedAmount - overallAmountPaid, 0)),
               preCollOfficer: loan.preCollOfficer || callRecord.preCollOfficer,
             };
           }),

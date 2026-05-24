@@ -1,6 +1,7 @@
 import React from "react";
 import { GlobalContext } from "../../libs/context/globalContext";
 import DefaultLoader from "../../components/loaders/defaultLoader";
+import { getCollectionMetrics } from "../../libs/collectionMetrics";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -70,20 +71,7 @@ const isCurrentMonth = (dateValue) => {
   );
 };
 
-const calculatePenalty = (loan) => {
-  if (Math.sign(toNumber(loan?.dur)) !== -1) return 0;
-
-  const paymentDate = loan?.caseStatus === "Completed" ? new Date(loan?.dp) : new Date();
-  const dueDate = new Date(loan?.dop);
-
-  if (Number.isNaN(dueDate.getTime()) || Number.isNaN(paymentDate.getTime())) return 0;
-
-  const dayDifference = Math.trunc(
-    (paymentDate.getTime() - dueDate.getTime()) / (1000 * 3600 * 24)
-  );
-
-  return (2 / Math.max(toNumber(loan?.amount), 1)) * 100 * dayDifference;
-};
+const calculatePenalty = (loan) => getCollectionMetrics(loan).overduePenalty;
 
 export default function Dashboard() {
   const { loans, customers, globalLoader } = React.useContext(GlobalContext);
