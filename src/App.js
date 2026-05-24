@@ -293,6 +293,52 @@ const formatDaysLabel = (days) => {
   const overdueDays = Math.abs(days);
   return `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`;
 };
+const SETTLED_PAYMENT_STATUSES = ["Paid", "Payed"];
+const isSettledPortalLoan = (loan = {}) =>
+  SETTLED_PAYMENT_STATUSES.includes(String(loan?.paymentStatus || "").trim()) ||
+  String(loan?.caseStatus || "").trim() === "Completed" ||
+  toMoney(loan?.amountPaid) + 0.009 >= toMoney(loan?.repaymentAmount);
+const getCalendarDayDifference = (left, right = new Date()) => {
+  const leftDate = new Date(left);
+  const rightDate = new Date(right);
+
+  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
+    return null;
+  }
+
+  const leftMidnight = new Date(leftDate.getFullYear(), leftDate.getMonth(), leftDate.getDate());
+  const rightMidnight = new Date(
+    rightDate.getFullYear(),
+    rightDate.getMonth(),
+    rightDate.getDate()
+  );
+
+  return Math.round((leftMidnight.getTime() - rightMidnight.getTime()) / (1000 * 3600 * 24));
+};
+const getPortalLoanMetrics = (loan = {}) => {
+  const repaymentAmount = toMoney(loan?.repaymentAmount || 0);
+  const amountPaid = toMoney(loan?.amountPaid || 0);
+  const settled = isSettledPortalLoan(loan);
+  const cutoffDate = settled && loan?.dp ? loan.dp : new Date();
+  const daysRemaining = getCalendarDayDifference(loan?.dop, cutoffDate);
+  const overdueDays = daysRemaining === null ? 0 : Math.max(-daysRemaining, 0);
+  const remainingPrincipal = Math.max(repaymentAmount - amountPaid, 0);
+  const overduePenaltyRate = Number(loan?.overduePenaltyRate || 2);
+  const overduePenalty = toMoney(
+    remainingPrincipal > 0 ? remainingPrincipal * (overduePenaltyRate / 100) * overdueDays : 0
+  );
+  const outstandingBalance = toMoney(remainingPrincipal + overduePenalty);
+
+  return {
+    settled,
+    repaymentAmount,
+    amountPaid,
+    daysRemaining,
+    overdueDays,
+    overduePenalty,
+    outstandingBalance,
+  };
+};
 const getRepaymentMethodLabel = (options = [], key = "") =>
   options.find((item) => item.key === key)?.label || key || "-";
 const getGatewayMobileMoneyNetworks = (lifecycleConfig = {}) =>
@@ -317,7 +363,9 @@ const getRecordBadges = (loan = {}) => {
   if (loan.paymentStatus) {
     badges.push({
       label: loan.paymentStatus,
-      tone: loan.paymentStatus === "Paid" ? "success" : "neutral",
+      tone: SETTLED_PAYMENT_STATUSES.includes(String(loan.paymentStatus).trim())
+        ? "success"
+        : "neutral",
     });
   }
 
@@ -425,6 +473,7 @@ const syncLoanRequestWithOffer = (currentRequest, offer) => {
 const buildLoanRecords = (loans = []) =>
   [...loans]
     .flatMap((loan, index) => {
+      const metrics = getPortalLoanMetrics(loan);
       const records = [
         {
           id: `loan-${loan.ID || index}`,
@@ -448,25 +497,26 @@ const buildLoanRecords = (loans = []) =>
         records.push({
           id: `repayment-${loan.ID || index}`,
           type: "Repayment",
-          status: loan.paymentStatus === "Paid" ? "Completed" : "In progress",
+          status: metrics.settled ? "Completed" : "In progress",
           amount: Number(loan.amountPaid || 0),
           direction: "debit",
           date: loan.dp || loan.updatedAt || loan.doa,
           subtitle: `Loan repayment${loan.ID ? ` (${loan.ID})` : ""}`,
           badges: [
             {
-              label: loan.paymentStatus === "Paid" ? "Payment cleared" : "Partial payment",
-              tone: loan.paymentStatus === "Paid" ? "success" : "info",
+              label: metrics.settled ? "Payment cleared" : "Partial payment",
+              tone: metrics.settled ? "success" : "info",
             },
           ],
           metaRows: [
             { label: "Loan ID", value: loan.ID || "-" },
             { label: "Amount Paid", value: formatCurrency(Number(loan.amountPaid || 0)) },
+            ...(metrics.overduePenalty > 0
+              ? [{ label: "Penalty", value: formatCurrency(metrics.overduePenalty) }]
+              : []),
             {
               label: "Balance",
-              value: formatCurrency(
-                Math.max(Number(loan.repaymentAmount || 0) - Number(loan.amountPaid || 0), 0)
-              ),
+              value: formatCurrency(metrics.outstandingBalance),
             },
           ],
         });
