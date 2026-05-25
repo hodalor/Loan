@@ -208,7 +208,7 @@ const DEFAULT_COUNTRIES = [
   },
 ];
 const DEFAULT_PORTAL_CONTENT = {
-  appName: "Pathway Loans",
+  appName: "SPEED CASH",
   logoUrl: "",
   tagline: "Fast customer login, application tracking, and identity verification.",
   footerText: "All rights reserved.",
@@ -250,7 +250,7 @@ const DEFAULT_CONFIG = {
   activeChannel: "zynlepay",
   disbursementGateway: "zynlepay",
   implementedChannels: ["zynlepay", "nsano", "paystack", "bridge"],
-  gatewayAccountName: "Pathway Main Float",
+  gatewayAccountName: "Speed Cash Main Float",
   callbackUrl: "",
   settlementAccount: "",
   apiKey: "",

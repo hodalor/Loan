@@ -218,7 +218,7 @@ const portalContentSchema = new mongoose.Schema(
   {
     appName: {
       type: String,
-      default: "Pathway Loans",
+      default: "SPEED CASH",
     },
     logoUrl: {
       type: String,
@@ -345,7 +345,7 @@ const systemConfigSchema = new mongoose.Schema(
     },
     gatewayAccountName: {
       type: String,
-      default: "Pathway Main Float",
+      default: "Speed Cash Main Float",
     },
     callbackUrl: {
       type: String,

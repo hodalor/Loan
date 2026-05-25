@@ -250,7 +250,7 @@ const resolveCountryProfile = ({ systemConfig = {}, customer = null, access = nu
     )
   );
 const buildPortalContent = (systemConfig = {}) => ({
-  appName: systemConfig.portalContent?.appName || "Pathway Loans",
+  appName: systemConfig.portalContent?.appName || "SPEED CASH",
   logoUrl: systemConfig.portalContent?.logoUrl || "",
   tagline:
     systemConfig.portalContent?.tagline ||
