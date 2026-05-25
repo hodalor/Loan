@@ -2,6 +2,7 @@ import React from "react";
 import { GlobalContext } from "../../libs/context/globalContext";
 import MyModal from "../modals";
 import BigLoader from "../loaders/bigLoader";
+import { formatMoney, getCollectionMetrics } from "../../libs/collectionMetrics";
 
 export default function Balance() {
   const {
@@ -20,22 +21,16 @@ export default function Balance() {
   const [area, setArea] = React.useState("");
   const canReviewPayments = _hasAccess("action:payment:review");
   const amountBeingCleared = Number.parseFloat(loan.clearanceRecord?.amountPaid || 0);
-  const remainingAmountAfterApproval =
-    loan.amountPaid === undefined
-      ? parseFloat(loan.repaymentAmount) +
-        ((2 / 100) * loan.amount * Math.sign(loan.dur) === -1 ? -loan.dur : 1) -
-        parseFloat(loan.clearanceRecord.amountPaid)
-      : parseFloat(loan.repaymentAmount) +
-        (2 / 100) * loan.amount * -loan.dur -
-        parseFloat(loan.amountPaid);
+  const metrics = getCollectionMetrics(loan);
+  const remainingAmountAfterApproval = Math.max(metrics.amountPayable - amountBeingCleared, 0);
 
   const detailRows = [
     { label: "Record Type", value: "Balance" },
     { label: "Order ID", value: loan.ID },
     { label: "User ID", value: loan.userId },
-    { label: "Paid Amount", value: loan.amountPaid },
-    { label: "Amount Being Cleared", value: amountBeingCleared },
-    { label: "Remaining Amount After Approval", value: remainingAmountAfterApproval },
+    { label: "Paid Amount", value: formatMoney(loan.amountPaid) },
+    { label: "Amount Being Cleared", value: formatMoney(amountBeingCleared) },
+    { label: "Remaining Amount After Approval", value: formatMoney(remainingAmountAfterApproval) },
   ];
 
   return (
@@ -155,13 +150,13 @@ export default function Balance() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-slate-900">Amount Being Cleared</span>
-                <span>{amountBeingCleared}</span>
+                <span>{formatMoney(amountBeingCleared)}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-slate-900">
                   Remaining Amount After Approval
                 </span>
-                <span>{remainingAmountAfterApproval}</span>
+                <span>{formatMoney(remainingAmountAfterApproval)}</span>
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">

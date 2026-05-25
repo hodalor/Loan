@@ -5,6 +5,7 @@ import MyModal from "../modals";
 import BigLoader from "../loaders/bigLoader";
 import ImgModalContent from "../modals/imgContent";
 import { apiBaseUrl } from "../../libs/endpoints";
+import { formatMoney, getCollectionMetrics } from "../../libs/collectionMetrics";
 
 const normalizeProofUrl = (value = "") => {
   const rawValue = String(value || "").trim();
@@ -56,29 +57,15 @@ export default function PublicTransfare() {
   const hasConfirmationProof = inputs.image instanceof File;
   const trimmedRemark = area.trim();
   const amountBeingCleared = Number.parseFloat(loan.clearanceRecord?.amountPaid || 0);
-  const remainingAmount =
-    Math.sign(loan.dur) === -1
-      ? loan.amountPaid === undefined
-        ? parseFloat(loan.repaymentAmount) +
-          (2 / parseInt(loan.amount, 10)) * 100 * -loan.dur -
-          parseFloat(loan.clearanceRecord.amountPaid)
-        : parseFloat(loan.repaymentAmount) +
-          (2 / parseInt(loan.amount, 10)) * 100 * -loan.dur -
-          (parseFloat(loan.clearanceRecord.amountPaid) +
-            parseFloat(loan.amountPaid))
-      : loan.amountPaid === undefined
-      ? parseFloat(loan.repaymentAmount) -
-        parseFloat(loan.clearanceRecord.amountPaid)
-      : parseFloat(loan.repaymentAmount) -
-        (parseFloat(loan.clearanceRecord.amountPaid) +
-          parseFloat(loan.amountPaid));
+  const metrics = getCollectionMetrics(loan);
+  const remainingAmount = Math.max(metrics.amountPayable - amountBeingCleared, 0);
   const detailRows = [
     { label: "Record Type", value: loan.clearanceRecord.recordType },
     { label: "Order ID", value: loan.ID },
     { label: "User ID", value: loan.userId },
     { label: "Actual Repayment Date", value: new Date(loan.dop).toLocaleDateString() },
-    { label: "Repayment Amount", value: loan.clearanceRecord.amountPaid },
-    { label: "Remaining Repayment Amount", value: remainingAmount },
+    { label: "Repayment Amount", value: formatMoney(loan.clearanceRecord.amountPaid) },
+    { label: "Remaining Repayment Amount", value: formatMoney(remainingAmount) },
     { label: "Remarks", value: loan.clearanceRecord.remarks },
   ];
 
@@ -280,13 +267,13 @@ export default function PublicTransfare() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-slate-900">Amount Being Cleared</span>
-                <span>{amountBeingCleared}</span>
+                <span>{formatMoney(amountBeingCleared)}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-slate-900">
                   Remaining Amount After Approval
                 </span>
-                <span>{remainingAmount}</span>
+                <span>{formatMoney(remainingAmount)}</span>
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
