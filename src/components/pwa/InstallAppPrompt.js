@@ -148,40 +148,42 @@ export default function InstallAppPrompt() {
 
   return (
     <>
-      <div className="fixed inset-x-4 bottom-4 z-[1200] sm:left-auto sm:right-4 sm:top-4 sm:bottom-auto sm:w-full sm:max-w-sm">
-        <div className="rounded-[24px] border border-emerald-200 bg-white/95 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.2)] backdrop-blur">
+      <div className="fixed inset-x-4 bottom-4 z-[1200] mx-auto w-auto max-w-[320px] sm:left-auto sm:right-4 sm:top-4 sm:bottom-auto sm:mx-0 sm:w-full sm:max-w-sm">
+        <div className="rounded-[22px] border border-emerald-200 bg-white/95 p-3 shadow-[0_20px_48px_rgba(15,23,42,0.18)] backdrop-blur sm:rounded-[24px] sm:p-4 sm:shadow-[0_24px_60px_rgba(15,23,42,0.2)]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
                 Install App
               </p>
-              <h3 className="mt-1 text-base font-semibold text-slate-900">SPEED CASH Admin</h3>
-              <p className="mt-1 text-sm text-slate-600">
+              <h3 className="mt-1 text-sm font-semibold text-slate-900 sm:text-base">
+                SPEED CASH Admin
+              </h3>
+              <p className="mt-1 text-xs text-slate-600 sm:text-sm">
                 Add the admin app to this device for faster access.
               </p>
             </div>
             <button
               type="button"
               onClick={hidePrompt}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 sm:h-9 sm:w-9"
               aria-label="Dismiss install prompt"
             >
               <i className="fa fa-times" aria-hidden="true" />
             </button>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">
             <button
               type="button"
               onClick={handleInstall}
-              className="inline-flex min-h-[42px] items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              className="inline-flex min-h-[38px] flex-1 items-center justify-center rounded-2xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 sm:min-h-[42px] sm:px-4 sm:text-sm"
             >
               {deferredPrompt ? "Install now" : "How to install"}
             </button>
             <button
               type="button"
               onClick={() => setShowHelp(true)}
-              className="inline-flex min-h-[42px] items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex min-h-[38px] flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:min-h-[42px] sm:px-4 sm:text-sm"
             >
               Install guide
             </button>
