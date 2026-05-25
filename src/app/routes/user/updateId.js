@@ -1,5 +1,6 @@
 const express = require("express");
 const { upload } = require("../../../libs/uploadImage");
+const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
 const User = require("../../models/users");
 
 const router = express.Router();
@@ -32,15 +33,14 @@ router.patch(
         });
       }
 
-      const url = `${req.protocol}://${req.get("host")}`;
       const idFront = req.files?.idFrontImage?.[0]
-        ? `${url}/upload/${req.files.idFrontImage[0].filename}`
+        ? await resolveUploadedFileUrl(req, req.files.idFrontImage[0], "identity/front")
         : user.IDinfo.idFront;
       const idBack = req.files?.idBackImage?.[0]
-        ? `${url}/upload/${req.files.idBackImage[0].filename}`
+        ? await resolveUploadedFileUrl(req, req.files.idBackImage[0], "identity/back")
         : user.IDinfo.idBack;
       const livePhoto = req.files?.livePhotoImage?.[0]
-        ? `${url}/upload/${req.files.livePhotoImage[0].filename}`
+        ? await resolveUploadedFileUrl(req, req.files.livePhotoImage[0], "identity/selfie")
         : user.userImage;
       const gCardNumber = String(
         req.body?.gCardNumber || user.IDinfo.gCardNumber || ""

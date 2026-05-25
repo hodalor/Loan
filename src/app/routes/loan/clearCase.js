@@ -1,6 +1,7 @@
 const express = require("express");
 const Loans = require("../../models/loans");
 const { upload } = require("../../../libs/uploadImage");
+const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
 
 const router = express.Router();
 
@@ -13,9 +14,6 @@ const parseJsonField = (value) => {
     return {};
   }
 };
-
-const buildFileUrl = (req, file) =>
-  `${req.protocol}://${req.get("host")}/upload/${file.filename}`;
 
 router.patch("/clearCasePublic/:ID", upload.single("proof1"), async (req, res) => {
   try {
@@ -41,7 +39,9 @@ router.patch("/clearCasePublic/:ID", upload.single("proof1"), async (req, res) =
       remarks,
       reviewedBy,
     } = payload;
-    const recieptImg = req.file ? buildFileUrl(req, req.file) : payload.recieptImg || "";
+    const recieptImg = req.file
+      ? await resolveUploadedFileUrl(req, req.file, "loan-clearance/audit")
+      : payload.recieptImg || "";
 
     const recordData = {
       recordType,

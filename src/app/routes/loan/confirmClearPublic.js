@@ -1,6 +1,7 @@
 const express = require("express");
 const Loans = require("../../models/loans");
 const { upload } = require("../../../libs/uploadImage");
+const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
 
 const router = express.Router();
 const _clearLoan = require("../../handlers/userHandlers/clearUserLoan");
@@ -14,9 +15,6 @@ const parseJsonField = (value) => {
     return {};
   }
 };
-
-const buildFileUrl = (req, file) =>
-  `${req.protocol}://${req.get("host")}/upload/${file.filename}`;
 
 router.patch("/confirmClearCaseP/:ID", upload.single("proof2"), async (req, res) => {
   try {
@@ -32,7 +30,9 @@ router.patch("/confirmClearCaseP/:ID", upload.single("proof2"), async (req, res)
 
     const payload = parseJsonField(req.body?.data);
     const { rejectRemarks, auditResults, confirmedBy } = payload;
-    const recieptImg = req.file ? buildFileUrl(req, req.file) : payload.recieptImg || "";
+    const recieptImg = req.file
+      ? await resolveUploadedFileUrl(req, req.file, "loan-clearance/confirm")
+      : payload.recieptImg || "";
 
     loan.clearanceRecord.recordProofConfirm = recieptImg;
     loan.clearanceRecord.rejectRemarks = rejectRemarks;

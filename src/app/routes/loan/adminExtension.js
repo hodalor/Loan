@@ -1,6 +1,7 @@
 const express = require("express");
 const Loans = require("../../models/loans");
 const { upload } = require("../../../libs/uploadImage");
+const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
 const { getSystemConfig } = require("../../services/systemConfig");
 const _createExt = require("../../handlers/userHandlers/createExt");
 
@@ -15,9 +16,6 @@ const parseJsonField = (value) => {
     return {};
   }
 };
-
-const buildFileUrl = (req, file) =>
-  `${req.protocol}://${req.get("host")}/upload/${file.filename}`;
 
 const toNumber = (value, fallback = 0) => {
   const parsed = Number.parseFloat(value);
@@ -103,7 +101,9 @@ router.post("/admin-extension/request", upload.single("proof"), async (req, res)
       source: "manual",
       requestStatus: "Pending",
       requestedBy: requestedBy || "Admin",
-      proofUrl: req.file ? buildFileUrl(req, req.file) : "",
+      proofUrl: req.file
+        ? await resolveUploadedFileUrl(req, req.file, "loan-extension/proof")
+        : "",
     });
 
     await loan.save();

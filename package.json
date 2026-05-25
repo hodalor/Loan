@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon index.js",
-    "create-super-admin": "node scripts/createSuperAdmin.js"
+    "create-super-admin": "node scripts/createSuperAdmin.js",
+    "migrate-media-to-supabase:dry": "node scripts/migrateMediaToSupabase.js",
+    "migrate-media-to-supabase": "node scripts/migrateMediaToSupabase.js --apply"
   },
   "keywords": [],
   "author": {
@@ -16,6 +18,7 @@
   },
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
     "body-parser": "^1.20.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

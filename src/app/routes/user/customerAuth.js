@@ -6,6 +6,7 @@ const GatewayTransactions = require("../../models/gatewayTransactions");
 const Loans = require("../../models/loans");
 const User = require("../../models/users");
 const { upload } = require("../../../libs/uploadImage");
+const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
 const config = require("../../../config");
 const { _encrypt, _decrypt } = require("../../../libs/encrypt");
 const _generateString = require("../../../libs/generateID");
@@ -80,8 +81,6 @@ const buildPhoneLookupQuery = (values = [], dialCode = "") => {
     },
   };
 };
-const buildFileUrl = (req, file) =>
-  `${req.protocol}://${req.get("host")}/upload/${file.filename}`;
 const parseJsonField = (value) => {
   if (!value) return null;
   if (typeof value === "object") return value;
@@ -3444,13 +3443,13 @@ router.post(
       const existingUser = await User.findOne({ phone });
       const files = {
         frontPhoto: req.files?.frontPhoto?.[0]
-          ? buildFileUrl(req, req.files.frontPhoto[0])
+          ? await resolveUploadedFileUrl(req, req.files.frontPhoto[0], "identity/front")
           : "",
         backPhoto: req.files?.backPhoto?.[0]
-          ? buildFileUrl(req, req.files.backPhoto[0])
+          ? await resolveUploadedFileUrl(req, req.files.backPhoto[0], "identity/back")
           : "",
         selfiePhoto: req.files?.selfiePhoto?.[0]
-          ? buildFileUrl(req, req.files.selfiePhoto[0])
+          ? await resolveUploadedFileUrl(req, req.files.selfiePhoto[0], "identity/selfie")
           : "",
       };
 
