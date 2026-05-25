@@ -49,7 +49,7 @@ export default function Aside({ isOpen, onClose }) {
 
   const logoSrc =
     branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/pathwaylogo.png`;
-  const appName = branding.appName?.trim() || "Pathway Loans";
+  const appName = branding.appName?.trim() || "SPEED CASH";
   const tagline = branding.tagline?.trim() || "Loan operations";
 
   return (

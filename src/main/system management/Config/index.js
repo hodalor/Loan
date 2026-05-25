@@ -1658,7 +1658,7 @@ export default function SystemConfig() {
                         onChange={(e) =>
                           updatePortalContentField("appName", e.target.value)
                         }
-                        placeholder="Pathway Loans"
+                        placeholder="SPEED CASH"
                       />
                     </div>
                     <div>

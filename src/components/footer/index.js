@@ -20,7 +20,7 @@ export default function Footer() {
     };
   }, []);
 
-  const appName = branding.appName?.trim() || "Pathway Loans";
+  const appName = branding.appName?.trim() || "SPEED CASH";
   const footerText = branding.footerText?.trim() || "All rights reserved.";
   const footerVersion = branding.footerVersion?.trim() || "1.5.0";
   const logoUrl =

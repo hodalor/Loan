@@ -25,7 +25,7 @@ export default function Login() {
         <div className="mb-5 flex flex-col items-center justify-center gap-3 text-center sm:mb-6 sm:flex-row">
           <img
             src={`${process.env.PUBLIC_URL}/pathwaylogo.png`}
-            alt="Pathway Loans"
+            alt="SPEED CASH"
             className="h-12 w-12 rounded-2xl object-cover sm:h-12 sm:w-12"
           />
           <h2 className="text-center text-[24px] font-semibold leading-tight text-slate-900 sm:text-[28px] sm:leading-none">
