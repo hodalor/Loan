@@ -24,6 +24,7 @@ import {
   verifyFirebasePhoneOtp,
 } from "./firebase/phoneAuth";
 import "./App.css";
+import InstallAppPrompt from "./components/InstallAppPrompt";
 
 const APPLICATION_STEPS = [
   { id: "personal", label: "Personal info" },
@@ -61,7 +62,7 @@ const PAYMENT_SUCCESS_MESSAGE = "Payment completed successfully.";
 let runtimeLocale = "en-ZM";
 let runtimeCurrencySymbol = "K";
 const buildDefaultPortalContent = () => ({
-  appName: "Pathway Loans",
+  appName: "SPEED CASH",
   logoUrl: "",
   tagline: "Fast customer login, application tracking, and identity verification.",
   footerText: "All rights reserved.",
@@ -2113,6 +2114,8 @@ function App() {
             </button>
           ) : null}
         </header>
+
+        <InstallAppPrompt />
 
         {screen !== "portal" ? (
           <section className="form-card form-card-auth">
