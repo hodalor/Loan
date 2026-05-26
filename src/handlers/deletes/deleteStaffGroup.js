@@ -1,4 +1,5 @@
 import { adminBaseUrl } from "../../libs/endpoints";
+import getAuditActor from "../utils/auditActor";
 
 const _deleteStaffGroup = async (groupId) => {
   let resp = {};
@@ -9,6 +10,9 @@ const _deleteStaffGroup = async (groupId) => {
         Accept: "application/json",
         "Content-type": "application/json",
       },
+      body: JSON.stringify({
+        auditActor: getAuditActor(),
+      }),
     });
 
     resp = await reqs.json();

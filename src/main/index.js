@@ -58,6 +58,7 @@ import CollectionLoanDetails from "./collection center/colLoanDetails";
 import PreLoanDetails from "./PreCollection Center/preColLoanDetails";
 import SystemConfig from "./system management/Config";
 import AuditLogs from "./system management/Audit Logs";
+import CustomerLogs from "./system management/Customer Logs";
 import ErrorLogs from "./system management/Error Logs";
 import SystemDocs from "./system management/Docs";
 import FundPayments from "./Fund Management/Payments";
@@ -142,6 +143,12 @@ function MainAppShell({
               path="/system-audit-logs"
               component={AuditLogs}
               allow={canOpenPath("/system-audit-logs")}
+              fallbackPath={fallbackPath}
+            />
+            <GuardedRoute
+              path="/system-customer-logs"
+              component={CustomerLogs}
+              allow={canOpenPath("/system-customer-logs")}
               fallbackPath={fallbackPath}
             />
             <GuardedRoute

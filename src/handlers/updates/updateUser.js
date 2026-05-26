@@ -1,4 +1,5 @@
 import { adminBaseUrl } from "../../libs/endpoints";
+import getAuditActor from "../utils/auditActor";
 
 const _updateUser = async (data) => {
   let url = adminBaseUrl + "updateAdmin/" + data.userName;
@@ -11,7 +12,10 @@ const _updateUser = async (data) => {
         Accept: "application/json",
         "Content-type": "application/json",
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        auditActor: getAuditActor(),
+      }),
     });
 
     let res = await reqs.json();

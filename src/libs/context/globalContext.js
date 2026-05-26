@@ -1670,7 +1670,14 @@ export default function GlobalContextProvider(props) {
     try {
       const response = await emitWithAck(
         "changeAdminActiveStatus",
-        userId,
+        {
+          userId,
+          auditActor: {
+            userId: user?.userId || "",
+            userName: user?.userName || "",
+            role: user?.role || "",
+          },
+        },
         "Changing the user status took too long. Please refresh and try again."
       );
         const isSuccess = response.success !== false;
@@ -1887,7 +1894,17 @@ export default function GlobalContextProvider(props) {
 
     setBigLoader(true);
 
-    socket.emit("remove_user", userDetails._id, async (response) => {
+    socket.emit(
+      "remove_user",
+      {
+        _id: userDetails._id,
+        auditActor: {
+          userId: user?.userId || "",
+          userName: user?.userName || "",
+          role: user?.role || "",
+        },
+      },
+      async (response) => {
       if (response.success === 0) {
         setBigLoader(false);
 
@@ -1925,7 +1942,8 @@ export default function GlobalContextProvider(props) {
       setUserDetails({});
 
       setBigLoader(false);
-    });
+      }
+    );
   };
 
   const _handleCreateStaffGroup = async (fields = {}) => {
@@ -2430,27 +2448,47 @@ export default function GlobalContextProvider(props) {
   };
 
   const _handleCustomerActiveStatus = async (userId) => {
-    socket.emit("changeCustomerActiveStatus", userId, (response) => {
-      setCustomers((current) =>
-        current.map((item) =>
-          item.userId === userId ? { ...item, isActive: !item.isActive } : item
-        )
-      );
-      setCustomer((current) =>
-        current?.userId === userId
-          ? {
-              ...current,
-              isActive: !current.isActive,
-            }
-          : current
-      );
+    const response = await emitWithAck(
+      "changeCustomerActiveStatus",
+      {
+        userId,
+        auditActor: {
+          userId: user?.userId || "",
+          userName: user?.userName || "",
+          role: user?.role || "",
+        },
+      },
+      "Changing the customer status took too long. Please refresh and try again."
+    );
 
+    if (response.success === false) {
       return setAlerts({
         ...alerts,
-        type: "info",
-        msg: response.message,
+        type: "error",
+        msg: response.message || "Could not update the customer status",
         open: true,
       });
+    }
+
+    setCustomers((current) =>
+      current.map((item) =>
+        item.userId === userId ? { ...item, isActive: !item.isActive } : item
+      )
+    );
+    setCustomer((current) =>
+      current?.userId === userId
+        ? {
+            ...current,
+            isActive: !current.isActive,
+          }
+        : current
+    );
+
+    return setAlerts({
+      ...alerts,
+      type: "info",
+      msg: response.message,
+      open: true,
     });
   };
 
@@ -2512,81 +2550,92 @@ export default function GlobalContextProvider(props) {
     setGlobalLoader(true);
 
     let structuredData = await _structureData({ inputs, customer });
+    const response = await emitWithAck(
+      "updateCustomer",
+      {
+        ...structuredData,
+        auditActor: {
+          userId: user?.userId || "",
+          userName: user?.userName || "",
+          role: user?.role || "",
+        },
+      },
+      "Saving customer changes took too long. Please refresh and try again."
+    );
 
-    socket.emit("updateCustomer", structuredData, async (response) => {
-      if (response.success === true) {
-        let updatedCustomer = {
-          ...customer,
-          level: structuredData.level,
-          IDinfo: structuredData.IDinfo,
-          pesonalInfo: structuredData.pesonalInfo,
-          workInfo: structuredData.workInfo,
-          emergncyContacts: structuredData.emergncyContacts,
-        };
+    if (response.success === true) {
+      let updatedCustomer = {
+        ...customer,
+        level: structuredData.level,
+        IDinfo: structuredData.IDinfo,
+        pesonalInfo: structuredData.pesonalInfo,
+        workInfo: structuredData.workInfo,
+        emergncyContacts: structuredData.emergncyContacts,
+      };
 
-        if (inputs.idFrontImage || inputs.idBackImage || inputs.livePhotoImage) {
-          const formData = new FormData();
+      if (inputs.idFrontImage || inputs.idBackImage || inputs.livePhotoImage) {
+        const formData = new FormData();
 
-          if (inputs.idFrontImage) {
-            formData.append("idFrontImage", inputs.idFrontImage);
-          }
-          if (inputs.idBackImage) {
-            formData.append("idBackImage", inputs.idBackImage);
-          }
-          if (inputs.livePhotoImage) {
-            formData.append("livePhotoImage", inputs.livePhotoImage);
-          }
-          formData.append("gCardNumber", structuredData.IDinfo.gCardNumber || "");
+        if (inputs.idFrontImage) {
+          formData.append("idFrontImage", inputs.idFrontImage);
+        }
+        if (inputs.idBackImage) {
+          formData.append("idBackImage", inputs.idBackImage);
+        }
+        if (inputs.livePhotoImage) {
+          formData.append("livePhotoImage", inputs.livePhotoImage);
+        }
+        formData.append("gCardNumber", structuredData.IDinfo.gCardNumber || "");
 
-          const identityResponse = await _updateIDCard({
-            formData,
-            userId: customer.userId,
+        const identityResponse = await _updateIDCard({
+          formData,
+          userId: customer.userId,
+        });
+
+        if (identityResponse.success === 0) {
+          setAlerts({
+            ...alerts,
+            type: "error",
+            msg: identityResponse.message,
+            open: true,
           });
-
-          if (identityResponse.success === 0) {
-            setAlerts({
-              ...alerts,
-              type: "error",
-              msg: identityResponse.message,
-              open: true,
-            });
-            setGlobalLoader(false);
-            return;
-          }
-
-          updatedCustomer = identityResponse.data || updatedCustomer;
+          setGlobalLoader(false);
+          return;
         }
 
-        let newCustomers = customers.filter((item) => item.userId !== customer.userId);
-
-        newCustomers.push(_toCustomerSummary(updatedCustomer));
-
-        let sorted = await _sortCustomers(newCustomers);
-
-        setCustomers(sorted);
-
-        setCustomer(updatedCustomer);
-        setInput({
-          ...inputs,
-          ghCard: "",
-          idFrontImage: null,
-          idBackImage: null,
-          livePhotoImage: null,
-        });
-
-        setAlerts({
-          ...alerts,
-          type: "success",
-          msg: response.message,
-          open: true,
-        });
-
-        setGlobalLoader(false);
-
-        return;
+        updatedCustomer = identityResponse.data || updatedCustomer;
       }
 
-      if (response.success === false) {
+      let newCustomers = customers.filter((item) => item.userId !== customer.userId);
+
+      newCustomers.push(_toCustomerSummary(updatedCustomer));
+
+      let sorted = await _sortCustomers(newCustomers);
+
+      setCustomers(sorted);
+
+      setCustomer(updatedCustomer);
+      setInput({
+        ...inputs,
+        ghCard: "",
+        idFrontImage: null,
+        idBackImage: null,
+        livePhotoImage: null,
+      });
+
+      setAlerts({
+        ...alerts,
+        type: "success",
+        msg: response.message,
+        open: true,
+      });
+
+      setGlobalLoader(false);
+
+      return;
+    }
+
+    if (response.success === false) {
         setAlerts({
           ...alerts,
           type: "error",
@@ -2597,8 +2646,7 @@ export default function GlobalContextProvider(props) {
         setGlobalLoader(false);
 
         return;
-      }
-    });
+    }
   };
 
   const _handleFindLoan = async () => {

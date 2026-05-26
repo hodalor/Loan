@@ -239,6 +239,12 @@ const rawNavigationItems = [
         roles: ["super-admin"],
       },
       {
+        label: "Customer Logs",
+        path: "/system-customer-logs",
+        icon: "fa fa-address-book-o",
+        roles: ["super-admin"],
+      },
+      {
         label: "Error Logs",
         path: "/system-error-logs",
         icon: "fa fa-exclamation-triangle",

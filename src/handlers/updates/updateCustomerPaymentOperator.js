@@ -1,4 +1,5 @@
 import { usersBaseUrl } from "../../libs/endpoints";
+import getAuditActor from "../utils/auditActor";
 
 const _updateCustomerPaymentOperator = async ({ userId, method, operator }) => {
   let resp = {};
@@ -10,7 +11,11 @@ const _updateCustomerPaymentOperator = async ({ userId, method, operator }) => {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ method, operator }),
+      body: JSON.stringify({
+        method,
+        operator,
+        auditActor: getAuditActor(),
+      }),
     });
 
     resp = await request.json();

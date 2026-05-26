@@ -1,4 +1,5 @@
 import { adminBaseUrl } from "../../libs/endpoints";
+import getAuditActor from "../utils/auditActor";
 
 const _updateSystemConfig = async (data) => {
   let resp = {};
@@ -10,7 +11,10 @@ const _updateSystemConfig = async (data) => {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        auditActor: getAuditActor(),
+      }),
     });
 
     resp = await request.json();

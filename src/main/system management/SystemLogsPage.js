@@ -35,11 +35,38 @@ const truncateText = (value = "", limit = 96) => {
   return `${normalized.slice(0, limit)}...`;
 };
 
+const getLogRecordType = (log = {}) => {
+  const source = String(log?.source || "").trim().toLowerCase();
+  const requestPath = String(log?.requestPath || "").trim().toLowerCase();
+
+  if (
+    source.startsWith("user.") ||
+    source.includes("customer") ||
+    requestPath.startsWith("/users/") ||
+    requestPath.includes("/updateid/") ||
+    requestPath.includes("/payment-operator/") ||
+    requestPath.includes("/addpayment/")
+  ) {
+    return "customer";
+  }
+
+  if (source.startsWith("admin.") || source.includes("changeadmin") || source.includes("remove_user")) {
+    return "admin";
+  }
+
+  if (source.startsWith("auth.") || source.includes("login") || log?.category === "auth") {
+    return "auth";
+  }
+
+  return "system";
+};
+
 export default function SystemLogsPage({
   title,
   description,
   endpoint,
   defaultLevel = "",
+  defaultRecordType = "",
   showLevelFilter = true,
 }) {
   const [logs, setLogs] = React.useState([]);
@@ -47,6 +74,7 @@ export default function SystemLogsPage({
   const [search, setSearch] = React.useState("");
   const [level, setLevel] = React.useState(defaultLevel);
   const [status, setStatus] = React.useState("");
+  const [recordType, setRecordType] = React.useState(defaultRecordType);
   const [startDate, setStartDate] = React.useState("");
   const [endDate, setEndDate] = React.useState("");
   const [errorMessage, setErrorMessage] = React.useState("");
@@ -85,6 +113,7 @@ export default function SystemLogsPage({
 
     return logs
       .filter((log) => {
+        if (recordType && getLogRecordType(log) !== recordType) return false;
         if (!normalizedStart && !normalizedEnd) return true;
 
         const createdAt = log.createdAt ? new Date(log.createdAt) : null;
@@ -95,11 +124,12 @@ export default function SystemLogsPage({
       })
       .map((log) => ({
         ...log,
+        recordType: getLogRecordType(log),
         createdLabel: log.createdAt ? new Date(log.createdAt).toLocaleString() : "-",
         actorLabel: log.actor?.userName || log.actor?.userId || "-",
         shortMessage: truncateText(log.message, 88),
       }));
-  }, [endDate, logs, startDate]);
+  }, [endDate, logs, recordType, startDate]);
 
   const selectedIndex = React.useMemo(
     () => tableRows.findIndex((row) => row._id === selectedLog?._id),
@@ -211,7 +241,7 @@ export default function SystemLogsPage({
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm">
-        <div className="grid gap-4 xl:grid-cols-5">
+        <div className="grid gap-4 xl:grid-cols-6">
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
               Search
@@ -267,6 +297,23 @@ export default function SystemLogsPage({
 
           <label className="space-y-2">
             <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Record Type
+            </span>
+            <select
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100"
+              value={recordType}
+              onChange={(event) => setRecordType(event.target.value)}
+            >
+              <option value="">All records</option>
+              <option value="customer">Customer logs</option>
+              <option value="admin">Admin logs</option>
+              <option value="auth">Auth logs</option>
+              <option value="system">System logs</option>
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
               Start Date
             </span>
             <input
@@ -301,6 +348,7 @@ export default function SystemLogsPage({
               setSearch("");
               setLevel(defaultLevel);
               setStatus("");
+              setRecordType(defaultRecordType);
               setStartDate("");
               setEndDate("");
             }}

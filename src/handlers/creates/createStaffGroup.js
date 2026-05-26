@@ -1,4 +1,5 @@
 import { adminBaseUrl } from "../../libs/endpoints";
+import getAuditActor from "../utils/auditActor";
 
 const _createStaffGroup = async (data) => {
   let resp = {};
@@ -9,7 +10,10 @@ const _createStaffGroup = async (data) => {
         Accept: "application/json",
         "Content-type": "application/json",
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        auditActor: getAuditActor(),
+      }),
     });
 
     resp = await reqs.json();
