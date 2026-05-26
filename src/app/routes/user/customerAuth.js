@@ -6,7 +6,7 @@ const GatewayTransactions = require("../../models/gatewayTransactions");
 const Loans = require("../../models/loans");
 const User = require("../../models/users");
 const { upload } = require("../../../libs/uploadImage");
-const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
+const { resolveUploadedFileUrl, resolveUserMediaUrls } = require("../../../libs/mediaStorage");
 const config = require("../../../config");
 const { _encrypt, _decrypt } = require("../../../libs/encrypt");
 const _generateString = require("../../../libs/generateID");
@@ -1164,7 +1164,7 @@ const applyPortalGatewayTransaction = async (transaction) => {
     }
   }
 
-  const summary = await buildPortalSummaryData(transaction.phone);
+  const summary = await buildPortalSummaryData(null, transaction.phone);
   if (!summary) {
     throw new Error("Customer portal data could not be refreshed after payment.");
   }
@@ -1194,7 +1194,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   }
 
   if (transaction.processed) {
-    const summary = await buildPortalSummaryData(transaction.phone);
+    const summary = await buildPortalSummaryData(null, transaction.phone);
     return {
       success: 1,
       message: "Payment already confirmed.",
@@ -1274,7 +1274,7 @@ const finalizePortalGatewayTransaction = async ({ reference, webhookEvent = null
   if (!claimedTransaction) {
     const latestTransaction = await GatewayTransactions.findOne({ reference });
     const summary = latestTransaction?.phone
-      ? await buildPortalSummaryData(latestTransaction.phone)
+      ? await buildPortalSummaryData(null, latestTransaction.phone)
       : null;
 
     return {
@@ -1552,7 +1552,7 @@ const buildPortalOffer = (user = {}, systemConfig = {}, globalLoans = []) => {
     termOptions,
   };
 };
-const buildPortalSummaryData = async (phone) => {
+const buildPortalSummaryData = async (req, phone) => {
   const [updatedUser, refreshedAccess, refreshedConfig] = await Promise.all([
     User.findOne({ phone }).lean(),
     CustomerAccess.findOne({ phone }).lean(),
@@ -1563,6 +1563,7 @@ const buildPortalSummaryData = async (phone) => {
 
   const refreshedLoans = await Loans.find({ userId: updatedUser.userId }).lean();
   const syncedUser = await syncUserLoanSnapshotWithCollection(updatedUser, refreshedLoans);
+  const resolvedCustomer = await resolveUserMediaUrls(req, syncedUser);
 
   return {
     loanHistory: refreshedLoans,
@@ -1575,7 +1576,7 @@ const buildPortalSummaryData = async (phone) => {
       customer: syncedUser,
       access: refreshedAccess,
     }),
-    customer: syncedUser,
+    customer: resolvedCustomer,
     transaction: null,
   };
 };
@@ -2000,20 +2001,19 @@ router.post("/portal/summary", async (req, res) => {
       });
     }
 
-    const globalLoans = customer?.userId
-      ? await Loans.find({ userId: customer.userId }).lean()
-      : [];
+    const globalLoans = customer?.userId ? await Loans.find({ userId: customer.userId }).lean() : [];
     const syncedCustomer =
       customer && customer.userId
         ? await syncUserLoanSnapshotWithCollection(customer, globalLoans)
         : customer;
+    const resolvedCustomer = await resolveUserMediaUrls(req, syncedCustomer);
 
     return res.status(200).json({
       success: 1,
       data: {
         phone,
         hasProfile: Boolean(syncedCustomer),
-        customer: syncedCustomer || null,
+        customer: resolvedCustomer || null,
         loanHistory: globalLoans,
         draftApplication: access.draftApplication || null,
         country: resolveCountryProfile({

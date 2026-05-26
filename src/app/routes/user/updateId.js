@@ -1,6 +1,6 @@
 const express = require("express");
 const { upload } = require("../../../libs/uploadImage");
-const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
+const { resolveUploadedFileUrl, resolveUserMediaUrls } = require("../../../libs/mediaStorage");
 const {
   getAuditActorFromRequest,
   summarizeCustomer,
@@ -111,7 +111,7 @@ router.patch(
         return res.status(200).json({
           success: 1,
           message: "Identity updated successfully",
-          data: updatedUser,
+          data: await resolveUserMediaUrls(req, updatedUser),
         });
       }
 

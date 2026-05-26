@@ -1,5 +1,6 @@
 const express = require("express");
 const _checkDuration = require("../../../libs/checkDur");
+const { resolveUserMediaUrls } = require("../../../libs/mediaStorage");
 const User = require("../../models/users");
 
 const router = express.Router();
@@ -44,9 +45,11 @@ router.get("/findUser/:id", async (req, res) => {
       newUser = updatedUser;
     }
 
+    const responseUser = await resolveUserMediaUrls(req, newUser === undefined ? user : newUser);
+
     return res.status(200).json({
       success: 1,
-      data: newUser === undefined ? user : newUser,
+      data: responseUser,
       res: response,
     });
   } catch (error) {

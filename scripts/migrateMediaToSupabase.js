@@ -10,6 +10,7 @@ const Loans = require("../src/app/models/loans");
 const SystemConfig = require("../src/app/models/systemConfig");
 const {
   isSupabaseStorageEnabled,
+  uploadBufferToSupabase,
   uploadLocalFilePathToSupabase,
 } = require("../src/libs/mediaStorage");
 
@@ -20,6 +21,11 @@ const perCollectionLimit = limitArg ? Number.parseInt(limitArg.split("=")[1], 10
 const uploadDir = path.resolve(__dirname, "../upload");
 const uploadUrlPattern = /\/upload\/([^?#]+)/i;
 const cache = new Map();
+const configuredBackendBaseUrl = String(
+  process.env.BACKEND_BASE_URL || process.env.BASE_URL || ""
+)
+  .trim()
+  .replace(/\/+$/, "");
 
 const summary = {
   scanned: 0,
@@ -55,6 +61,49 @@ const buildLocalFilePath = (value = "") => {
   if (!filename) return "";
   return path.join(uploadDir, filename);
 };
+const buildRemoteUploadCandidates = (value = "") => {
+  const normalized = String(value || "").trim().replace(/\\/g, "/");
+  const filename = extractUploadFilename(normalized);
+  if (!filename) return [];
+
+  const candidates = [];
+  if (/^https?:\/\//i.test(normalized)) {
+    candidates.push(normalized);
+  }
+  if (configuredBackendBaseUrl) {
+    candidates.push(`${configuredBackendBaseUrl}/upload/${encodeURIComponent(filename)}`);
+  }
+
+  return [...new Set(candidates)];
+};
+const fetchRemoteUploadAsset = async (value = "") => {
+  const filename = extractUploadFilename(value);
+  if (!filename) {
+    throw new Error("No upload filename could be extracted from the stored URL.");
+  }
+
+  for (const candidateUrl of buildRemoteUploadCandidates(value)) {
+    try {
+      const response = await fetch(encodeURI(candidateUrl));
+      if (!response.ok) {
+        continue;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      return {
+        buffer: Buffer.from(arrayBuffer),
+        mimetype:
+          response.headers.get("content-type") || getMimeTypeFromFilename(filename),
+        originalName: filename,
+        sourceUrl: candidateUrl,
+      };
+    } catch (error) {
+      // Try the next candidate URL before failing the migration.
+    }
+  }
+
+  throw new Error(`Remote upload file could not be fetched for ${value}`);
+};
 
 const migrateMediaField = async ({
   currentValue,
@@ -70,31 +119,39 @@ const migrateMediaField = async ({
 
   summary.eligible += 1;
   const localFilePath = buildLocalFilePath(currentValue);
-  const filename = path.basename(localFilePath || "");
-
-  if (!localFilePath || !fs.existsSync(localFilePath)) {
-    summary.missingFiles += 1;
-    console.warn(`[missing] ${docLabel} -> ${fieldLabel}: ${currentValue}`);
-    return { changed: false, value: currentValue };
-  }
+  const filename = extractUploadFilename(currentValue) || path.basename(localFilePath || "");
 
   if (!shouldApply) {
     console.log(`[dry-run] ${docLabel} -> ${fieldLabel}: ${currentValue}`);
     return { changed: false, value: currentValue };
   }
 
-  const cacheKey = `${folder}::${localFilePath}`;
+  const hasLocalFile = Boolean(localFilePath) && fs.existsSync(localFilePath);
+  const cacheKey = `${folder}::${hasLocalFile ? localFilePath : currentValue}`;
   if (cache.has(cacheKey)) {
     return { changed: true, value: cache.get(cacheKey) };
   }
 
   try {
-    const uploadedUrl = await uploadLocalFilePathToSupabase({
-      filePath: localFilePath,
-      originalName: filename,
-      mimetype: getMimeTypeFromFilename(filename),
-      folder,
-    });
+    let uploadedUrl = "";
+
+    if (hasLocalFile) {
+      uploadedUrl = await uploadLocalFilePathToSupabase({
+        filePath: localFilePath,
+        originalName: filename,
+        mimetype: getMimeTypeFromFilename(filename),
+        folder,
+      });
+    } else {
+      const remoteAsset = await fetchRemoteUploadAsset(currentValue);
+      uploadedUrl = await uploadBufferToSupabase({
+        buffer: remoteAsset.buffer,
+        filename,
+        originalName: remoteAsset.originalName,
+        mimetype: remoteAsset.mimetype,
+        folder,
+      });
+    }
 
     if (!uploadedUrl) {
       summary.failed += 1;
@@ -108,6 +165,9 @@ const migrateMediaField = async ({
     return { changed: true, value: uploadedUrl };
   } catch (error) {
     summary.failed += 1;
+    if (!hasLocalFile) {
+      summary.missingFiles += 1;
+    }
     console.error(`[failed] ${docLabel} -> ${fieldLabel}: ${error.message || error}`);
     return { changed: false, value: currentValue };
   }
@@ -260,7 +320,7 @@ async function runMigration() {
     throw new Error("Supabase storage is not configured. Set backend Supabase env values first.");
   }
 
-  if (!fs.existsSync(uploadDir)) {
+  if (!fs.existsSync(uploadDir) && !configuredBackendBaseUrl) {
     throw new Error(`Upload directory not found: ${uploadDir}`);
   }
 
