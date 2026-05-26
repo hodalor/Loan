@@ -3,7 +3,12 @@ const {
   getSystemConfig,
   saveSystemConfig,
 } = require("../../services/systemConfig");
-const { logSystemEvent } = require("../../../libs/logger");
+const {
+  getAuditActorFromRequest,
+  summarizeSystemConfig,
+  listChangedFields,
+  logAuditEvent,
+} = require("../../../libs/audit");
 
 const router = express.Router();
 
@@ -17,7 +22,7 @@ router.get("/system-config", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    await logSystemEvent({
+    await logAuditEvent({
       level: "error",
       category: "system",
       source: "admin.systemConfig",
@@ -38,9 +43,11 @@ router.get("/system-config", async (req, res) => {
 
 router.patch("/system-config", async (req, res) => {
   try {
-    const config = await saveSystemConfig(req.body);
+    const previousConfig = await getSystemConfig();
+    const { auditActor, ...payload } = req.body || {};
+    const config = await saveSystemConfig(payload);
 
-    await logSystemEvent({
+    await logAuditEvent({
       level: "info",
       category: "system",
       source: "admin.systemConfig",
@@ -48,10 +55,27 @@ router.patch("/system-config", async (req, res) => {
       status: "success",
       message: "System configuration updated successfully.",
       req,
+      actor: getAuditActorFromRequest(req, auditActor || {}),
+      details: {
+        changedFields: listChangedFields(
+          summarizeSystemConfig(previousConfig),
+          summarizeSystemConfig(config),
+          [
+            "appName",
+            "activeCountryCode",
+            "collectionGateway",
+            "disbursementGateway",
+            "disbursementMode",
+            "implementedChannels",
+            "allowPartialRepayment",
+            "autoRepaymentPosting",
+            "requireGatewayApprovalCheck",
+          ]
+        ),
+      },
       metadata: {
-        collectionGateway: config.collectionGateway,
-        disbursementGateway: config.disbursementGateway,
-        activeCountryCode: config.activeCountryCode,
+        before: summarizeSystemConfig(previousConfig),
+        after: summarizeSystemConfig(config),
       },
     });
 
@@ -62,7 +86,7 @@ router.patch("/system-config", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    await logSystemEvent({
+    await logAuditEvent({
       level: "error",
       category: "system",
       source: "admin.systemConfig",
@@ -70,6 +94,7 @@ router.patch("/system-config", async (req, res) => {
       status: "failed",
       message: error.message || "System configuration update failed.",
       req,
+      actor: getAuditActorFromRequest(req),
       details: {
         stack: error.stack || "",
       },

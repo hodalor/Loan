@@ -1,6 +1,11 @@
 const express = require("express");
 const { upload } = require("../../../libs/uploadImage");
 const _generateString = require("../../../libs/generateID");
+const {
+  getAuditActorFromRequest,
+  summarizeCustomer,
+  logAuditEvent,
+} = require("../../../libs/audit");
 const User = require("../../models/users");
 const CustomerAccess = require("../../models/customerAccess");
 
@@ -45,14 +50,28 @@ router.post("/createUser", async (req, res) => {
       idFront,
       idBack,
     } = req.body;
+    const actor = getAuditActorFromRequest(req);
 
     const checkMail = await User.findOne({ email });
 
-    if (checkMail !== undefined && checkMail)
+    if (checkMail !== undefined && checkMail) {
+      await logAuditEvent({
+        req,
+        actor,
+        source: "user.createUser",
+        action: "create",
+        status: "failed",
+        message: "Customer creation failed because the email already exists.",
+        metadata: {
+          email: String(email || "").trim(),
+          phone: String(phone || "").trim(),
+        },
+      });
       return res.status(400).json({
         success: 0,
         message: "This email already exist please log in!",
       });
+    }
 
     const IDinfo = {
       idFront,
@@ -156,6 +175,18 @@ router.post("/createUser", async (req, res) => {
         }
       );
 
+      await logAuditEvent({
+        req,
+        actor,
+        source: "user.createUser",
+        action: "create",
+        status: "success",
+        message: "Customer account created successfully.",
+        metadata: {
+          target: summarizeCustomer(savedUser),
+        },
+      });
+
       return res.status(201).json({
         success: 1,
         data: savedUser,
@@ -169,6 +200,22 @@ router.post("/createUser", async (req, res) => {
       });
   } catch (error) {
     console.log(error);
+    await logAuditEvent({
+      req,
+      actor: getAuditActorFromRequest(req),
+      level: "error",
+      source: "user.createUser",
+      action: "create",
+      status: "failed",
+      message: error.message || "Customer creation failed.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        email: String(req.body?.email || "").trim(),
+        phone: String(req.body?.phone || "").trim(),
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",

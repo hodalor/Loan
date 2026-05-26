@@ -77,6 +77,12 @@ const _updateUser = require("./app/handlers/userHandlers/updateUser");
 const _removeUser = require("./app/handlers/adminHandlers/deleteUser");
 const _disburseLoans = require("./app/handlers/loanHandlers/disburseLoans");
 const { logger, logSystemEvent } = require("./libs/logger");
+const {
+  buildAuditActor,
+  summarizeAdmin,
+  summarizeCustomer,
+  logAuditEvent,
+} = require("./libs/audit");
 
 // end points
 app.use("/users", user.createUser);
@@ -212,7 +218,10 @@ io.on("connection", (socket) => {
         });
       })
       .catch((error) => {
-        logger.error(error);
+        logger({
+          level: "error",
+          message: error?.message || "Socket action failed.",
+        });
         respondToSocketAction(callBack, {
           success: false,
           message: failureMessage || "Request failed.",
@@ -237,37 +246,204 @@ io.on("connection", (socket) => {
     socket.broadcast.emit("admin_off_receiver", data.userId);
   });
 
-  socket.on("changeAdminActiveStatus", async (userId, callBack) => {
-    // set admin active status
-    await _setActiveStatus(userId);
+  socket.on("changeAdminActiveStatus", async (payload, callBack) => {
+    try {
+      const userId = typeof payload === "string" ? payload : payload?.userId;
+      const actor = buildAuditActor(payload?.auditActor || {});
+      const admin = await _setActiveStatus(userId);
 
-    // call back fired when action is complete
-    callBack({
-      message: "Updated successfully",
-    });
+      if (!admin) {
+        await logAuditEvent({
+          source: "socket.changeAdminActiveStatus",
+          action: "toggle-active",
+          status: "failed",
+          message: "Staff active status update failed because the account was not found.",
+          actor,
+          metadata: {
+            targetUserId: userId || "",
+            channel: "socket",
+          },
+        });
+        return callBack({
+          success: false,
+          message: "Could not update the user status",
+        });
+      }
+
+      await logAuditEvent({
+        source: "socket.changeAdminActiveStatus",
+        action: admin.isActive ? "activate" : "deactivate",
+        status: "success",
+        message: `Staff account ${admin.isActive ? "activated" : "deactivated"} successfully.`,
+        actor,
+        metadata: {
+          target: summarizeAdmin(admin),
+          channel: "socket",
+        },
+      });
+
+      callBack({
+        success: true,
+        message: "Updated successfully",
+      });
+    } catch (error) {
+      logger({
+        level: "error",
+        message: error?.message || "Staff active status socket action failed.",
+      });
+      await logAuditEvent({
+        level: "error",
+        source: "socket.changeAdminActiveStatus",
+        action: "toggle-active",
+        status: "failed",
+        message: error?.message || "Staff active status update failed.",
+        actor: buildAuditActor(payload?.auditActor || {}),
+        details: {
+          stack: error?.stack || "",
+        },
+        metadata: {
+          targetUserId: typeof payload === "string" ? payload : payload?.userId || "",
+          channel: "socket",
+        },
+      });
+      callBack({
+        success: false,
+        message: "Could not update the user status",
+      });
+    }
   });
 
-  socket.on("changeCustomerActiveStatus", async (userId, callBack) => {
-    // set admin active status
-    await _setCustomerActiveStatus(userId);
+  socket.on("changeCustomerActiveStatus", async (payload, callBack) => {
+    try {
+      const userId = typeof payload === "string" ? payload : payload?.userId;
+      const actor = buildAuditActor(payload?.auditActor || {});
+      const customer = await _setCustomerActiveStatus(userId);
 
-    // call back fired when action is complete
-    callBack({
-      message: "Updated successfully",
-    });
+      if (!customer) {
+        await logAuditEvent({
+          source: "socket.changeCustomerActiveStatus",
+          action: "toggle-active",
+          status: "failed",
+          message: "Customer active status update failed because the account was not found.",
+          actor,
+          metadata: {
+            targetUserId: userId || "",
+            channel: "socket",
+          },
+        });
+        return callBack({
+          success: false,
+          message: "Could not update the customer status",
+        });
+      }
+
+      await logAuditEvent({
+        source: "socket.changeCustomerActiveStatus",
+        action: customer.isActive ? "unblock" : "block",
+        status: "success",
+        message: `Customer account ${customer.isActive ? "unblocked" : "blocked"} successfully.`,
+        actor,
+        metadata: {
+          target: summarizeCustomer(customer),
+          channel: "socket",
+        },
+      });
+
+      callBack({
+        success: true,
+        message: "Updated successfully",
+      });
+    } catch (error) {
+      logger({
+        level: "error",
+        message: error?.message || "Customer active status socket action failed.",
+      });
+      await logAuditEvent({
+        level: "error",
+        source: "socket.changeCustomerActiveStatus",
+        action: "toggle-active",
+        status: "failed",
+        message: error?.message || "Customer active status update failed.",
+        actor: buildAuditActor(payload?.auditActor || {}),
+        details: {
+          stack: error?.stack || "",
+        },
+        metadata: {
+          targetUserId: typeof payload === "string" ? payload : payload?.userId || "",
+          channel: "socket",
+        },
+      });
+      callBack({
+        success: false,
+        message: "Could not update the customer status",
+      });
+    }
   });
 
   socket.on("updateCustomer", async (data, callBack) => {
-    // update user data
-    const res = await _updateUser(data);
+    try {
+      const actor = buildAuditActor(data?.auditActor || {});
+      const res = await _updateUser(data);
 
-    // call back fired when action is complete
-    callBack({
-      success: res ? true : false,
-      message: res
-        ? "records updated successfully"
-        : "could not update records",
-    });
+      if (!res) {
+        await logAuditEvent({
+          source: "socket.updateCustomer",
+          action: "update",
+          status: "failed",
+          message: "Customer profile update failed because the account was not found or unchanged.",
+          actor,
+          metadata: {
+            targetUserId: data?.userId || "",
+            channel: "socket",
+          },
+        });
+        return callBack({
+          success: false,
+          message: "could not update records",
+        });
+      }
+
+      await logAuditEvent({
+        source: "socket.updateCustomer",
+        action: "update",
+        status: "success",
+        message: "Customer profile updated successfully.",
+        actor,
+        metadata: {
+          target: summarizeCustomer(res),
+          channel: "socket",
+        },
+      });
+
+      callBack({
+        success: true,
+        message: "records updated successfully",
+      });
+    } catch (error) {
+      logger({
+        level: "error",
+        message: error?.message || "Customer update socket action failed.",
+      });
+      await logAuditEvent({
+        level: "error",
+        source: "socket.updateCustomer",
+        action: "update",
+        status: "failed",
+        message: error?.message || "Customer profile update failed.",
+        actor: buildAuditActor(data?.auditActor || {}),
+        details: {
+          stack: error?.stack || "",
+        },
+        metadata: {
+          targetUserId: data?.userId || "",
+          channel: "socket",
+        },
+      });
+      callBack({
+        success: false,
+        message: "could not update records",
+      });
+    }
   });
 
   socket.on("assignTask", (data, callBack) =>
@@ -324,15 +500,67 @@ io.on("connection", (socket) => {
     )
   );
 
-  socket.on("remove_user", async (_id, callBack) => {
-    // set admin active status
-    let res = await _removeUser(_id);
+  socket.on("remove_user", async (payload, callBack) => {
+    try {
+      const targetId = typeof payload === "string" ? payload : payload?._id;
+      const actor = buildAuditActor(payload?.auditActor || {});
+      const res = await _removeUser(targetId);
 
-    // call back fired when action is complete
-    callBack({
-      success: res ? 1 : 0,
-      message: res ? "user removed successfully" : "could not remover user",
-    });
+      if (res) {
+        await logAuditEvent({
+          source: "socket.remove_user",
+          action: "delete",
+          status: "success",
+          message: "Staff account deleted successfully.",
+          actor,
+          metadata: {
+            target: summarizeAdmin(res),
+            channel: "socket",
+          },
+        });
+      } else {
+        await logAuditEvent({
+          source: "socket.remove_user",
+          action: "delete",
+          status: "failed",
+          message: "Staff account deletion failed because the account was not found.",
+          actor,
+          metadata: {
+            targetId: targetId || "",
+            channel: "socket",
+          },
+        });
+      }
+
+      callBack({
+        success: res ? 1 : 0,
+        message: res ? "user removed successfully" : "could not remover user",
+      });
+    } catch (error) {
+      logger({
+        level: "error",
+        message: error?.message || "Staff delete socket action failed.",
+      });
+      await logAuditEvent({
+        level: "error",
+        source: "socket.remove_user",
+        action: "delete",
+        status: "failed",
+        message: error?.message || "Staff account deletion failed.",
+        actor: buildAuditActor(payload?.auditActor || {}),
+        details: {
+          stack: error?.stack || "",
+        },
+        metadata: {
+          targetId: typeof payload === "string" ? payload : payload?._id || "",
+          channel: "socket",
+        },
+      });
+      callBack({
+        success: 0,
+        message: "could not remover user",
+      });
+    }
   });
 
   socket.on("loanRequest", (userData, callBack) => {

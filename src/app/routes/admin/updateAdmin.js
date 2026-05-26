@@ -1,5 +1,11 @@
 const express = require("express");
 const { _encrypt } = require("../../../libs/encrypt");
+const {
+  getAuditActorFromRequest,
+  summarizeAdmin,
+  listChangedFields,
+  logAuditEvent,
+} = require("../../../libs/audit");
 const Admins = require("../../models/admin");
 const StaffGroups = require("../../models/staffGroup");
 
@@ -22,15 +28,31 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       permissions,
       staffGroupId,
       managedStaffGroupIds,
+      auditActor,
     } = req.body;
+    const actor = getAuditActorFromRequest(req, auditActor || {});
 
     const user = await Admins.findOne({ userName });
 
-    if (!user)
+    if (!user) {
+      await logAuditEvent({
+        req,
+        actor,
+        source: "admin.updateAdmin",
+        action: "update",
+        status: "failed",
+        message: "Admin account update failed because the target user was not found.",
+        metadata: {
+          targetUserName: userName,
+        },
+      });
       return res.status(400).json({
         success: 0,
         messsage: "Could not identify user!",
       });
+    }
+
+    const beforeState = summarizeAdmin(user);
 
     if (password && password.trim() !== "") {
       const encryptedPass = await _encrypt(password);
@@ -100,11 +122,37 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
 
     let updatedUser = await user.save();
 
-    if (updatedUser)
+    if (updatedUser) {
+      const afterState = summarizeAdmin(updatedUser);
+      await logAuditEvent({
+        req,
+        actor,
+        source: "admin.updateAdmin",
+        action: "update",
+        status: "success",
+        message: "Admin account updated successfully.",
+        details: {
+          changedFields: listChangedFields(beforeState, afterState, [
+            "firstName",
+            "lastName",
+            "role",
+            "department",
+            "phone",
+            "staffGroupId",
+            "staffGroupName",
+            "isActive",
+          ]),
+        },
+        metadata: {
+          before: beforeState,
+          after: afterState,
+        },
+      });
       return res.status(201).json({
         success: 1,
         message: "User updated successfully",
       });
+    }
 
     if (!updatedUser)
       return res.status(400).json({
@@ -113,6 +161,21 @@ router.patch("/updateAdmin/:userName", async (req, res) => {
       });
   } catch (error) {
     console.log(error);
+    await logAuditEvent({
+      req,
+      actor: getAuditActorFromRequest(req),
+      level: "error",
+      source: "admin.updateAdmin",
+      action: "update",
+      status: "failed",
+      message: error.message || "Admin account update failed.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        targetUserName: req.params?.userName || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",

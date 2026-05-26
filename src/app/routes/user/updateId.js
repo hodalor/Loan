@@ -1,6 +1,11 @@
 const express = require("express");
 const { upload } = require("../../../libs/uploadImage");
 const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
+const {
+  getAuditActorFromRequest,
+  summarizeCustomer,
+  logAuditEvent,
+} = require("../../../libs/audit");
 const User = require("../../models/users");
 
 const router = express.Router();
@@ -25,8 +30,20 @@ router.patch(
   uploadIdentityAssets,
   async (req, res) => {
     try {
+      const actor = getAuditActorFromRequest(req);
       const user = await User.findOne({ userId: req.params.userId });
       if (!user) {
+        await logAuditEvent({
+          req,
+          actor,
+          source: "user.updateId",
+          action: "update-identity",
+          status: "failed",
+          message: "Customer identity update failed because the customer was not found.",
+          metadata: {
+            targetUserId: String(req.params.userId || "").trim(),
+          },
+        });
         return res.status(404).json({
           success: 0,
           message: "Customer not found.",
@@ -69,12 +86,34 @@ router.patch(
         }
       );
 
-      if (updatedUser)
+      if (updatedUser) {
+        await logAuditEvent({
+          req,
+          actor,
+          source: "user.updateId",
+          action: "update-identity",
+          status: "success",
+          message: "Customer identity assets were updated successfully.",
+          details: {
+            changedFields: [
+              ...(req.files?.idFrontImage?.[0] ? ["idFront"] : []),
+              ...(req.files?.idBackImage?.[0] ? ["idBack"] : []),
+              ...(req.files?.livePhotoImage?.[0] ? ["userImage"] : []),
+              ...(gCardNumber !== String(user.IDinfo.gCardNumber || "").trim()
+                ? ["gCardNumber"]
+                : []),
+            ],
+          },
+          metadata: {
+            target: summarizeCustomer(updatedUser),
+          },
+        });
         return res.status(200).json({
           success: 1,
           message: "Identity updated successfully",
           data: updatedUser,
         });
+      }
 
       if (!updatedUser)
         return res.status(400).json({
@@ -83,6 +122,21 @@ router.patch(
         });
     } catch (error) {
       console.log(error);
+      await logAuditEvent({
+        req,
+        actor: getAuditActorFromRequest(req),
+        level: "error",
+        source: "user.updateId",
+        action: "update-identity",
+        status: "failed",
+        message: error.message || "Customer identity update failed.",
+        details: {
+          stack: error.stack || "",
+        },
+        metadata: {
+          targetUserId: String(req.params?.userId || "").trim(),
+        },
+      });
       return res.status(500).json({
         success: 0,
         message: "Internal error: code(500)!",

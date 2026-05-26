@@ -3,9 +3,9 @@ const Admins = require("../../models/admin");
 const _removeUser = async (_id) => {
   let admin = await Admins.findOneAndDelete({ _id });
 
-  if (admin) return true;
+  if (admin) return admin;
 
-  if (!admin) return false;
+  if (!admin) return null;
 };
 
 module.exports = _removeUser;

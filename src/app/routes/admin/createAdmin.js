@@ -1,6 +1,11 @@
 const express = require("express");
 const { _encrypt } = require("../../../libs/encrypt");
 const _generateString = require("../../../libs/generateID");
+const {
+  getAuditActorFromRequest,
+  summarizeAdmin,
+  logAuditEvent,
+} = require("../../../libs/audit");
 const Admins = require("../../models/admin");
 const StaffGroups = require("../../models/staffGroup");
 
@@ -23,15 +28,29 @@ router.post("/createAdmin", async (req, res) => {
       permissions,
       staffGroupId,
       managedStaffGroupIds,
+      auditActor,
     } = req.body;
+    const actor = getAuditActorFromRequest(req, auditActor || {});
 
     const user = await Admins.findOne({ userName });
 
-    if (user !== undefined && user !== null && user)
+    if (user !== undefined && user !== null && user) {
+      await logAuditEvent({
+        req,
+        actor,
+        source: "admin.createAdmin",
+        action: "create",
+        status: "failed",
+        message: "Admin account creation failed because the username already exists.",
+        metadata: {
+          targetUserName: userName,
+        },
+      });
       return res.status(400).json({
         success: 0,
         message: "This user name already exist please chose a different one!",
       });
+    }
 
     if (user !== undefined && user !== null && user.phone === phone)
       return res.status(400).json({
@@ -123,6 +142,17 @@ router.post("/createAdmin", async (req, res) => {
     const savedUser = await userData.save();
 
     if (savedUser) {
+      await logAuditEvent({
+        req,
+        actor,
+        source: "admin.createAdmin",
+        action: "create",
+        status: "success",
+        message: "Admin account created successfully.",
+        metadata: {
+          target: summarizeAdmin(savedUser),
+        },
+      });
       return res.status(201).json({
         success: 1,
         message: "User created successfully",
@@ -136,6 +166,21 @@ router.post("/createAdmin", async (req, res) => {
       });
   } catch (error) {
     console.log(error);
+    await logAuditEvent({
+      req,
+      actor: getAuditActorFromRequest(req),
+      level: "error",
+      source: "admin.createAdmin",
+      action: "create",
+      status: "failed",
+      message: error.message || "Admin account creation failed.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        targetUserName: req.body?.userName || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",

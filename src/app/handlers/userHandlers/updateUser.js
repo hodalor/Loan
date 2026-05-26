@@ -20,12 +20,12 @@ const _updateUser = async (data) => {
       }
     );
 
-    if (updatedUser) return true;
+    if (updatedUser) return updatedUser;
 
-    if (!updatedUser) return true;
+    if (!updatedUser) return null;
   } catch (error) {
     console.log(error);
-    return false;
+    return null;
   }
 };
 

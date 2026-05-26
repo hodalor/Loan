@@ -1,6 +1,11 @@
 const express = require("express");
 const StaffGroups = require("../../models/staffGroup");
 const Admins = require("../../models/admin");
+const {
+  getAuditActorFromRequest,
+  summarizeStaffGroup,
+  logAuditEvent,
+} = require("../../../libs/audit");
 
 const router = express.Router();
 
@@ -33,6 +38,9 @@ router.post("/staff-groups", async (req, res) => {
       createdBy = "",
       updatedBy = "",
     } = req.body || {};
+    const actor = getAuditActorFromRequest(req, {
+      userName: createdBy || updatedBy,
+    });
 
     const normalizedName = normalizeName(name);
     const normalizedDepartment = normalizeDepartment(department);
@@ -50,6 +58,18 @@ router.post("/staff-groups", async (req, res) => {
     });
 
     if (existingGroup) {
+      await logAuditEvent({
+        req,
+        actor,
+        source: "admin.staffGroups",
+        action: "create",
+        status: "failed",
+        message: "Staff group creation failed because the name already exists in the department.",
+        metadata: {
+          name: normalizedName,
+          department: normalizedDepartment,
+        },
+      });
       return res.status(400).json({
         success: 0,
         message: "A group with this name already exists in the selected department",
@@ -64,6 +84,18 @@ router.post("/staff-groups", async (req, res) => {
       updatedBy: String(updatedBy || createdBy || "").trim(),
     });
 
+    await logAuditEvent({
+      req,
+      actor,
+      source: "admin.staffGroups",
+      action: "create",
+      status: "success",
+      message: "Staff group created successfully.",
+      metadata: {
+        target: summarizeStaffGroup(group),
+      },
+    });
+
     return res.status(201).json({
       success: 1,
       message: "Group created successfully",
@@ -71,6 +103,18 @@ router.post("/staff-groups", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    await logAuditEvent({
+      req,
+      actor: getAuditActorFromRequest(req),
+      level: "error",
+      source: "admin.staffGroups",
+      action: "create",
+      status: "failed",
+      message: error.message || "Staff group creation failed.",
+      details: {
+        stack: error.stack || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",
@@ -82,6 +126,9 @@ router.patch("/staff-groups/:groupId", async (req, res) => {
   try {
     const groupId = req.params.groupId;
     const { name, department, description = "", updatedBy = "" } = req.body || {};
+    const actor = getAuditActorFromRequest(req, {
+      userName: updatedBy,
+    });
 
     const group = await StaffGroups.findById(groupId);
 
@@ -91,6 +138,8 @@ router.patch("/staff-groups/:groupId", async (req, res) => {
         message: "Group not found",
       });
     }
+
+    const beforeState = summarizeStaffGroup(group);
 
     const normalizedName = normalizeName(name || group.name);
     const normalizedDepartment = normalizeDepartment(department || group.department);
@@ -135,6 +184,19 @@ router.patch("/staff-groups/:groupId", async (req, res) => {
       }
     );
 
+    await logAuditEvent({
+      req,
+      actor,
+      source: "admin.staffGroups",
+      action: "update",
+      status: "success",
+      message: "Staff group updated successfully.",
+      metadata: {
+        before: beforeState,
+        after: summarizeStaffGroup(savedGroup),
+      },
+    });
+
     return res.status(200).json({
       success: 1,
       message: "Group updated successfully",
@@ -142,6 +204,21 @@ router.patch("/staff-groups/:groupId", async (req, res) => {
     });
   } catch (error) {
     console.log(error);
+    await logAuditEvent({
+      req,
+      actor: getAuditActorFromRequest(req),
+      level: "error",
+      source: "admin.staffGroups",
+      action: "update",
+      status: "failed",
+      message: error.message || "Staff group update failed.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        groupId: req.params?.groupId || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",
@@ -152,6 +229,7 @@ router.patch("/staff-groups/:groupId", async (req, res) => {
 router.delete("/staff-groups/:groupId", async (req, res) => {
   try {
     const groupId = req.params.groupId;
+    const actor = getAuditActorFromRequest(req);
     const linkedAdmins = await Admins.find({ staffGroupId: String(groupId) })
       .select("userName firstName lastName")
       .lean();
@@ -173,12 +251,39 @@ router.delete("/staff-groups/:groupId", async (req, res) => {
       });
     }
 
+    await logAuditEvent({
+      req,
+      actor,
+      source: "admin.staffGroups",
+      action: "delete",
+      status: "success",
+      message: "Staff group deleted successfully.",
+      metadata: {
+        target: summarizeStaffGroup(deletedGroup),
+      },
+    });
+
     return res.status(200).json({
       success: 1,
       message: "Group deleted successfully",
     });
   } catch (error) {
     console.log(error);
+    await logAuditEvent({
+      req,
+      actor: getAuditActorFromRequest(req),
+      level: "error",
+      source: "admin.staffGroups",
+      action: "delete",
+      status: "failed",
+      message: error.message || "Staff group deletion failed.",
+      details: {
+        stack: error.stack || "",
+      },
+      metadata: {
+        groupId: req.params?.groupId || "",
+      },
+    });
     return res.status(500).json({
       success: 0,
       message: "Internal error: code(500)!",
