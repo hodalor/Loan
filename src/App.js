@@ -25,6 +25,7 @@ import {
 } from "./firebase/phoneAuth";
 import "./App.css";
 import InstallAppPrompt from "./components/InstallAppPrompt";
+import { resolveMediaUrl } from "./libs/mediaUrl";
 
 const APPLICATION_STEPS = [
   { id: "personal", label: "Personal info" },
@@ -219,8 +220,6 @@ const isPhoneValid = (value = "") => value.trim().length >= 10;
 const isPinValid = (value = "") => /^\d{4}$/.test(value.trim());
 const isNotEmpty = (value = "") => String(value).trim() !== "";
 const isBrowserFile = (value) => typeof File !== "undefined" && value instanceof File;
-const isPreviewableImageSrc = (value = "") =>
-  /^(https?:\/\/|data:|blob:|\/)/i.test(String(value || "").trim());
 const normalizeStoredFile = (value) =>
   value && typeof value === "object" && value.name
     ? {
@@ -251,7 +250,7 @@ const getIdentityPreviewSrc = (value) => {
   if (isBrowserFile(value)) {
     return URL.createObjectURL(value);
   }
-  return isPreviewableImageSrc(value?.name) ? value.name : "";
+  return resolveMediaUrl(value?.name || "");
 };
 const toMoney = (value = 0) => Number.parseFloat(Number(value || 0).toFixed(2));
 const applyRuntimeCountryFormatting = (country = {}) => {
@@ -808,6 +807,7 @@ function App() {
   const [transactionReceipt, setTransactionReceipt] = useState(null);
   const [pendingGatewayTransaction, setPendingGatewayTransaction] = useState(null);
   const [firebaseIdToken, setFirebaseIdToken] = useState("");
+  const [brandLogoLoadFailed, setBrandLogoLoadFailed] = useState(false);
   const [appMessage, setAppMessage] = useState({
     type: "info",
     text: "Sign in with phone number and your 4-digit PIN, or create a new application.",
@@ -833,7 +833,9 @@ function App() {
     [selectedAmount, selectedTerm]
   );
   const brandName = portalContent?.appName || buildDefaultPortalContent().appName;
-  const brandLogoUrl = portalContent?.logoUrl || buildDefaultPortalContent().logoUrl;
+  const brandLogoUrl = resolveMediaUrl(
+    portalContent?.logoUrl || buildDefaultPortalContent().logoUrl
+  );
   const brandTagline = portalContent?.tagline || buildDefaultPortalContent().tagline;
   const footerText = portalContent?.footerText || buildDefaultPortalContent().footerText;
   const footerVersion =
@@ -852,6 +854,10 @@ function App() {
   const isRealOtpMode = otpMode === "real";
   const firebaseVerificationReady = isFirebasePhoneVerificationReady(firebaseWebConfig);
   const lifecycleConfig = sessionAccount?.lifecycleConfig || null;
+
+  useEffect(() => {
+    setBrandLogoLoadFailed(false);
+  }, [brandLogoUrl]);
 
   const showMessage = (type, text) => setAppMessage({ type, text });
   const resetOtpVerificationState = useCallback(() => {
@@ -2098,8 +2104,13 @@ function App() {
           className={`hero-panel ${screen === "portal" ? "hero-panel-wide" : "hero-panel-auth"}`}
         >
           <div className="brand-inline">
-            {brandLogoUrl ? (
-              <img src={brandLogoUrl} alt={brandName} className="brand-mark brand-mark-image" />
+            {brandLogoUrl && !brandLogoLoadFailed ? (
+              <img
+                src={brandLogoUrl}
+                alt={brandName}
+                className="brand-mark brand-mark-image"
+                onError={() => setBrandLogoLoadFailed(true)}
+              />
             ) : (
               <div className="brand-mark">{brandName.slice(0, 1).toUpperCase()}</div>
             )}
