@@ -24,7 +24,7 @@ export default function Login() {
       <div className="w-full max-w-sm rounded-[24px] border border-slate-800 bg-white p-4 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6 md:max-w-md md:p-7">
         <div className="mb-5 flex flex-col items-center justify-center gap-3 text-center sm:mb-6 sm:flex-row">
           <img
-            src={`${process.env.PUBLIC_URL}/pathwaylogo.png`}
+            src={`${process.env.PUBLIC_URL}/speedcash-icon.png`}
             alt="SPEED CASH"
             className="h-12 w-12 rounded-2xl object-cover sm:h-12 sm:w-12"
           />

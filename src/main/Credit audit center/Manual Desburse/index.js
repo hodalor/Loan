@@ -45,7 +45,7 @@ export default function ManualDisburse() {
                 : "-",
               accountNumber: paymentMethod?.method || loan.paymentMethod || "-",
               accountIssuer: loan.paymentOperator || paymentMethod?.operator || "Unknown",
-              description: "Pathway loans disbursement",
+              description: "SPEED CASH loan disbursement",
               disbursementProvider: loan.disbursementProvider || "Pending",
               payoutStatus: loan.payoutStatus || "Pending",
             };

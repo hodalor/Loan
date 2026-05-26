@@ -13,7 +13,7 @@ export default function Home() {
               Welcome
             </p>
             <h2 className="mt-3 text-4xl font-semibold text-slate-900">
-              {user?.userName || "Pathway"} Workspace
+              {user?.userName || "SPEED CASH"} Workspace
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
               Faster daily operations with a simpler navigation flow, cleaner

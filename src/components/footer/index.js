@@ -24,7 +24,7 @@ export default function Footer() {
   const footerText = branding.footerText?.trim() || "All rights reserved.";
   const footerVersion = branding.footerVersion?.trim() || "1.5.0";
   const logoUrl =
-    branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/pathwaylogo.png`;
+    branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/speedcash-icon.png`;
 
   return (
     <footer className="border-t border-slate-200 bg-white px-4 py-4 text-sm text-slate-500 sm:px-6 lg:px-8">

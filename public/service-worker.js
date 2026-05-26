@@ -1,6 +1,6 @@
 const CACHE_PREFIX = "speed-cash-admin";
-const CACHE_NAME = `${CACHE_PREFIX}-v1`;
-const APP_SHELL = ["./", "./index.html", "./manifest.json", "./pathwaylogo.png"];
+const CACHE_NAME = `${CACHE_PREFIX}-v2`;
+const APP_SHELL = ["./", "./index.html", "./manifest.json", "./speedcash-icon.png"];
 const STATIC_DESTINATIONS = new Set([
   "style",
   "script",

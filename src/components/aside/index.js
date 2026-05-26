@@ -48,7 +48,7 @@ export default function Aside({ isOpen, onClose }) {
   }, []);
 
   const logoSrc =
-    branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/pathwaylogo.png`;
+    branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/speedcash-icon.png`;
   const appName = branding.appName?.trim() || "SPEED CASH";
   const tagline = branding.tagline?.trim() || "Loan operations";
 
