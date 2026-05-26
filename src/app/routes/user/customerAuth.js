@@ -901,7 +901,7 @@ const initializePaystackCharge = async ({
       Accept: "application/json",
     },
     body: JSON.stringify({
-      email: user.email || `${sanitizePhone(user.phone || "customer")}@pathway.local`,
+      email: user.email || `${sanitizePhone(user.phone || "customer")}@speedcash.local`,
       amount: toSubunitAmount(amount),
       reference,
       callback_url: callbackUrl,
@@ -1606,7 +1606,7 @@ const buildProfilePayload = ({
     email:
       personal.email ||
       existingUser?.email ||
-      `${sanitizePhone(personal.phone || existingUser?.phone || "customer")}@pathway.local`,
+      `${sanitizePhone(personal.phone || existingUser?.phone || "customer")}@speedcash.local`,
     phone: sanitizePhone(personal.phone || existingUser?.phone || ""),
     countryCode:
       countryProfile.code || existingUser?.countryCode || access?.countryCode || "",
