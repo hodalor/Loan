@@ -5,6 +5,11 @@ import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 export default function BasicInfo(props) {
   const { loan, customerProfileLoading } = useResolvedLoanDetails();
   const applyTime = loan?.doa ? new Date(loan.doa).toLocaleString() : "-";
+  const productName = (() => {
+    const rawProductName = String(loan?.productName || "").trim();
+    if (!rawProductName) return "SPEED CASH";
+    return /^pathway$/i.test(rawProductName) ? "SPEED CASH" : rawProductName;
+  })();
   const rows = [
     [
       { type: "label", content: "Loan ID" },
@@ -16,7 +21,7 @@ export default function BasicInfo(props) {
     ],
     [
       { type: "label", content: "Products Name" },
-      { content: loan?.productName || "PathWay" },
+      { content: productName },
       { type: "label", content: "Apply Amount" },
       { content: loan?.amount || "-" },
       { type: "label", content: "Loan Purpose" },
