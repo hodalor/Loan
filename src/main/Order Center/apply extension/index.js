@@ -3,6 +3,7 @@ import { GlobalContext } from "../../../libs/context/globalContext";
 import { AuthContext } from "../../../libs/context/authContext";
 import { _getSystemConfig } from "../../../handlers";
 import { dataBaseUrl } from "../../../libs/endpoints";
+import { resolveMediaUrl } from "../../../libs/mediaUrl";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
 
 const normalizeStatus = (record = {}) =>
@@ -95,7 +96,7 @@ export default function ApplyExtension() {
                 rec.requestedBy || (normalizeSource(rec) === "manual" ? "Admin" : "Customer"),
               approvedBy:
                 rec.approvedBy || (normalizeSource(rec) === "manual" ? "-" : "System"),
-              proofUrl: rec.proofUrl || "",
+              proofUrl: resolveMediaUrl(rec.proofUrl || ""),
             }))
           : []
       ).sort((left, right) => {

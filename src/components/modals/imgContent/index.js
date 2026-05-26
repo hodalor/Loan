@@ -1,12 +1,16 @@
 import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
+import { resolveMediaUrl } from "../../../libs/mediaUrl";
 
 export default function ImgModalContent() {
   const { imageToView, setImageToView, setmodalTitle } = React.useContext(GlobalContext);
   const [zoomLevel, setZoomLevel] = React.useState(1);
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+  const resolvedImageUrl = resolveMediaUrl(imageToView);
 
   React.useEffect(() => {
     setZoomLevel(1);
+    setImageLoadFailed(false);
   }, [imageToView]);
 
   const handleClose = () => {
@@ -57,14 +61,17 @@ export default function ImgModalContent() {
         </div>
       </div>
 
-      {imageToView === "" ? (
-        <div className="p-6 text-sm text-slate-500">Invalid image url</div>
+      {resolvedImageUrl === "" || imageLoadFailed ? (
+        <div className="p-6 text-sm text-slate-500">
+          {imageLoadFailed ? "Image failed to load." : "Invalid image url"}
+        </div>
       ) : (
         <div className="flex max-h-[75vh] items-center justify-center overflow-auto bg-slate-950/95 p-4">
           <img
-            src={imageToView}
+            src={resolvedImageUrl}
             alt="Preview"
             className="max-w-full rounded-2xl object-contain shadow-2xl transition-transform duration-200"
+            onError={() => setImageLoadFailed(true)}
             style={{
               maxHeight: "70vh",
               transform: `scale(${zoomLevel})`,

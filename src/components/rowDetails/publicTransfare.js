@@ -4,31 +4,8 @@ import { GlobalContext } from "../../libs/context/globalContext";
 import MyModal from "../modals";
 import BigLoader from "../loaders/bigLoader";
 import ImgModalContent from "../modals/imgContent";
-import { apiBaseUrl } from "../../libs/endpoints";
 import { formatMoney, getCollectionMetrics } from "../../libs/collectionMetrics";
-
-const normalizeProofUrl = (value = "") => {
-  const rawValue = String(value || "").trim();
-
-  if (!rawValue) return "";
-  if (/^https?:\/\//i.test(rawValue)) return rawValue;
-  if (!apiBaseUrl) return rawValue;
-
-  const uploadIndex = rawValue.indexOf("/upload/");
-  if (rawValue.startsWith("/upload/")) {
-    return `${apiBaseUrl}${rawValue}`;
-  }
-
-  if (rawValue.startsWith("upload/")) {
-    return `${apiBaseUrl}/${rawValue}`;
-  }
-
-  if (uploadIndex >= 0) {
-    return `${apiBaseUrl}${rawValue.slice(uploadIndex)}`;
-  }
-
-  return rawValue;
-};
+import { resolveMediaUrl } from "../../libs/mediaUrl";
 
 export default function PublicTransfare() {
   const {
@@ -51,7 +28,7 @@ export default function PublicTransfare() {
   const [proofLoadFailed, setProofLoadFailed] = React.useState(false);
   const canReviewPayments = _hasAccess("action:payment:review");
   const proofAuditUrl = React.useMemo(
-    () => normalizeProofUrl(loan.clearanceRecord?.recordProofAudit),
+    () => resolveMediaUrl(loan.clearanceRecord?.recordProofAudit),
     [loan.clearanceRecord?.recordProofAudit]
   );
   const hasConfirmationProof = inputs.image instanceof File;

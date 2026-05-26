@@ -1,5 +1,6 @@
 import React from "react";
 import { readSystemConfig } from "../../libs/systemConfig";
+import { resolveMediaUrl } from "../../libs/mediaUrl";
 
 export default function Footer() {
   const [branding, setBranding] = React.useState(() =>
@@ -23,8 +24,15 @@ export default function Footer() {
   const appName = branding.appName?.trim() || "SPEED CASH";
   const footerText = branding.footerText?.trim() || "All rights reserved.";
   const footerVersion = branding.footerVersion?.trim() || "1.5.0";
-  const logoUrl =
-    branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/speedcash-icon.png`;
+  const defaultLogoUrl = `${process.env.PUBLIC_URL}/speedcash-icon.png`;
+  const resolvedLogoUrl = resolveMediaUrl(branding.logoUrl);
+  const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setLogoLoadFailed(false);
+  }, [resolvedLogoUrl]);
+
+  const logoUrl = !logoLoadFailed && resolvedLogoUrl ? resolvedLogoUrl : defaultLogoUrl;
 
   return (
     <footer className="border-t border-slate-200 bg-white px-4 py-4 text-sm text-slate-500 sm:px-6 lg:px-8">
@@ -34,6 +42,7 @@ export default function Footer() {
             src={logoUrl}
             alt={appName}
             className="h-8 w-8 rounded-lg bg-white object-cover p-1"
+            onError={() => setLogoLoadFailed(true)}
           />
           <p>
             Copyright © {new Date().getFullYear()} <strong>{appName}</strong>.{" "}

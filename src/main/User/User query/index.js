@@ -2,6 +2,7 @@ import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
+import { resolveMediaUrl } from "../../../libs/mediaUrl";
 import { readSystemConfig } from "../../../libs/systemConfig";
 import _updateCustomerPaymentOperator from "../../../handlers/updates/updateCustomerPaymentOperator";
 
@@ -934,20 +935,28 @@ function DetailInput({ label, value, onChange, disabled }) {
 }
 
 function ImageCard({ title, src }) {
+  const resolvedSrc = resolveMediaUrl(src);
+  const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImageLoadFailed(false);
+  }, [resolvedSrc]);
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
       </div>
-      {src ? (
+      {resolvedSrc && !imageLoadFailed ? (
         <img
-          src={src}
+          src={resolvedSrc}
           alt={title}
           className="h-64 w-full rounded-2xl object-cover"
+          onError={() => setImageLoadFailed(true)}
         />
       ) : (
         <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white text-sm text-slate-500">
-          No image available
+          {imageLoadFailed ? "Image failed to load" : "No image available"}
         </div>
       )}
     </div>

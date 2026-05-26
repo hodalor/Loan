@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { GlobalContext } from "../../libs/context/globalContext";
 import { readSystemConfig } from "../../libs/systemConfig";
 import { getVisibleNavigation } from "../../config/navigation";
+import { resolveMediaUrl } from "../../libs/mediaUrl";
 
 const isActivePath = (pathname, item) => {
   if (item.exact) return pathname === item.path;
@@ -47,8 +48,15 @@ export default function Aside({ isOpen, onClose }) {
     };
   }, []);
 
-  const logoSrc =
-    branding.logoUrl?.trim() || `${process.env.PUBLIC_URL}/speedcash-icon.png`;
+  const defaultLogoSrc = `${process.env.PUBLIC_URL}/speedcash-icon.png`;
+  const resolvedLogoSrc = resolveMediaUrl(branding.logoUrl);
+  const [logoLoadFailed, setLogoLoadFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setLogoLoadFailed(false);
+  }, [resolvedLogoSrc]);
+
+  const logoSrc = !logoLoadFailed && resolvedLogoSrc ? resolvedLogoSrc : defaultLogoSrc;
   const appName = branding.appName?.trim() || "SPEED CASH";
   const tagline = branding.tagline?.trim() || "Loan operations";
 
@@ -70,6 +78,7 @@ export default function Aside({ isOpen, onClose }) {
             src={logoSrc}
             alt={appName}
             className="h-9 w-9 rounded-xl bg-white object-cover p-1"
+            onError={() => setLogoLoadFailed(true)}
           />
           <div>
             <p className="text-sm font-semibold tracking-wide text-slate-200">

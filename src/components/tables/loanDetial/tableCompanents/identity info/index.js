@@ -8,6 +8,7 @@ import {
   DetailSectionHint,
   StatusBadge,
 } from "../../DetailSectionCard";
+import { resolveMediaUrl } from "../../../../../libs/mediaUrl";
 import useResolvedLoanDetails from "../../useResolvedLoanDetails";
 
 export default function IdentityInfo() {
@@ -18,9 +19,9 @@ export default function IdentityInfo() {
   const [idBackFailed, setIdBackFailed] = React.useState(false);
   const dob = customer?.pesonalInfo?.dob || "";
   const age = dob ? new Date().getFullYear() - new Date(dob).getFullYear() : "-";
-  const livePhoto = customer?.userImage || loan?.facialRecog || "";
-  const idFront = customer?.IDinfo?.idFront || "";
-  const idBack = customer?.IDinfo?.idBack || "";
+  const livePhoto = resolveMediaUrl(customer?.userImage || loan?.facialRecog || "");
+  const idFront = resolveMediaUrl(customer?.IDinfo?.idFront || "");
+  const idBack = resolveMediaUrl(customer?.IDinfo?.idBack || "");
   const canOpenLivePhoto = Boolean(livePhoto) && !livePhotoFailed;
   const canOpenIdFront = Boolean(idFront) && !idFrontFailed;
   const canOpenIdBack = Boolean(idBack) && !idBackFailed;
