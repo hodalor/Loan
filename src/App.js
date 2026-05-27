@@ -2098,8 +2098,8 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
-      <div className="app-stage">
+    <div className={`app-shell ${screen === "portal" ? "app-shell-portal" : ""}`}>
+      <div className={`app-stage ${screen === "portal" ? "app-stage-portal" : ""}`}>
         <header
           className={`hero-panel ${screen === "portal" ? "hero-panel-wide" : "hero-panel-auth"}`}
         >
@@ -2306,45 +2306,45 @@ function App() {
 
         {screen === "portal" ? (
           <section className="form-card portal-card">
-            <div className="message-stack">
-              <div className={`message-banner message-${appMessage.type}`}>{appMessage.text}</div>
-            </div>
+            <div className="portal-card-body">
+              <div className="message-stack">
+                <div className={`message-banner message-${appMessage.type}`}>{appMessage.text}</div>
+              </div>
 
-            {portalLoading ? <div className="portal-loading">Loading customer portal...</div> : null}
+              {portalLoading ? <div className="portal-loading">Loading customer portal...</div> : null}
 
-            {activeTab === "home" ? (
-              <HomeTab
-                displayName={displayName}
-                offer={loanOffer}
-                content={portalContent}
-                activeLoan={activeLoan}
-                transactionReceipt={transactionReceipt}
-                hasProfile={hasProfile}
-                hasDraft={hasDraft}
-                onStartApply={handleOpenApply}
-                onOpenHistory={() => setActiveTab("history")}
-              />
-            ) : null}
-
-            {activeTab === "apply" ? (
-              applyMode === "loan" && hasProfile && !hasDraft ? (
-                <LoanApplyTab
+              {activeTab === "home" ? (
+                <HomeTab
+                  displayName={displayName}
                   offer={loanOffer}
-                  loanRequest={loanRequest}
+                  content={portalContent}
                   activeLoan={activeLoan}
-                  selectedAmount={selectedAmount}
-                  loanSummary={loanSummary}
-                  loanApplying={loanApplying}
-                  lifecycleLoading={lifecycleLoading}
-                  lifecycleAction={lifecycleAction}
-                  lifecycleConfig={lifecycleConfig}
-                  repaymentDraft={repaymentDraft}
-                  extensionDraft={extensionDraft}
-                  repaymentSummaryData={repaymentSummaryData}
-                  extensionSummaryData={extensionSummaryData}
-                  onChange={updateLoanRequest}
-                  onRepaymentDraftChange={(field, value) =>
-                    {
+                  transactionReceipt={transactionReceipt}
+                  hasProfile={hasProfile}
+                  hasDraft={hasDraft}
+                  onStartApply={handleOpenApply}
+                  onOpenHistory={() => setActiveTab("history")}
+                />
+              ) : null}
+
+              {activeTab === "apply" ? (
+                applyMode === "loan" && hasProfile && !hasDraft ? (
+                  <LoanApplyTab
+                    offer={loanOffer}
+                    loanRequest={loanRequest}
+                    activeLoan={activeLoan}
+                    selectedAmount={selectedAmount}
+                    loanSummary={loanSummary}
+                    loanApplying={loanApplying}
+                    lifecycleLoading={lifecycleLoading}
+                    lifecycleAction={lifecycleAction}
+                    lifecycleConfig={lifecycleConfig}
+                    repaymentDraft={repaymentDraft}
+                    extensionDraft={extensionDraft}
+                    repaymentSummaryData={repaymentSummaryData}
+                    extensionSummaryData={extensionSummaryData}
+                    onChange={updateLoanRequest}
+                    onRepaymentDraftChange={(field, value) => {
                       setRepaymentDraft((current) => ({
                         ...current,
                         [field]: value,
@@ -2361,30 +2361,28 @@ function App() {
                           : {}),
                       }));
                       setRepaymentSummaryData(null);
+                    }}
+                    onGoReview={handleLoanReview}
+                    onGoBuilder={() =>
+                      setLoanRequest((current) => ({
+                        ...current,
+                        stage: "builder",
+                      }))
                     }
-                  }
-                  onGoReview={handleLoanReview}
-                  onGoBuilder={() =>
-                    setLoanRequest((current) => ({
-                      ...current,
-                      stage: "builder",
-                    }))
-                  }
-                  onApply={handleApplyLoan}
-                  onReviewRepayment={handleReviewRepayment}
-                  onReviewExtension={handleReviewExtension}
-                  onSubmitRepayment={handleSubmitRepayment}
-                  onSubmitExtension={handleSubmitExtension}
-                  onOpenRepayment={() => {
-                    setLifecycleAction("payment");
-                    setRepaymentSummaryData(null);
-                  }}
-                  onOpenExtension={() => {
-                    setLifecycleAction("extension");
-                    setExtensionSummaryData(null);
-                  }}
-                  onExtensionDraftChange={(field, value) =>
-                    {
+                    onApply={handleApplyLoan}
+                    onReviewRepayment={handleReviewRepayment}
+                    onReviewExtension={handleReviewExtension}
+                    onSubmitRepayment={handleSubmitRepayment}
+                    onSubmitExtension={handleSubmitExtension}
+                    onOpenRepayment={() => {
+                      setLifecycleAction("payment");
+                      setRepaymentSummaryData(null);
+                    }}
+                    onOpenExtension={() => {
+                      setLifecycleAction("extension");
+                      setExtensionSummaryData(null);
+                    }}
+                    onExtensionDraftChange={(field, value) => {
                       setExtensionDraft((current) => ({
                         ...current,
                         [field]: value,
@@ -2401,58 +2399,66 @@ function App() {
                           : {}),
                       }));
                       setExtensionSummaryData(null);
-                    }
-                  }
-                  onClearLifecycleAction={() => {
-                    setLifecycleAction("");
-                    setRepaymentSummaryData(null);
-                    setExtensionSummaryData(null);
-                  }}
-                  onOpenRecords={() => setActiveTab("history")}
-                />
-              ) : (
-                <ProfileApplicationFlow
-                  activeStep={activeStep}
-                  applicationStep={applicationStep}
+                    }}
+                    onClearLifecycleAction={() => {
+                      setLifecycleAction("");
+                      setRepaymentSummaryData(null);
+                      setExtensionSummaryData(null);
+                    }}
+                    onOpenRecords={() => setActiveTab("history")}
+                  />
+                ) : (
+                  <ProfileApplicationFlow
+                    activeStep={activeStep}
+                    applicationStep={applicationStep}
+                    formData={formData}
+                    draftLoading={draftLoading}
+                    submitLoading={submitLoading}
+                    updateSection={updateSection}
+                    updateEmergencyContact={updateEmergencyContact}
+                    handleSaveDraft={handleSaveDraft}
+                    previousStep={previousStep}
+                    nextStep={nextStep}
+                    handleSubmit={handleSubmit}
+                  />
+                )
+              ) : null}
+
+              {activeTab === "history" ? (
+                <RecordsTab records={loanRecords} onStartApplication={handleOpenApply} />
+              ) : null}
+
+              {activeTab === "profile" ? (
+                <ProfileTab
+                  displayName={displayName}
+                  sessionAccount={sessionAccount}
                   formData={formData}
-                  draftLoading={draftLoading}
-                  submitLoading={submitLoading}
-                  updateSection={updateSection}
-                  updateEmergencyContact={updateEmergencyContact}
-                  handleSaveDraft={handleSaveDraft}
-                  previousStep={previousStep}
-                  nextStep={nextStep}
-                  handleSubmit={handleSubmit}
+                  offer={loanOffer}
+                  onEditProfile={() => openProfileEditor(0)}
+                  onResetPin={() => switchToOtpFlow("reset")}
+                  onLogout={handleLogout}
                 />
-              )
-            ) : null}
+              ) : null}
 
-            {activeTab === "history" ? (
-              <RecordsTab records={loanRecords} onStartApplication={handleOpenApply} />
-            ) : null}
-
-            {activeTab === "profile" ? (
-              <ProfileTab
-                displayName={displayName}
-                sessionAccount={sessionAccount}
-                formData={formData}
-                offer={loanOffer}
-                onEditProfile={() => openProfileEditor(0)}
-                onResetPin={() => switchToOtpFlow("reset")}
-                onLogout={handleLogout}
-              />
-            ) : null}
-
+              <footer className="portal-footer-note">
+                <span>
+                  {brandName} · {footerText}
+                </span>
+                <span>Version {footerVersion}</span>
+              </footer>
+            </div>
             <BottomNav activeTab={activeTab} onChange={handlePortalTabChange} />
           </section>
         ) : null}
 
-        <footer className="portal-footer-note">
-          <span>
-            {brandName} · {footerText}
-          </span>
-          <span>Version {footerVersion}</span>
-        </footer>
+        {screen !== "portal" ? (
+          <footer className="portal-footer-note">
+            <span>
+              {brandName} · {footerText}
+            </span>
+            <span>Version {footerVersion}</span>
+          </footer>
+        ) : null}
       </div>
     </div>
   );
