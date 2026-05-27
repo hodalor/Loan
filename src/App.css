@@ -1340,7 +1340,7 @@
 
 .loan-status-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -1552,9 +1552,24 @@
   color: var(--text-main);
 }
 
+.term-card-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .term-card span {
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.term-card-amount {
+  display: inline-flex;
+  width: fit-content;
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
 .term-card-active {
@@ -1564,7 +1579,8 @@
 }
 
 .term-card-active strong,
-.term-card-active span {
+.term-card-active span,
+.term-card-active .term-card-amount {
   color: #fff;
 }
 
@@ -1848,6 +1864,7 @@
 }
 
 @media (max-width: 360px) {
+  .loan-status-grid,
   .record-meta-grid {
     grid-template-columns: 1fr;
   }
@@ -1945,7 +1962,6 @@
 }
 
 @media (max-width: 640px) {
-  .loan-status-grid,
   .record-meta-grid {
     grid-template-columns: 1fr;
   }

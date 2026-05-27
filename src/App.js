@@ -2888,9 +2888,13 @@ function LoanApplyTab({
                       onClick={() => onReviewExtension(item.key)}
                     >
                       <strong>{item.label}</strong>
-                      <span>{item.days} days</span>
-                      <span>{item.feeRate}% fee</span>
-                      <span>{formatCurrency(item.feeAmount || 0)}</span>
+                      <div className="term-card-meta-row">
+                        <span>{item.days} days</span>
+                        <span>{item.feeRate}% fee</span>
+                      </div>
+                      <span className="term-card-amount">
+                        {formatCurrency(item.feeAmount || 0)}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -3092,9 +3096,13 @@ function LoanApplyTab({
                   onClick={() => onChange("termKey", term.key)}
                 >
                   <strong>{term.label}</strong>
-                  <span>{term.interestRate}% interest</span>
-                  <span>+{term.serviceFeeRate}% service</span>
-                  <span>+{term.processingFeeRate}% processing</span>
+                  <div className="term-card-meta-row">
+                    <span>{term.interestRate}% interest</span>
+                    <span>+{term.serviceFeeRate}% service</span>
+                  </div>
+                  <span className="term-card-amount">
+                    +{term.processingFeeRate}% processing
+                  </span>
                 </button>
               ))}
             </div>
