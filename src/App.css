@@ -608,17 +608,6 @@
   }
 }
 
-.logout-chip {
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 10px 16px;
-  cursor: pointer;
-}
-
 .portal-card {
   flex: 1;
   min-height: 0;
@@ -634,6 +623,26 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+.portal-card-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.portal-card-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.portal-card-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, #cbd5e1, #94a3b8);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+}
+
+.portal-card-body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #94a3b8, #64748b);
 }
 
 .portal-stack {
@@ -1653,11 +1662,11 @@
 .record-card-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .record-card {
-  padding: 11px;
+  padding: 10px;
 }
 
 .record-card-top {
@@ -1701,6 +1710,7 @@
 .record-title-row strong {
   color: #0f172a;
   font-size: 15px;
+  line-height: 1.25;
 }
 
 .record-amount {
@@ -1718,8 +1728,8 @@
 
 .record-status {
   display: inline-flex;
-  margin-top: 6px;
-  padding: 6px 10px;
+  margin-top: 5px;
+  padding: 5px 9px;
   border-radius: 999px;
   background: #e2f7e8;
   color: #166534;
@@ -1728,7 +1738,7 @@
 }
 
 .record-main p {
-  margin: 8px 0 6px;
+  margin: 7px 0 5px;
   color: #334155;
   line-height: 1.45;
   font-size: 13px;
@@ -1738,7 +1748,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 5px;
 }
 
 .record-badge {
@@ -1773,34 +1783,48 @@
 
 .record-meta-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin: 8px 0 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 7px 0 4px;
 }
 
 .record-meta-card {
-  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
-  padding: 9px 10px;
+  padding: 8px 9px;
 }
 
 .record-meta-card small {
-  display: block;
+  display: inline;
+  margin-bottom: 0;
   color: #64748b;
-  margin-bottom: 4px;
   font-size: 11px;
+  line-height: 1.25;
 }
 
 .record-meta-card strong {
+  flex-shrink: 0;
   color: #0f172a;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.25;
+  text-align: right;
 }
 
 .record-main small {
   color: #64748b;
   font-size: 11px;
+}
+
+@media (max-width: 360px) {
+  .record-meta-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .profile-hero-card {

@@ -2119,11 +2119,6 @@ function App() {
               <p className="hero-copy">{brandTagline}</p>
             </div>
           </div>
-          {screen === "portal" ? (
-            <button type="button" className="logout-chip" onClick={handleLogout}>
-              Logout
-            </button>
-          ) : null}
         </header>
 
         <InstallAppPrompt />
