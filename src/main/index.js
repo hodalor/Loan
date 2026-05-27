@@ -94,7 +94,7 @@ function MainAppShell({
   const { bootstrapLoading } = React.useContext(GlobalContext);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-[#f5f7fb] text-[#122033]">
       <CustomizedSnackbars />
       <Aside isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="lg:pl-64">
@@ -104,10 +104,10 @@ function MainAppShell({
         />
         <main className="relative px-4 py-6 sm:px-6 lg:px-8">
           {bootstrapLoading ? (
-            <div className="absolute inset-0 z-20 flex items-start justify-center bg-slate-50/90 px-4 py-10 backdrop-blur-[2px]">
-              <div className="flex min-w-[240px] max-w-sm flex-col items-center rounded-3xl border border-slate-200 bg-white px-6 py-6 text-center shadow-sm">
+            <div className="absolute inset-0 z-20 flex items-start justify-center bg-[#f5f7fb]/92 px-4 py-10 backdrop-blur-[2px]">
+              <div className="flex min-w-[240px] max-w-sm flex-col items-center rounded-3xl border border-orange-100 bg-white px-6 py-6 text-center shadow-sm">
                 <BigLoader />
-                <p className="mt-2 text-sm font-semibold text-slate-900">
+                <p className="mt-2 text-sm font-semibold text-[#122033]">
                   Loading your workspace
                 </p>
                 <p className="mt-1 text-xs text-slate-500">

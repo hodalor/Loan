@@ -3,6 +3,25 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --admin-bg: #f5f7fb;
+    --admin-surface: #ffffff;
+    --admin-surface-soft: #fff7ed;
+    --admin-surface-dark: #0b1220;
+    --admin-surface-dark-alt: #13213a;
+    --admin-text: #122033;
+    --admin-text-soft: #516174;
+    --admin-text-muted: #718198;
+    --admin-border: #dbe3ef;
+    --admin-border-soft: #edf2f7;
+    --admin-accent: #f97316;
+    --admin-accent-strong: #ea580c;
+    --admin-accent-soft: #ffedd5;
+    --admin-accent-soft-strong: #fed7aa;
+    --admin-accent-ink: #9a3412;
+    --admin-dark-soft: #e8eef8;
+  }
+
   html {
     scroll-behavior: smooth;
   }
@@ -11,8 +30,8 @@
     margin: 0;
     font-family: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
       sans-serif;
-    background: #f8fafc;
-    color: #0f172a;
+    background: var(--admin-bg);
+    color: var(--admin-text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -31,11 +50,13 @@
 
 @layer components {
   .app-panel {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-soft;
+    @apply rounded-2xl border bg-white shadow-soft;
+    border-color: var(--admin-border);
   }
 
   .app-panel-header {
-    @apply flex flex-col gap-2 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center md:justify-between;
+    @apply flex flex-col gap-2 border-b px-6 py-5 md:flex-row md:items-center md:justify-between;
+    border-color: var(--admin-border-soft);
   }
 
   .app-panel-body {
@@ -43,7 +64,10 @@
   }
 
   .app-input {
-    @apply h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100;
+    @apply h-11 w-full rounded-xl border bg-white px-4 text-sm outline-none transition focus:ring-4;
+    border-color: var(--admin-border);
+    color: var(--admin-text);
+    --tw-ring-color: rgba(249, 115, 22, 0.14);
   }
 
   .app-select {
@@ -51,19 +75,26 @@
   }
 
   .app-label {
-    @apply mb-2 block text-sm font-medium text-slate-700;
+    @apply mb-2 block text-sm font-medium;
+    color: var(--admin-text-soft);
   }
 
   .app-btn-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60;
+    background: linear-gradient(135deg, var(--admin-accent), var(--admin-accent-strong));
+    box-shadow: 0 16px 32px rgba(234, 88, 12, 0.18);
   }
 
   .app-btn-secondary {
-    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50;
+    @apply inline-flex items-center justify-center rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold transition;
+    border-color: var(--admin-border);
+    color: var(--admin-surface-dark-alt);
   }
 
   .app-chip {
-    @apply inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700;
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent-ink);
   }
 }
 
@@ -79,17 +110,17 @@
 }
 
 .card {
-  border: 1px solid #e2e8f0 !important;
+  border: 1px solid var(--admin-border) !important;
   border-radius: 1.5rem !important;
-  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 14px 42px rgba(15, 23, 42, 0.08) !important;
   overflow: hidden;
 }
 
 .card-header,
 .card-body,
 .card-footer {
-  background: #ffffff !important;
-  border-color: #f1f5f9 !important;
+  background: var(--admin-surface) !important;
+  border-color: var(--admin-border-soft) !important;
 }
 
 .card-body,
@@ -107,60 +138,61 @@
 }
 
 .btn-primary {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
+  background: linear-gradient(135deg, var(--admin-accent), var(--admin-accent-strong)) !important;
+  border-color: var(--admin-accent-strong) !important;
+  box-shadow: 0 14px 28px rgba(234, 88, 12, 0.18) !important;
 }
 
 .btn-default {
   background: #ffffff !important;
-  border-color: #dbe2ea !important;
-  color: #334155 !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-surface-dark-alt) !important;
 }
 
 .form-control {
   height: 2.75rem !important;
   border-radius: 0.9rem !important;
-  border: 1px solid #dbe2ea !important;
+  border: 1px solid var(--admin-border) !important;
   background: #ffffff !important;
-  color: #0f172a !important;
+  color: var(--admin-text) !important;
   font-size: 0.875rem !important;
   box-shadow: none !important;
 }
 
 .form-control:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12) !important;
+  border-color: var(--admin-accent) !important;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.14) !important;
 }
 
 .label {
   margin-bottom: 0.45rem;
   font-size: 0.82rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--admin-text-soft);
 }
 
 .MuiDataGrid-root {
   border: 0 !important;
   font-size: 0.875rem !important;
-  color: #0f172a !important;
+  color: var(--admin-text) !important;
 }
 
 .MuiDataGrid-columnHeaders {
-  background: #f8fafc !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, #fff7ed, #ffffff) !important;
+  border-bottom: 1px solid var(--admin-border) !important;
 }
 
 .MuiDataGrid-columnHeaderTitle {
   font-weight: 700 !important;
-  color: #334155 !important;
+  color: var(--admin-surface-dark-alt) !important;
 }
 
 .MuiDataGrid-cell {
-  border-color: #f1f5f9 !important;
+  border-color: var(--admin-border-soft) !important;
 }
 
 .MuiDataGrid-row:hover {
-  background: #f8fafc !important;
+  background: #fff7ed !important;
 }
 
 .MuiFormControl-root .MuiOutlinedInput-root {
@@ -171,15 +203,16 @@
 
 .MuiFormControl-root .MuiInputLabel-root {
   font-size: 0.88rem;
+  color: var(--admin-text-soft);
 }
 
 .MuiSwitch-root .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
-  background-color: #2563eb !important;
+  background-color: var(--admin-accent) !important;
 }
 
 .MuiCheckbox-root.Mui-checked,
 .MuiRadio-root.Mui-checked {
-  color: #2563eb !important;
+  color: var(--admin-accent) !important;
 }
 
 .app-range-picker.react-daterange-picker {
@@ -193,7 +226,7 @@
   min-width: 0;
   min-height: 2.75rem;
   border-radius: 0.9rem;
-  border: 1px solid #dbe2ea;
+  border: 1px solid var(--admin-border);
   background: #ffffff;
   padding: 0 0.75rem;
   overflow: hidden;
@@ -207,7 +240,7 @@
   gap: 0.125rem;
   overflow: hidden;
   font-size: 0.875rem;
-  color: #0f172a;
+  color: var(--admin-text);
 }
 
 .app-range-picker .react-daterange-picker__inputGroup__input,
@@ -229,11 +262,113 @@
 }
 
 .app-range-picker .react-daterange-picker__button {
-  color: #64748b;
+  color: var(--admin-text-muted);
 }
 
 .app-range-picker .react-calendar {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--admin-border);
   border-radius: 1rem;
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.14);
+}
+
+.app-btn-primary:hover,
+.btn-primary:hover {
+  filter: brightness(0.98);
+}
+
+.app-btn-secondary:hover,
+.btn-default:hover {
+  background: #fff7ed !important;
+  border-color: var(--admin-accent-soft-strong) !important;
+  color: var(--admin-accent-ink) !important;
+}
+
+.table {
+  color: var(--admin-text);
+}
+
+.table thead th {
+  border-bottom-color: var(--admin-border) !important;
+  background: linear-gradient(180deg, #fff7ed, #ffffff);
+  color: var(--admin-surface-dark-alt);
+  font-weight: 700;
+}
+
+.table td,
+.table th {
+  border-top-color: var(--admin-border-soft) !important;
+}
+
+.table-hover tbody tr:hover {
+  background: #fff7ed !important;
+}
+
+.nav-tabs {
+  border-bottom-color: var(--admin-border) !important;
+}
+
+.nav-tabs .nav-link,
+.nav-pills .nav-link {
+  border-radius: 0.9rem !important;
+  color: var(--admin-text-soft);
+  font-weight: 600;
+}
+
+.nav-tabs .nav-link:hover,
+.nav-pills .nav-link:hover {
+  background: #fff7ed;
+  color: var(--admin-accent-ink);
+}
+
+.nav-tabs .nav-link.active,
+.nav-pills .nav-link.active {
+  background: linear-gradient(135deg, var(--admin-accent), var(--admin-accent-strong)) !important;
+  border-color: var(--admin-accent-strong) !important;
+  color: #ffffff !important;
+}
+
+.pagination .page-link {
+  border-radius: 0.8rem !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-surface-dark-alt) !important;
+}
+
+.pagination .page-item.active .page-link {
+  background: linear-gradient(135deg, var(--admin-accent), var(--admin-accent-strong)) !important;
+  border-color: var(--admin-accent-strong) !important;
+  color: #ffffff !important;
+}
+
+.dropdown-menu,
+.modal-content {
+  border: 1px solid var(--admin-border) !important;
+  border-radius: 1.25rem !important;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.14) !important;
+}
+
+.modal-header,
+.modal-footer {
+  border-color: var(--admin-border-soft) !important;
+}
+
+.dropdown-item {
+  color: var(--admin-text-soft) !important;
+  border-radius: 0.75rem;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: #fff7ed !important;
+  color: var(--admin-accent-ink) !important;
+}
+
+.badge-primary,
+.badge-info {
+  background: var(--admin-dark-soft) !important;
+  color: var(--admin-surface-dark-alt) !important;
+}
+
+.badge-warning {
+  background: var(--admin-accent-soft) !important;
+  color: var(--admin-accent-ink) !important;
 }

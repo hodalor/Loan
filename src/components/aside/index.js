@@ -63,28 +63,28 @@ export default function Aside({ isOpen, onClose }) {
   return (
     <>
       <div
-        className={`fixed inset-0 z-30 bg-slate-950/40 transition lg:hidden ${
+        className={`fixed inset-0 z-30 bg-[#08111f]/55 transition lg:hidden ${
           isOpen ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={onClose}
       />
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-slate-950 text-slate-100 transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[#1f2d45] bg-gradient-to-b from-[#0b1220] via-[#101a2e] to-[#13213a] text-slate-100 transition-transform duration-300 lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center gap-3 border-b border-slate-800/70 px-4 py-3.5">
+        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3.5">
           <img
             src={logoSrc}
             alt={appName}
-            className="h-9 w-9 rounded-xl bg-white object-cover p-1"
+            className="h-9 w-9 rounded-xl bg-white object-cover p-1 shadow-[0_8px_24px_rgba(249,115,22,0.22)]"
             onError={() => setLogoLoadFailed(true)}
           />
           <div>
-            <p className="text-sm font-semibold tracking-wide text-slate-200">
+            <p className="text-sm font-semibold tracking-wide text-white">
               {appName.toUpperCase()}
             </p>
-            <p className="text-xs text-slate-500">{tagline}</p>
+            <p className="text-xs text-orange-200/75">{tagline}</p>
           </div>
         </div>
 
@@ -105,8 +105,8 @@ export default function Aside({ isOpen, onClose }) {
                   onClick={onClose}
                   className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${
                     active
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
-                      : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                      ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/20"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <i className={`${item.icon} text-sm`} />
@@ -118,7 +118,7 @@ export default function Aside({ isOpen, onClose }) {
             return (
               <div
                 key={item.key}
-                className="border-b border-slate-900/60 py-1 last:border-b-0"
+                className="border-b border-white/5 py-1 last:border-b-0"
               >
                 <button
                   type="button"
@@ -126,14 +126,14 @@ export default function Aside({ isOpen, onClose }) {
                     setOpenGroup((current) => (current === item.key ? "" : item.key))
                   }
                   className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
-                    active ? "text-white" : "text-slate-300 hover:text-white"
+                    active ? "bg-white/5 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
                   }`}
                 >
                   <i className={`${item.icon} text-sm`} />
                   <span className="flex-1">{item.label}</span>
                   <span
                     className={`text-base leading-none text-slate-400 transition-transform duration-200 ${
-                      openGroup === item.key ? "rotate-90 text-white" : ""
+                      openGroup === item.key ? "rotate-90 text-orange-300" : ""
                     }`}
                   >
                     &gt;
@@ -159,8 +159,8 @@ export default function Aside({ isOpen, onClose }) {
                             onClick={onClose}
                             className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
                               childActive
-                                ? "bg-blue-600/15 text-white"
-                                : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                                ? "bg-orange-500/15 text-orange-100"
+                                : "text-slate-400 hover:bg-white/10 hover:text-white"
                             }`}
                           >
                             {child.icon ? (

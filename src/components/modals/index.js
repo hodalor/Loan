@@ -92,11 +92,11 @@ export default function MyModal(props) {
   return (
     isOpen ? (
       <div
-        className="fixed inset-0 z-[1400] flex items-center justify-center bg-slate-900/50 p-4"
+        className="fixed inset-0 z-[1400] flex items-center justify-center bg-[#08111f]/60 p-4"
         onClick={_closeModal}
       >
         <div
-          className={`max-h-[92vh] w-full ${modalSizeClassName} overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.18)]`}
+          className={`max-h-[92vh] w-full ${modalSizeClassName} overflow-y-auto rounded-[24px] border border-orange-100 bg-white p-0 shadow-[0_24px_80px_rgba(15,23,42,0.18)]`}
           onClick={(event) => event.stopPropagation()}
           role="dialog"
           aria-modal="true"

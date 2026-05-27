@@ -226,15 +226,15 @@ export default function Dashboard() {
           fill: true,
           label: "Collected",
           data: metrics.monthlyCollected,
-          borderColor: "rgb(53, 162, 235)",
-          backgroundColor: "rgba(53, 162, 235, 0.5)",
+          borderColor: "#f97316",
+          backgroundColor: "rgba(249, 115, 22, 0.22)",
         },
         {
           fill: true,
           label: "Disbursed",
           data: metrics.monthlyDisbursed,
-          borderColor: "rgb(240, 53, 112)",
-          backgroundColor: "rgba(240, 53, 112, 0.5)",
+          borderColor: "#13213a",
+          backgroundColor: "rgba(19, 33, 58, 0.2)",
         },
       ],
     }),
@@ -247,7 +247,7 @@ export default function Dashboard() {
       datasets: [
         {
           label: "",
-          backgroundColor: ["#3cba9f"],
+          backgroundColor: ["#f97316"],
           data: [metrics.profitPercentage],
         },
       ],
@@ -262,18 +262,18 @@ export default function Dashboard() {
         {
           label: "users",
           backgroundColor: [
-            "#3e95cd",
-            "#8e5ea2",
-            "#3cba9f",
-            "#e8c3b9",
-            "#c45850",
-            "#3e95cc",
-            "#8e5ea3",
-            "#3cba9f",
-            "#e8c3bD",
-            "#c45851",
-            "#e8c3b5",
-            "#c4f851",
+            "#f97316",
+            "#13213a",
+            "#fb923c",
+            "#1f2d45",
+            "#fdba74",
+            "#0b1220",
+            "#f59e0b",
+            "#243552",
+            "#fed7aa",
+            "#364968",
+            "#ffedd5",
+            "#ea580c",
           ],
           data: metrics.monthlyRegistrations,
         },
@@ -287,13 +287,13 @@ export default function Dashboard() {
       label: "New Loans",
       value: metrics.underReview.length,
       iconClass: "fa fa-chart-line",
-      tone: "bg-blue-50 text-blue-700",
+      tone: "bg-orange-50 text-orange-700",
     },
     {
       label: "Loans This Month",
       value: metrics.allThisMonth.length,
       iconClass: "fa fa-wallet",
-      tone: "bg-emerald-50 text-emerald-700",
+      tone: "bg-slate-100 text-[#13213a]",
     },
     {
       label: "Granted This Month",
@@ -335,7 +335,7 @@ export default function Dashboard() {
   if (globalLoader && loanData.length === 0 && customerData.length === 0) {
     return (
       <div className="space-y-6">
-        <section className="app-panel overflow-hidden bg-gradient-to-r from-slate-950 via-slate-900 to-blue-900 text-white">
+        <section className="app-panel overflow-hidden bg-gradient-to-r from-[#0b1220] via-[#101a2e] to-[#13213a] text-white">
           <div className="app-panel-body">
             <div className="flex min-h-[200px] flex-col items-center justify-center gap-4 text-center">
               <DefaultLoader />
@@ -354,11 +354,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="app-panel overflow-hidden bg-gradient-to-r from-slate-950 via-slate-900 to-blue-900 text-white">
+      <section className="app-panel overflow-hidden bg-gradient-to-r from-[#0b1220] via-[#101a2e] to-[#13213a] text-white">
         <div className="app-panel-body">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="max-w-sm">
-              <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">
+              <span className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-orange-100">
                 Dashboard
               </span>
               <h2 className="mt-4 text-2xl font-semibold leading-tight xl:text-3xl">
@@ -395,16 +395,16 @@ export default function Dashboard() {
               return (
                 <div
                   key={card.label}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  className="rounded-2xl border border-orange-100 bg-orange-50/40 p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs text-slate-500">{card.label}</p>
-                      <p className="mt-1.5 text-xl font-semibold leading-tight text-slate-900">
+                      <p className="text-xs text-[var(--admin-text-muted)]">{card.label}</p>
+                      <p className="mt-1.5 text-xl font-semibold leading-tight text-[var(--admin-text)]">
                         {card.value}
                       </p>
                     </div>
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-700 shadow-sm">
+                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--admin-surface-dark-alt)] text-white shadow-sm">
                       <i className={`${card.iconClass} text-sm`} />
                     </div>
                   </div>
@@ -467,21 +467,21 @@ export default function Dashboard() {
 
           <div className="app-panel">
             <div className="app-panel-body space-y-4">
-              <div className="rounded-2xl bg-slate-50 p-3.5">
-                <p className="text-xs text-slate-500">This Month Disbursed</p>
-                <p className="mt-1.5 text-xl font-semibold text-slate-900">
+              <div className="rounded-2xl bg-orange-50/40 p-3.5">
+                <p className="text-xs text-[var(--admin-text-muted)]">This Month Disbursed</p>
+                <p className="mt-1.5 text-xl font-semibold text-[var(--admin-text)]">
                   GHS {metrics.disbursedThisMonth.toFixed(2)}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3.5">
-                <p className="text-xs text-slate-500">This Month Expected</p>
-                <p className="mt-1.5 text-xl font-semibold text-slate-900">
+              <div className="rounded-2xl bg-orange-50/40 p-3.5">
+                <p className="text-xs text-[var(--admin-text-muted)]">This Month Expected</p>
+                <p className="mt-1.5 text-xl font-semibold text-[var(--admin-text)]">
                   GHS {metrics.expectedThisMonth.toFixed(2)}
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-3.5">
-                <p className="text-xs text-slate-500">This Month Collected</p>
-                <p className="mt-1.5 text-xl font-semibold text-slate-900">
+              <div className="rounded-2xl bg-orange-50/40 p-3.5">
+                <p className="text-xs text-[var(--admin-text-muted)]">This Month Collected</p>
+                <p className="mt-1.5 text-xl font-semibold text-[var(--admin-text)]">
                   GHS {metrics.collectedThisMonth.toFixed(2)}
                 </p>
               </div>
@@ -524,8 +524,8 @@ export default function Dashboard() {
         <div className="space-y-4">
           <div className="app-panel">
             <div className="app-panel-body grid gap-4">
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3.5">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+              <div className="flex items-center gap-3 rounded-2xl bg-orange-50/40 p-3.5">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
                   <i className="fa fa-users text-sm" />
                 </div>
                 <div>
@@ -535,7 +535,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3.5">
+              <div className="flex items-center gap-3 rounded-2xl bg-orange-50/40 p-3.5">
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
                   <i className="fa fa-user-slash text-sm" />
                 </div>
@@ -546,8 +546,8 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3.5">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <div className="flex items-center gap-3 rounded-2xl bg-orange-50/40 p-3.5">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#13213a]">
                   <i className="fa fa-check-circle text-sm" />
                 </div>
                 <div>
@@ -557,7 +557,7 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3.5">
+              <div className="flex items-center gap-3 rounded-2xl bg-orange-50/40 p-3.5">
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
                   <i className="fa fa-ban text-sm" />
                 </div>
@@ -585,26 +585,26 @@ export default function Dashboard() {
             <div className="app-panel-body space-y-4">
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Extension handling fee</span>
-                  <span className="font-semibold text-slate-900">
+                  <span className="text-[var(--admin-text-soft)]">Extension handling fee</span>
+                  <span className="font-semibold text-[var(--admin-text)]">
                     GHS {metrics.extFeeThisMonth.toFixed(2)}
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
-                  <div className="h-2 w-full rounded-full bg-blue-500" />
+                  <div className="h-2 w-full rounded-full bg-orange-500" />
                 </div>
               </div>
 
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Expected profit this month</span>
-                  <span className="font-semibold text-slate-900">
+                  <span className="text-[var(--admin-text-soft)]">Expected profit this month</span>
+                  <span className="font-semibold text-[var(--admin-text)]">
                     GHS {metrics.expectedMonthProfit.toFixed(2)}
                   </span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
                   <div
-                    className="h-2 rounded-full bg-emerald-500"
+                    className="h-2 rounded-full bg-[#13213a]"
                     style={{
                       width: `${Math.min(
                         100,
@@ -619,8 +619,8 @@ export default function Dashboard() {
 
               <div>
                 <div className="mb-2 flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Overdue penalty recovered</span>
-                  <span className="font-semibold text-slate-900">
+                  <span className="text-[var(--admin-text-soft)]">Overdue penalty recovered</span>
+                  <span className="font-semibold text-[var(--admin-text)]">
                     {metrics.paidOverduePenalty.toFixed(2)} /{" "}
                     {metrics.overduePenalty.toFixed(2)}
                   </span>

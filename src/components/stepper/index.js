@@ -111,19 +111,19 @@ export default function StepperForm() {
               className={[
                 "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 isActive
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  ? "border-orange-200 bg-orange-50 text-[var(--admin-accent-ink)]"
                   : isCompleted
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-white text-slate-500",
+                  ? "border-[var(--admin-border)] bg-[var(--admin-dark-soft)] text-[var(--admin-surface-dark-alt)]"
+                  : "border-[var(--admin-border)] bg-white text-[var(--admin-text-muted)]",
               ].join(" ")}
             >
               <span
                 className={[
                   "flex h-5 w-5 items-center justify-center rounded-full text-[11px]",
                   isActive
-                    ? "bg-blue-600 text-white"
+                    ? "bg-[var(--admin-accent)] text-white"
                     : isCompleted
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-[var(--admin-surface-dark-alt)] text-white"
                     : "bg-slate-200 text-slate-600",
                 ].join(" ")}
               >
@@ -136,12 +136,12 @@ export default function StepperForm() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.9fr)]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-[var(--admin-border)] bg-white p-4 shadow-sm">
           <div className="mb-4">
-            <h3 className="text-base font-semibold text-slate-900">
+            <h3 className="text-base font-semibold text-[var(--admin-text)]">
               {activeStep === 0 ? "Find order record" : "Record repayment details"}
             </h3>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-[var(--admin-text-muted)]">
               {stepItems[activeStep]?.description || "Capture the required order details."}
             </p>
           </div>
@@ -207,22 +207,22 @@ export default function StepperForm() {
                         className={[
                           "flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-2.5 transition",
                           isSelected
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-slate-200 bg-slate-50/60 hover:border-slate-300 hover:bg-white",
+                            ? "border-orange-200 bg-orange-50"
+                            : "border-[var(--admin-border)] bg-slate-50/60 hover:border-orange-100 hover:bg-white",
                         ].join(" ")}
                       >
                         <input
                           type="radio"
                           name="order-repayment-record-type"
-                          className="mt-1 h-4 w-4 accent-blue-600"
+                          className="mt-1 h-4 w-4 accent-orange-500"
                           checked={isSelected}
                           onChange={() => setSelectedRadio(option.value)}
                         />
                         <span className="min-w-0">
-                          <span className="block text-sm font-semibold text-slate-900">
+                          <span className="block text-sm font-semibold text-[var(--admin-text)]">
                             {option.label}
                           </span>
-                          <span className="block text-xs text-slate-500">
+                          <span className="block text-xs text-[var(--admin-text-muted)]">
                             {option.description}
                           </span>
                         </span>
@@ -274,10 +274,10 @@ export default function StepperForm() {
                 </label>
               </div>
 
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+              <label className="flex items-center gap-3 rounded-2xl border border-[var(--admin-border)] bg-slate-50 px-3 py-2.5 text-sm text-[var(--admin-text-soft)]">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded accent-blue-600"
+                  className="h-4 w-4 rounded accent-orange-500"
                   checked={Boolean(inputs.check)}
                   onChange={(e) =>
                     _handleOnChange({
@@ -297,16 +297,16 @@ export default function StepperForm() {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4 text-sm text-[var(--admin-accent-ink)]">
               Clear the outstanding balance for this loan. The current remaining repayment amount is{" "}
               <span className="font-semibold">{remainingAmount.toFixed(2)}</span>.
             </div>
           )}
         </section>
 
-        <aside className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
+        <aside className="rounded-2xl border border-[var(--admin-border)] bg-orange-50/30 p-4 shadow-sm">
           <div className="mb-3">
-            <h3 className="text-sm font-semibold text-slate-900">Order summary</h3>
+            <h3 className="text-sm font-semibold text-[var(--admin-text)]">Order summary</h3>
             <p className="text-xs text-slate-500">Review the selected order before saving.</p>
           </div>
           <div className="space-y-2">

@@ -38,11 +38,13 @@ export default function SimpleDataTable({
   const showLoadingState = loading && rows.length === 0;
 
   return (
-    <div className={`overflow-hidden rounded-3xl border border-slate-200 bg-white ${className}`}>
+    <div
+      className={`overflow-hidden rounded-3xl border border-[var(--admin-border)] bg-white shadow-sm ${className}`}
+    >
       <div className="overflow-auto">
         <table className={`min-w-full ${tableClassName}`.trim()}>
-          <thead className="bg-slate-100">
-            <tr className="text-left text-xs uppercase tracking-[0.16em] text-slate-500">
+          <thead className="bg-gradient-to-r from-orange-50 to-white">
+            <tr className="text-left text-xs uppercase tracking-[0.16em] text-[var(--admin-text-muted)]">
               {columns.map((column) => (
                 <th key={column.key} className={`${headCellClassName} font-semibold`}>
                   {column.label}
@@ -50,12 +52,12 @@ export default function SimpleDataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-[var(--admin-border-soft)]">
             {showLoadingState ? (
               <tr>
                 <td
                   colSpan={Math.max(columns.length, 1)}
-                  className="px-4 py-10 text-center text-sm text-slate-500"
+                  className="px-4 py-10 text-center text-sm text-[var(--admin-text-muted)]"
                 >
                   <div className="flex flex-col items-center justify-center gap-3">
                     <DefaultLoader />
@@ -72,13 +74,13 @@ export default function SimpleDataTable({
                 return (
                   <tr
                     key={`${keyValue}-${index}`}
-                    className={`align-top ${isClickable ? "cursor-pointer hover:bg-slate-50" : ""} ${customRowClassName}`}
+                    className={`align-top ${isClickable ? "cursor-pointer hover:bg-orange-50/60" : ""} ${customRowClassName}`}
                     onClick={isClickable ? () => onRowClick(row, index) : undefined}
                   >
                     {columns.map((column) => (
                       <td
                         key={`${keyValue}-${column.key}`}
-                        className={`${bodyCellClassName} text-sm text-slate-700 ${
+                        className={`${bodyCellClassName} text-sm text-[var(--admin-text-soft)] ${
                           column.cellClassName || ""
                         }`}
                       >
@@ -94,7 +96,7 @@ export default function SimpleDataTable({
               <tr>
                 <td
                   colSpan={Math.max(columns.length, 1)}
-                  className="px-4 py-8 text-center text-sm text-slate-500"
+                  className="px-4 py-8 text-center text-sm text-[var(--admin-text-muted)]"
                 >
                   {emptyMessage}
                 </td>
@@ -104,25 +106,25 @@ export default function SimpleDataTable({
         </table>
       </div>
       {pagination && rows.length > pageSize ? (
-        <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-500">
+        <div className="flex flex-col gap-3 border-t border-[var(--admin-border)] bg-orange-50/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-[var(--admin-text-muted)]">
             Showing {pageStart}-{pageEnd} of {rows.length}
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl border border-[var(--admin-border)] bg-white px-3 py-1.5 text-sm font-semibold text-[var(--admin-surface-dark-alt)] transition hover:border-[var(--admin-accent-soft-strong)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
             >
               Prev
             </button>
-            <span className="rounded-xl bg-white px-3 py-1.5 text-sm font-semibold text-slate-700">
+            <span className="rounded-xl bg-[var(--admin-dark-soft)] px-3 py-1.5 text-sm font-semibold text-[var(--admin-surface-dark-alt)]">
               {currentPage} / {totalPages}
             </span>
             <button
               type="button"
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl border border-[var(--admin-border)] bg-white px-3 py-1.5 text-sm font-semibold text-[var(--admin-surface-dark-alt)] transition hover:border-[var(--admin-accent-soft-strong)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
             >
