@@ -1,6 +1,19 @@
 import { adminBaseUrl } from "../../libs/endpoints";
 import getAuditActor from "../utils/auditActor";
 
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    if (!(file instanceof File)) {
+      resolve("");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read banner image."));
+    reader.readAsDataURL(file);
+  });
+
 const _updateSystemConfig = async (data) => {
   let resp = {};
 
@@ -27,6 +40,31 @@ const _updateSystemConfig = async (data) => {
     });
 
     resp = await request.json();
+
+    if (
+      homeBannerImageFile instanceof File &&
+      (!resp?.success ||
+        !resp?.data?.portalContent?.homeBannerImageUrl)
+    ) {
+      const fallbackBannerDataUrl = await readFileAsDataUrl(homeBannerImageFile);
+      const fallbackRequest = await fetch(`${adminBaseUrl}system-config`, {
+        method: "PATCH",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...configPayload,
+          portalContent: {
+            ...(configPayload.portalContent || {}),
+            homeBannerImageUrl: fallbackBannerDataUrl,
+          },
+          auditActor: getAuditActor(),
+        }),
+      });
+
+      resp = await fallbackRequest.json();
+    }
   } catch (error) {
     console.log(error);
     resp = {

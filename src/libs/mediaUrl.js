@@ -37,6 +37,10 @@ export const resolveMediaUrl = (value = "") => {
   const normalized = normalizeValue(value);
   if (!normalized) return "";
 
+  if (/^(data:|blob:)/i.test(normalized)) {
+    return normalized;
+  }
+
   const localUrl = buildLocalUploadUrl(normalized);
   if (localUrl) {
     return encodeURI(localUrl);
