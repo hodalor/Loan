@@ -60,6 +60,7 @@ const workHoursOptions = ["Full time", "Part time", "Shift", "Flexible"];
 const PAYMENT_PENDING_MESSAGE = "Continue to make payment.";
 const PAYMENT_FAILED_MESSAGE = "Payment failed. Try later.";
 const PAYMENT_SUCCESS_MESSAGE = "Payment completed successfully.";
+const PORTAL_SESSION_STORAGE_KEY = "loan-web-portal-session";
 let runtimeLocale = "en-ZM";
 let runtimeCurrencySymbol = "K";
 const buildDefaultPortalContent = () => ({
@@ -300,6 +301,18 @@ const getGatewayMobileMoneyNetworks = (lifecycleConfig = {}) =>
   Array.isArray(lifecycleConfig?.mobileMoneyNetworks) ? lifecycleConfig.mobileMoneyNetworks : [];
 const getDefaultGatewayMobileMoneyOperator = (lifecycleConfig = {}) =>
   getGatewayMobileMoneyNetworks(lifecycleConfig)[0]?.key || "";
+const readPersistedPortalSession = () => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const storedValue = window.localStorage.getItem(PORTAL_SESSION_STORAGE_KEY);
+    if (!storedValue) return null;
+    const parsedValue = JSON.parse(storedValue);
+    return parsedValue && typeof parsedValue === "object" ? parsedValue : null;
+  } catch (error) {
+    return null;
+  }
+};
 const getRecordBadges = (loan = {}) => {
   const badges = [];
 
@@ -736,6 +749,7 @@ const validateStepById = (stepId, formData) => {
 
 function App() {
   const firebaseConfirmationRef = useRef(null);
+  const portalSessionRestoredRef = useRef(false);
   const [screen, setScreen] = useState("login");
   const [activeTab, setActiveTab] = useState("home");
   const [authMode, setAuthMode] = useState("signup");
@@ -822,6 +836,26 @@ function App() {
   }, [brandLogoUrl]);
 
   const showMessage = (type, text) => setAppMessage({ type, text });
+  const clearPersistedPortalSession = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
+  }, []);
+  const persistPortalSession = useCallback((session) => {
+    if (typeof window === "undefined") return;
+
+    if (!isPhoneValid(session?.phone || "")) {
+      window.localStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(
+      PORTAL_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        phone: session.phone.trim(),
+        countryCode: session.countryCode || "",
+      })
+    );
+  }, []);
   const resetOtpVerificationState = useCallback(() => {
     firebaseConfirmationRef.current = null;
     setFirebaseIdToken("");
@@ -1013,6 +1047,71 @@ function App() {
     hydratePortalData(response.data, phone);
     return response.data;
   }, [hydratePortalData]);
+
+  useEffect(() => {
+    if (portalSessionRestoredRef.current) return;
+
+    portalSessionRestoredRef.current = true;
+    const savedSession = readPersistedPortalSession();
+    const restoredPhone = savedSession?.phone?.trim() || "";
+
+    if (!isPhoneValid(restoredPhone)) {
+      clearPersistedPortalSession();
+      return;
+    }
+
+    const restoredCountryCode =
+      savedSession?.countryCode || buildDefaultPortalContent().activeCountry.code;
+
+    setSelectedCountryCode(restoredCountryCode);
+    setFormData((current) => ({
+      ...current,
+      otp: {
+        ...current.otp,
+        phone: restoredPhone,
+        countryCode: current.otp.countryCode || restoredCountryCode,
+      },
+      login: {
+        ...current.login,
+        phone: restoredPhone,
+        pin: "",
+        countryCode: current.login.countryCode || restoredCountryCode,
+      },
+      personal: {
+        ...current.personal,
+        phone: restoredPhone,
+        countryCode: current.personal.countryCode || restoredCountryCode,
+      },
+    }));
+    setScreen("portal");
+    setActiveTab("home");
+    setAppMessage({
+      type: "info",
+      text: "Restoring your session...",
+    });
+
+    (async () => {
+      const restoredData = await loadPortalSummary(restoredPhone, { quiet: true });
+
+      if (!restoredData) {
+        clearPersistedPortalSession();
+        setScreen("login");
+        setActiveTab("home");
+        setAppMessage({
+          type: "info",
+          text: "Sign in with phone number and your 4-digit PIN, or create a new application.",
+        });
+        return;
+      }
+
+      setScreen("portal");
+      setActiveTab(restoredData?.hasProfile && !restoredData?.draftApplication ? "home" : "apply");
+      setAppMessage({
+        type: "success",
+        text: "Welcome back. Your session was restored.",
+      });
+    })();
+  }, [clearPersistedPortalSession, loadPortalSummary]);
 
   useEffect(() => {
     const defaultCountryCode =
@@ -1306,6 +1405,39 @@ function App() {
     applyVerifiedPortalTransaction,
     pendingGatewayTransaction,
     screen,
+  ]);
+
+  useEffect(() => {
+    if (screen !== "portal") return;
+
+    const phone =
+      sessionAccount?.phone ||
+      formData.personal.phone ||
+      formData.login.phone ||
+      formData.otp.phone ||
+      "";
+
+    persistPortalSession({
+      phone,
+      countryCode:
+        sessionAccount?.country?.code ||
+        formData.personal.countryCode ||
+        formData.login.countryCode ||
+        formData.otp.countryCode ||
+        selectedCountryCode,
+    });
+  }, [
+    formData.login.countryCode,
+    formData.login.phone,
+    formData.otp.countryCode,
+    formData.otp.phone,
+    formData.personal.countryCode,
+    formData.personal.phone,
+    persistPortalSession,
+    screen,
+    selectedCountryCode,
+    sessionAccount?.country?.code,
+    sessionAccount?.phone,
   ]);
 
   const switchToOtpFlow = (mode) => {
@@ -2038,6 +2170,7 @@ function App() {
     const fallbackCountryCode =
       portalContent?.activeCountry?.code || buildDefaultPortalContent().activeCountry.code;
     resetOtpVerificationState();
+    clearPersistedPortalSession();
     setScreen("login");
     setActiveTab("home");
     setApplyMode("profile");
