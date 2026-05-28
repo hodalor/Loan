@@ -139,15 +139,24 @@ class SpeedCashApiService {
     required String phone,
     required Map<String, dynamic> application,
     required String countryCode,
-  }) {
-    return _request(
-      path: '/application/update-profile',
-      body: {
-        'phone': phone,
-        'countryCode': countryCode,
-        'application': application,
-      },
-    );
+  }) async {
+    try {
+      return await _request(
+        path: '/application/update-profile',
+        body: {
+          'phone': phone,
+          'countryCode': countryCode,
+          'application': application,
+        },
+      );
+    } catch (_) {
+      // Older hosted backends may not expose the lightweight update route yet.
+      return submitProfile(
+        phone: phone,
+        application: application,
+        countryCode: countryCode,
+      );
+    }
   }
 
   Future<Map<String, dynamic>> applyLoan(Map<String, dynamic> payload) {

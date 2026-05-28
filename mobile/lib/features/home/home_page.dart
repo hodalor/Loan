@@ -182,6 +182,7 @@ class _HomePageState extends State<HomePage> {
         'Fast customer login, application tracking, and identity verification.',
     'footerText': 'All rights reserved.',
     'footerVersion': '1.5.0',
+    'homeBannerImageUrl': '',
     'homeBannerBadge': '',
     'homeBannerTitle': '',
     'homeBannerMessage': '',
@@ -329,26 +330,69 @@ class _HomePageState extends State<HomePage> {
 
   List<Map<String, dynamic>> get _paymentHistory {
     final raw = _sessionAccount?['paymentHistory'];
-    if (raw is List) {
-      return raw.whereType<Map<String, dynamic>>().toList();
+    final serverHistory = raw is List
+        ? raw
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    final derivedHistory = _loanHistory
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .expand((loan) {
+          final records = loan['paymentRecords'];
+          if (records is! List) {
+            return const <Map<String, dynamic>>[];
+          }
+
+          return records.whereType<Map>().toList().asMap().entries.map((entry) {
+            final record = Map<String, dynamic>.from(entry.value);
+            return <String, dynamic>{
+              'id': 'loan-${loan['ID'] ?? ''}-${entry.key}',
+              'transactionTypeLabel': 'Loan Repayment',
+              'amount': record['amountPaid'] ?? 0,
+              'status': 'success',
+              'date': record['datePaid'] ?? loan['dp'] ?? loan['updatedAt'] ?? loan['doa'] ?? '',
+              'reference': '',
+              'loanId': '${loan['ID'] ?? '-'}',
+              'loanAmount': loan['amount'] ?? 0,
+              'remainingBalance': loan['clearRemainingAmount'] ??
+                  loan['amountRemain'] ??
+                  loan['amountToPay'] ??
+                  loan['repaymentAmount'] ??
+                  0,
+              'methodLabel': 'Recorded Payment',
+            };
+          });
+        })
+        .toList();
+
+    final seen = <String>{};
+    final merged = <Map<String, dynamic>>[];
+    for (final item in [...serverHistory, ...derivedHistory]) {
+      final dateKey = '${item['date'] ?? ''}'.split('T').first;
+      final key =
+          '${item['loanId'] ?? ''}|${item['amount'] ?? 0}|${item['reference'] ?? ''}|$dateKey';
+      if (seen.add(key)) {
+        merged.add(item);
+      }
     }
-    return const [];
+
+    merged.sort((a, b) {
+      final left = DateTime.tryParse('${a['date'] ?? ''}') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final right = DateTime.tryParse('${b['date'] ?? ''}') ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return right.compareTo(left);
+    });
+    return merged;
   }
 
   String get _portalLogoUrl =>
       _api.resolveMediaUrl('${_portalContent['logoUrl'] ?? ''}');
 
-  String get _homeBannerBadge =>
-      '${_portalContent['homeBannerBadge'] ?? _defaultPortalContent['homeBannerBadge'] ?? ''}'
-          .trim();
-
-  String get _homeBannerTitle =>
-      '${_portalContent['homeBannerTitle'] ?? _defaultPortalContent['homeBannerTitle'] ?? ''}'
-          .trim();
-
-  String get _homeBannerMessage =>
-      '${_portalContent['homeBannerMessage'] ?? _defaultPortalContent['homeBannerMessage'] ?? ''}'
-          .trim();
+  String get _homeBannerImageUrl => _api.resolveMediaUrl(
+        '${_portalContent['homeBannerImageUrl'] ?? _defaultPortalContent['homeBannerImageUrl'] ?? ''}',
+      );
 
   String get _profileDisplayName {
     final firstName = _firstNameController.text.trim();
@@ -1479,8 +1523,12 @@ class _HomePageState extends State<HomePage> {
       _message = value;
       _messageTone = tone;
     });
-    if (autoClearAfter != null && value.trim().isNotEmpty) {
-      _messageTimer = Timer(autoClearAfter, _clearMessage);
+    final resolvedAutoClearAfter = autoClearAfter ??
+        (tone == 'error'
+            ? null
+            : const Duration(seconds: 4));
+    if (resolvedAutoClearAfter != null && value.trim().isNotEmpty) {
+      _messageTimer = Timer(resolvedAutoClearAfter, _clearMessage);
     }
   }
 
@@ -1983,6 +2031,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openProfileEditSheet() async {
+    _clearMessage();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -2000,6 +2049,13 @@ class _HomePageState extends State<HomePage> {
                     body:
                         'Names and your main login phone number are managed by admin and cannot be edited here.',
                   ),
+                  if (_message.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _SheetFeedbackBanner(
+                      message: _message,
+                      tone: _messageTone,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   TextField(
                     controller: _emailController,
@@ -2121,7 +2177,12 @@ class _HomePageState extends State<HomePage> {
                           onPressed: _profileSaving
                               ? null
                               : () async {
-                                  await _saveDraft();
+                                  final future = _saveDraft();
+                                  modalSetState(() {});
+                                  await future;
+                                  if (!mounted) {
+                                    return;
+                                  }
                                   modalSetState(() {});
                                 },
                           child: Text(_profileSaving ? 'Saving...' : 'Save Draft'),
@@ -2133,7 +2194,9 @@ class _HomePageState extends State<HomePage> {
                           onPressed: _profileSaving
                               ? null
                               : () async {
-                                  await _saveProfileChanges();
+                                  final future = _saveProfileChanges();
+                                  modalSetState(() {});
+                                  await future;
                                   if (!mounted) {
                                     return;
                                   }
@@ -2225,12 +2288,32 @@ class _HomePageState extends State<HomePage> {
         color: color,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Text(
-        _message,
-        style: TextStyle(
-          color: textColor,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              _message,
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: _clearMessage,
+            borderRadius: BorderRadius.circular(999),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(
+                Icons.close,
+                size: 18,
+                color: textColor,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2416,12 +2499,10 @@ class _HomePageState extends State<HomePage> {
           showLogo: false,
           compact: true,
         ),
-        if (_homeBannerTitle.isNotEmpty || _homeBannerMessage.isNotEmpty) ...[
+        if (_homeBannerImageUrl.isNotEmpty) ...[
           const SizedBox(height: 16),
           _HomeBannerCard(
-            badge: _homeBannerBadge,
-            title: _homeBannerTitle,
-            message: _homeBannerMessage,
+            imageUrl: _homeBannerImageUrl,
           ),
           const SizedBox(height: 16),
         ],
@@ -3311,68 +3392,42 @@ class _DisclosureCard extends StatelessWidget {
 
 class _HomeBannerCard extends StatelessWidget {
   const _HomeBannerCard({
-    required this.badge,
-    required this.title,
-    required this.message,
+    required this.imageUrl,
   });
 
-  final String badge;
-  final String title;
-  final String message;
+  final String imageUrl;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFF7ED), Color(0xFFFFEDD5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: const Color(0xFFFEC89A)),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (badge.trim().isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                badge,
-                style: const TextStyle(
-                  color: AppTheme.accentInk,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          if (badge.trim().isNotEmpty) const SizedBox(height: 12),
-          if (title.trim().isNotEmpty)
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.textMain,
-              ),
-            ),
-          if (message.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: const TextStyle(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: AspectRatio(
+        aspectRatio: 16 / 7,
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: const Color(0xFFFFF7ED),
+            alignment: Alignment.center,
+            child: const Text(
+              'Banner unavailable',
+              style: TextStyle(
                 color: AppTheme.textSoft,
-                height: 1.4,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          ],
-        ],
+          ),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return Container(
+              color: const Color(0xFFFFF7ED),
+              alignment: Alignment.center,
+              child: const CircularProgressIndicator(),
+            );
+          },
+        ),
       ),
     );
   }
@@ -4085,6 +4140,46 @@ class _InlineInfoCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(body),
         ],
+      ),
+    );
+  }
+}
+
+class _SheetFeedbackBanner extends StatelessWidget {
+  const _SheetFeedbackBanner({
+    required this.message,
+    required this.tone,
+  });
+
+  final String message;
+  final String tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final isError = tone == 'error';
+    final isSuccess = tone == 'success';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isError
+            ? const Color(0xFFFEE2E2)
+            : isSuccess
+                ? const Color(0xFFDCFCE7)
+                : const Color(0xFFE0F2FE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: isError
+              ? const Color(0xFFB42318)
+              : isSuccess
+                  ? const Color(0xFF166534)
+                  : const Color(0xFF0C4A6E),
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
