@@ -78,6 +78,9 @@ class _HomePageState extends State<HomePage> {
   bool _termsAccepted = false;
   bool _isSignedIn = false;
   bool _resetPinMode = false;
+  bool _homeHowItWorksExpanded = false;
+  bool _homeFaqsExpanded = false;
+  bool _homeContactExpanded = false;
 
   String _authMode = 'login';
   String _activeTab = 'home';
@@ -109,6 +112,7 @@ class _HomePageState extends State<HomePage> {
   String _pendingGatewayReference = '';
   String _pendingGatewayType = '';
   String _firebaseIdToken = '';
+  Timer? _messageTimer;
 
   Map<String, dynamic> _portalContent = _defaultPortalContent;
   Map<String, dynamic>? _sessionAccount;
@@ -175,6 +179,10 @@ class _HomePageState extends State<HomePage> {
         'Fast customer login, application tracking, and identity verification.',
     'footerText': 'All rights reserved.',
     'footerVersion': '1.5.0',
+    'homeBannerBadge': 'Updates',
+    'homeBannerTitle': 'Stay informed',
+    'homeBannerMessage':
+        'Share promotions, payment reminders, and important notices from admin config.',
     'faqs': [
       'Loan approval is subject to review by the admin team.',
       'You cannot apply for a new loan while another one is active.',
@@ -230,6 +238,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _messageTimer?.cancel();
     _phoneController.dispose();
     _otpController.dispose();
     _pinController.dispose();
@@ -317,6 +326,55 @@ class _HomePageState extends State<HomePage> {
 
   String get _portalLogoUrl =>
       _api.resolveMediaUrl('${_portalContent['logoUrl'] ?? ''}');
+
+  String get _homeBannerBadge =>
+      '${_portalContent['homeBannerBadge'] ?? _defaultPortalContent['homeBannerBadge'] ?? ''}'
+          .trim();
+
+  String get _homeBannerTitle =>
+      '${_portalContent['homeBannerTitle'] ?? _defaultPortalContent['homeBannerTitle'] ?? ''}'
+          .trim();
+
+  String get _homeBannerMessage =>
+      '${_portalContent['homeBannerMessage'] ?? _defaultPortalContent['homeBannerMessage'] ?? ''}'
+          .trim();
+
+  String get _profileDisplayName {
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final combined = '$firstName $lastName'.trim();
+    if (combined.isNotEmpty) {
+      return combined;
+    }
+    return '${_portalContent['appName'] ?? 'Customer'}';
+  }
+
+  String get _profileCustomerId {
+    return '${_customer?['userId'] ?? _customer?['ID'] ?? _customer?['id'] ?? '-'}';
+  }
+
+  String get _profileCountryName {
+    final customerCountry = _customer?['countryName'];
+    if ('$customerCountry'.trim().isNotEmpty && customerCountry != null) {
+      return '$customerCountry';
+    }
+    return '${_selectedCountry['name'] ?? '-'}';
+  }
+
+  String get _profileVerificationStatus {
+    final verified = _customer?['isVerified'];
+    return verified == true ? 'Verified' : 'Pending';
+  }
+
+  String get _profileCreatedAt {
+    final createdAt = _customer?['createdAt'] ?? _customer?['date'] ?? '';
+    if ('$createdAt'.trim().isEmpty) {
+      return '-';
+    }
+    return _formatDate(createdAt);
+  }
+
+  String get _creditScoreLabel => '${_offer?['creditScore'] ?? 0}';
 
   List<Map<String, dynamic>> get _termOptions {
     final raw = _offer?['termOptions'];
@@ -449,6 +507,7 @@ class _HomePageState extends State<HomePage> {
 
       _sessionAccount = data;
       _isSignedIn = true;
+      _activeTab = 'home';
       _syncCountrySelection(
         preferredCode: '${data['country']?['code'] ?? _selectedCountryCode}',
       );
@@ -824,7 +883,11 @@ class _HomePageState extends State<HomePage> {
       _sessionAccount = data;
       _isSignedIn = true;
       await _loadPortalSummary(phone, quiet: true);
-      _setMessage('Login successful.', tone: 'success');
+      _setMessage(
+        'Login successful.',
+        tone: 'success',
+        autoClearAfter: const Duration(seconds: 3),
+      );
     } catch (error) {
       _setMessage(_cleanError(error), tone: 'error');
     } finally {
@@ -853,6 +916,18 @@ class _HomePageState extends State<HomePage> {
     });
 
     _setMessage('Logged out successfully.', tone: 'success');
+  }
+
+  Future<void> _startPinReset() async {
+    await _logout();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _authMode = 'signup';
+      _resetPinMode = true;
+    });
+    _setMessage('Enter your phone number to reset PIN.', tone: 'info');
   }
 
   Future<void> _saveDraft() async {
@@ -1313,11 +1388,34 @@ class _HomePageState extends State<HomePage> {
     return RegExp(r'^\d{4}$').hasMatch(value);
   }
 
-  void _setMessage(String value, {String tone = 'info'}) {
+  void _clearMessage() {
+    _messageTimer?.cancel();
+    _messageTimer = null;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _message = '';
+      _messageTone = 'info';
+    });
+  }
+
+  void _setMessage(
+    String value, {
+    String tone = 'info',
+    Duration? autoClearAfter,
+  }) {
+    _messageTimer?.cancel();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _message = value;
       _messageTone = tone;
     });
+    if (autoClearAfter != null && value.trim().isNotEmpty) {
+      _messageTimer = Timer(autoClearAfter, _clearMessage);
+    }
   }
 
   String _cleanError(Object error) {
@@ -1463,6 +1561,508 @@ class _HomePageState extends State<HomePage> {
       return '$value';
     }
     return DateFormat('dd MMM yyyy, hh:mm a').format(parsed.toLocal());
+  }
+
+  String _formatShortDate(dynamic value) {
+    final parsed = DateTime.tryParse('$value');
+    if (parsed == null) {
+      return '$value';
+    }
+    return DateFormat('dd MMM yyyy').format(parsed.toLocal());
+  }
+
+  String _formatLoanTimeLeft(Map<String, dynamic>? loan) {
+    final daysRemaining = loan?['daysRemaining'];
+    final overdueDays = loan?['overdueDays'];
+    if (daysRemaining is num) {
+      if (daysRemaining < 0) {
+        return '${overdueDays ?? daysRemaining.abs()} days overdue';
+      }
+      if (daysRemaining == 0) {
+        return 'Due today';
+      }
+      return '$daysRemaining days left';
+    }
+    return '-';
+  }
+
+  void _openRecordsTab() {
+    setState(() {
+      _activeTab = 'records';
+    });
+  }
+
+  Future<void> _openRepaymentModal() async {
+    if (_activeLoan?['canMakePayment'] != true) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, modalSetState) {
+            return _ActionSheetShell(
+              title: 'Make Payment',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Repay your active loan without leaving this page.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSoft,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedRepaymentType,
+                    decoration: const InputDecoration(labelText: 'Repayment type'),
+                    items: const [
+                      DropdownMenuItem(value: 'full', child: Text('Full payment')),
+                      DropdownMenuItem(value: 'partial', child: Text('Partial payment')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRepaymentType = value ?? 'full';
+                        _repaymentSummary = null;
+                      });
+                      modalSetState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (_selectedRepaymentType == 'partial') ...[
+                    TextField(
+                      controller: _repaymentAmountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Partial repayment amount',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedRepaymentMethod.isEmpty
+                        ? null
+                        : _selectedRepaymentMethod,
+                    decoration: const InputDecoration(labelText: 'Payment method'),
+                    items: _repaymentOptions
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: '${item['key']}',
+                            child: Text('${item['label']}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRepaymentMethod = value ?? '';
+                      });
+                      modalSetState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (_selectedRepaymentMethod == 'mobile-money' &&
+                      _mobileMoneyNetworks.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedRepaymentOperator.isEmpty
+                          ? null
+                          : _selectedRepaymentOperator,
+                      decoration:
+                          const InputDecoration(labelText: 'Mobile money operator'),
+                      items: _mobileMoneyNetworks
+                          .map(
+                            (item) => DropdownMenuItem<String>(
+                              value: '${item['label'] ?? item['key']}',
+                              child: Text('${item['label'] ?? item['key']}'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedRepaymentOperator = value ?? '';
+                        });
+                        modalSetState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_repaymentSummary != null) ...[
+                    _InlineInfoCard(
+                      title: 'Repayment Summary',
+                      body:
+                          'Amount to pay: ${_formatMoney(_repaymentSummary?['amount'] ?? 0)}',
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _gatewayLoading
+                              ? null
+                              : () async {
+                                  await _reviewRepayment();
+                                  modalSetState(() {});
+                                },
+                          child: const Text('Review Payment'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed:
+                              _gatewayLoading || _selectedRepaymentMethod.isEmpty
+                                  ? null
+                                  : () async {
+                                      await _submitRepayment();
+                                      modalSetState(() {});
+                                    },
+                          child: Text(
+                            _gatewayLoading ? 'Processing...' : 'Pay Now',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openExtensionModal() async {
+    if (_activeLoan?['canExtend'] != true || _extensionOptions.isEmpty) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, modalSetState) {
+            return _ActionSheetShell(
+              title: 'Loan Extension',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choose an extension option and follow the payment steps here.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSoft,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedExtensionKey.isEmpty
+                        ? null
+                        : _selectedExtensionKey,
+                    decoration: const InputDecoration(labelText: 'Extension option'),
+                    items: _extensionOptions
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: '${item['key']}',
+                            child: Text(
+                              '${item['label']} | Fee ${_formatMoney(item['feeAmount'] ?? 0)}',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedExtensionKey = value ?? '';
+                        _extensionSummary = null;
+                      });
+                      modalSetState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedExtensionMethod.isEmpty
+                        ? null
+                        : _selectedExtensionMethod,
+                    decoration:
+                        const InputDecoration(labelText: 'Extension payment method'),
+                    items: _repaymentOptions
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: '${item['key']}',
+                            child: Text('${item['label']}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedExtensionMethod = value ?? '';
+                      });
+                      modalSetState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (_selectedExtensionMethod == 'mobile-money' &&
+                      _mobileMoneyNetworks.isNotEmpty) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedExtensionOperator.isEmpty
+                          ? null
+                          : _selectedExtensionOperator,
+                      decoration:
+                          const InputDecoration(labelText: 'Mobile money operator'),
+                      items: _mobileMoneyNetworks
+                          .map(
+                            (item) => DropdownMenuItem<String>(
+                              value: '${item['label'] ?? item['key']}',
+                              child: Text('${item['label'] ?? item['key']}'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedExtensionOperator = value ?? '';
+                        });
+                        modalSetState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_extensionSummary != null) ...[
+                    _InlineInfoCard(
+                      title: 'Extension Summary',
+                      body:
+                          'Fee: ${_formatMoney(_extensionSummary?['extension']?['feeAmount'] ?? 0)} | New due date: ${_formatDate(_extensionSummary?['extension']?['extendedDueDate'] ?? '')}',
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _gatewayLoading
+                              ? null
+                              : () async {
+                                  await _reviewExtension();
+                                  modalSetState(() {});
+                                },
+                          child: const Text('Review Extension'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed:
+                              _gatewayLoading || _selectedExtensionMethod.isEmpty
+                                  ? null
+                                  : () async {
+                                      await _submitExtension();
+                                      modalSetState(() {});
+                                    },
+                          child: Text(
+                            _gatewayLoading ? 'Processing...' : 'Pay Extension Fee',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveProfileChanges() async {
+    final previousTab = _activeTab;
+    await _submitProfile();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _activeTab = previousTab;
+    });
+  }
+
+  Future<void> _openProfileEditSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, modalSetState) {
+            return _ActionSheetShell(
+              title: 'Edit Profile',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _InlineInfoCard(
+                    title: 'Locked Fields',
+                    body:
+                        'Names and your main login phone number are managed by admin and cannot be edited here.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _backupPhoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration:
+                        const InputDecoration(labelText: 'Alternative phone number'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _dobController,
+                    decoration: const InputDecoration(labelText: 'Date of birth'),
+                  ),
+                  const SizedBox(height: 12),
+                  _doubleField(
+                    left: _SimpleDropdown(
+                      label: 'Gender',
+                      value: _selectedGender,
+                      items: const ['Male', 'Female'],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedGender = value;
+                        });
+                        modalSetState(() {});
+                      },
+                    ),
+                    right: _SimpleDropdown(
+                      label: 'Marital status',
+                      value: _selectedMaritalStatus,
+                      items: _maritalStatuses,
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedMaritalStatus = value;
+                        });
+                        modalSetState(() {});
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _doubleField(
+                    left: _SimpleDropdown(
+                      label: 'Education level',
+                      value: _selectedEducationLevel,
+                      items: _educationLevels,
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedEducationLevel = value;
+                        });
+                        modalSetState(() {});
+                      },
+                    ),
+                    right: _SimpleDropdown(
+                      label: 'In school',
+                      value: _selectedSchoolStatus,
+                      items: const ['Yes', 'No'],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedSchoolStatus = value;
+                        });
+                        modalSetState(() {});
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _SimpleDropdown(
+                    label: 'Residence type',
+                    value: _selectedResidenceType,
+                    items: _residenceTypes,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedResidenceType = value;
+                      });
+                      modalSetState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _residenceTimeController,
+                    decoration: const InputDecoration(labelText: 'Years at residence'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _digitalAddressController,
+                    decoration: const InputDecoration(labelText: 'Digital address'),
+                  ),
+                  const SizedBox(height: 12),
+                  _doubleField(
+                    left: TextField(
+                      controller: _areaController,
+                      decoration: const InputDecoration(labelText: 'Area name'),
+                    ),
+                    right: TextField(
+                      controller: _landmarkController,
+                      decoration: const InputDecoration(labelText: 'Landmark'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _doubleField(
+                    left: TextField(
+                      controller: _incomeSourceController,
+                      decoration: const InputDecoration(labelText: 'Main income source'),
+                    ),
+                    right: TextField(
+                      controller: _dependantsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Number of dependants'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _profileSaving
+                              ? null
+                              : () async {
+                                  await _saveDraft();
+                                  modalSetState(() {});
+                                },
+                          child: Text(_profileSaving ? 'Saving...' : 'Save Draft'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _profileSaving
+                              ? null
+                              : () async {
+                                  await _saveProfileChanges();
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  if (_messageTone == 'success') {
+                                    Navigator.of(sheetContext).pop();
+                                  } else {
+                                    modalSetState(() {});
+                                  }
+                                },
+                          child: Text(
+                            _profileSaving ? 'Saving...' : 'Save Changes',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -1708,6 +2308,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildHomeTab() {
     final faqs = _portalContent['faqs'] as List<dynamic>? ?? [];
     final tutorials = _portalContent['repaymentTutorials'] as List<dynamic>? ?? [];
+    final supportEntries = _supportEntries();
     final displayName = _customer?['IDinfo']?['firstName'] ??
         (_firstNameController.text.trim().isNotEmpty
             ? _firstNameController.text.trim()
@@ -1721,6 +2322,14 @@ class _HomePageState extends State<HomePage> {
           subtitle: 'Your mobile account stays synced with the web app.',
         ),
         const SizedBox(height: 16),
+        if (_homeBannerTitle.isNotEmpty || _homeBannerMessage.isNotEmpty) ...[
+          _HomeBannerCard(
+            badge: _homeBannerBadge,
+            title: _homeBannerTitle,
+            message: _homeBannerMessage,
+          ),
+          const SizedBox(height: 16),
+        ],
         Row(
           children: [
             Expanded(
@@ -1758,54 +2367,8 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 16),
         if (_activeLoan != null)
-          _SectionCard(
-            title: '${_activeLoan?['title'] ?? 'Loan status'}',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${_activeLoan?['message'] ?? ''}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                _LabelValueRow(
-                  label: 'Loan ID',
-                  value: '${_activeLoan?['loanId'] ?? '-'}',
-                ),
-                _LabelValueRow(
-                  label: 'Status',
-                  value: '${_activeLoan?['status'] ?? '-'}',
-                ),
-                _LabelValueRow(
-                  label: 'Total Due',
-                  value: _formatMoney(_activeLoan?['totalDue'] ?? 0),
-                ),
-                _LabelValueRow(
-                  label: 'Due Date',
-                  value: _formatDate(_activeLoan?['dueDate'] ?? ''),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _activeTab = 'records';
-                        });
-                      },
-                      child: const Text('Open Records'),
-                    ),
-                    if (_pendingGatewayReference.isNotEmpty)
-                      OutlinedButton(
-                        onPressed: _gatewayLoading ? null : _verifyPendingGateway,
-                        child: const Text('Verify Pending Payment'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+          _buildActiveLoanSummaryCard(
+            showOpenRecords: true,
           ),
         if (_lastTransaction != null) ...[
           const SizedBox(height: 16),
@@ -1834,8 +2397,14 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
         const SizedBox(height: 16),
-        _SectionCard(
+        _DisclosureCard(
           title: 'How It Works',
+          expanded: _homeHowItWorksExpanded,
+          onChanged: (expanded) {
+            setState(() {
+              _homeHowItWorksExpanded = expanded;
+            });
+          },
           child: Column(
             children: tutorials
                 .map(
@@ -1858,8 +2427,14 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         const SizedBox(height: 16),
-        _SectionCard(
+        _DisclosureCard(
           title: 'Frequently Asked Questions',
+          expanded: _homeFaqsExpanded,
+          onChanged: (expanded) {
+            setState(() {
+              _homeFaqsExpanded = expanded;
+            });
+          },
           child: Column(
             children: faqs
                 .map(
@@ -1874,8 +2449,75 @@ class _HomePageState extends State<HomePage> {
                 .toList(),
           ),
         ),
-        const SizedBox(height: 16),
-        _buildSupportCard(title: 'Support Channels'),
+        if (supportEntries.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _DisclosureCard(
+            title: 'Contact',
+            expanded: _homeContactExpanded,
+            onChanged: (expanded) {
+              setState(() {
+                _homeContactExpanded = expanded;
+              });
+            },
+            child: Column(
+              children: supportEntries
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () => _openSupportValue(
+                          item['kind'] ?? '',
+                          item['value'] ?? '',
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentSoft,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                switch (item['kind']) {
+                                  'whatsapp' => Icons.chat_bubble_outline,
+                                  'email' => Icons.mail_outline,
+                                  _ => Icons.call_outlined,
+                                },
+                                color: AppTheme.accentInk,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['label'] ?? '',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.accentInk,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(item['value'] ?? ''),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.keyboard_arrow_right,
+                                color: AppTheme.accentInk,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1894,7 +2536,9 @@ class _HomePageState extends State<HomePage> {
               'Submit your personal profile and identity documents before applying for a loan.',
             ),
           ),
-        if (hasProfile && !canApply)
+        if (hasProfile && !canApply && _activeLoan != null)
+          _buildActiveLoanSummaryCard(showOpenRecords: true),
+        if (hasProfile && !canApply && _activeLoan == null)
           _SectionCard(
             title: 'Loan Application Locked',
             child: Text(
@@ -2015,248 +2659,7 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.all(16),
       children: [
         if (_activeLoan != null)
-          _SectionCard(
-            title: 'Active Loan Actions',
-            child: Column(
-              children: [
-                _LabelValueRow(
-                  label: 'Status',
-                  value: '${_activeLoan?['title'] ?? ''}',
-                ),
-                _LabelValueRow(
-                  label: 'Outstanding',
-                  value: _formatMoney(_activeLoan?['outstandingBalance'] ?? 0),
-                ),
-                _LabelValueRow(
-                  label: 'Penalty',
-                  value: _formatMoney(_activeLoan?['overduePenalty'] ?? 0),
-                ),
-                _LabelValueRow(
-                  label: 'Total Due',
-                  value: _formatMoney(_activeLoan?['totalDue'] ?? 0),
-                ),
-                const SizedBox(height: 16),
-                if (_activeLoan?['canMakePayment'] == true) ...[
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Repayment',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedRepaymentType,
-                    decoration: const InputDecoration(labelText: 'Repayment type'),
-                    items: const [
-                      DropdownMenuItem(value: 'full', child: Text('Full payment')),
-                      DropdownMenuItem(value: 'partial', child: Text('Partial payment')),
-                    ],
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedRepaymentType = value ?? 'full';
-                        _repaymentSummary = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  if (_selectedRepaymentType == 'partial')
-                    TextField(
-                      controller: _repaymentAmountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Partial repayment amount',
-                      ),
-                    ),
-                  if (_selectedRepaymentType == 'partial')
-                    const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedRepaymentMethod.isEmpty
-                        ? null
-                        : _selectedRepaymentMethod,
-                    decoration: const InputDecoration(labelText: 'Payment method'),
-                    items: _repaymentOptions
-                        .map(
-                          (item) => DropdownMenuItem<String>(
-                            value: '${item['key']}',
-                            child: Text('${item['label']}'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedRepaymentMethod = value ?? '';
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  if (_selectedRepaymentMethod == 'mobile-money' &&
-                      _mobileMoneyNetworks.isNotEmpty)
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedRepaymentOperator.isEmpty
-                          ? null
-                          : _selectedRepaymentOperator,
-                      decoration:
-                          const InputDecoration(labelText: 'Mobile money operator'),
-                      items: _mobileMoneyNetworks
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: '${item['label'] ?? item['key']}',
-                              child: Text('${item['label'] ?? item['key']}'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedRepaymentOperator = value ?? '';
-                        });
-                      },
-                    ),
-                  if (_selectedRepaymentMethod == 'mobile-money' &&
-                      _mobileMoneyNetworks.isNotEmpty)
-                    const SizedBox(height: 12),
-                  if (_repaymentSummary != null)
-                    _InlineInfoCard(
-                      title: 'Repayment Summary',
-                      body:
-                          'Amount to pay: ${_formatMoney(_repaymentSummary?['amount'] ?? 0)}',
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _gatewayLoading ? null : _reviewRepayment,
-                          child: const Text('Review Payment'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed:
-                              _gatewayLoading || _selectedRepaymentMethod.isEmpty
-                                  ? null
-                                  : _submitRepayment,
-                          child: Text(
-                            _gatewayLoading ? 'Processing...' : 'Pay Now',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                ],
-                if (_activeLoan?['canExtend'] == true &&
-                    _extensionOptions.isNotEmpty) ...[
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Loan Extension',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedExtensionKey.isEmpty
-                        ? null
-                        : _selectedExtensionKey,
-                    decoration: const InputDecoration(labelText: 'Extension option'),
-                    items: _extensionOptions
-                        .map(
-                          (item) => DropdownMenuItem<String>(
-                            value: '${item['key']}',
-                            child: Text(
-                              '${item['label']} | Fee ${_formatMoney(item['feeAmount'] ?? 0)}',
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedExtensionKey = value ?? '';
-                        _extensionSummary = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedExtensionMethod.isEmpty
-                        ? null
-                        : _selectedExtensionMethod,
-                    decoration: const InputDecoration(labelText: 'Extension payment method'),
-                    items: _repaymentOptions
-                        .map(
-                          (item) => DropdownMenuItem<String>(
-                            value: '${item['key']}',
-                            child: Text('${item['label']}'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedExtensionMethod = value ?? '';
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  if (_selectedExtensionMethod == 'mobile-money' &&
-                      _mobileMoneyNetworks.isNotEmpty)
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedExtensionOperator.isEmpty
-                          ? null
-                          : _selectedExtensionOperator,
-                      decoration:
-                          const InputDecoration(labelText: 'Mobile money operator'),
-                      items: _mobileMoneyNetworks
-                          .map(
-                            (item) => DropdownMenuItem<String>(
-                              value: '${item['label'] ?? item['key']}',
-                              child: Text('${item['label'] ?? item['key']}'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedExtensionOperator = value ?? '';
-                        });
-                      },
-                    ),
-                  if (_selectedExtensionMethod == 'mobile-money' &&
-                      _mobileMoneyNetworks.isNotEmpty)
-                    const SizedBox(height: 12),
-                  if (_extensionSummary != null)
-                    _InlineInfoCard(
-                      title: 'Extension Summary',
-                      body:
-                          'Fee: ${_formatMoney(_extensionSummary?['extension']?['feeAmount'] ?? 0)} | New due date: ${_formatDate(_extensionSummary?['extension']?['extendedDueDate'] ?? '')}',
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _gatewayLoading ? null : _reviewExtension,
-                          child: const Text('Review Extension'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed:
-                              _gatewayLoading || _selectedExtensionMethod.isEmpty
-                                  ? null
-                                  : _submitExtension,
-                          child: Text(
-                            _gatewayLoading ? 'Processing...' : 'Pay Extension Fee',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
+          _buildActiveLoanSummaryCard(showOpenRecords: false),
         if (_pendingGatewayReference.isNotEmpty) ...[
           const SizedBox(height: 16),
           _SectionCard(
@@ -2357,346 +2760,91 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.all(16),
       children: [
         _SectionCard(
-          title: 'Personal Information',
+          title: 'Profile',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _doubleField(
-                left: TextField(
-                  controller: _firstNameController,
-                  decoration: const InputDecoration(labelText: 'First name'),
-                ),
-                right: TextField(
-                  controller: _lastNameController,
-                  decoration: const InputDecoration(labelText: 'Last name'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _middleNameController,
-                decoration: const InputDecoration(labelText: 'Middle name'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _backupPhoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Backup phone'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _dobController,
-                decoration: const InputDecoration(labelText: 'Date of birth'),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: _SimpleDropdown(
-                  label: 'Gender',
-                  value: _selectedGender,
-                  items: const ['Male', 'Female'],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedGender = value;
-                    });
-                  },
-                ),
-                right: _SimpleDropdown(
-                  label: 'Marital status',
-                  value: _selectedMaritalStatus,
-                  items: _maritalStatuses,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedMaritalStatus = value;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: _SimpleDropdown(
-                  label: 'Education level',
-                  value: _selectedEducationLevel,
-                  items: _educationLevels,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedEducationLevel = value;
-                    });
-                  },
-                ),
-                right: _SimpleDropdown(
-                  label: 'In school',
-                  value: _selectedSchoolStatus,
-                  items: const ['Yes', 'No'],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedSchoolStatus = value;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              _SimpleDropdown(
-                label: 'Residence type',
-                value: _selectedResidenceType,
-                items: _residenceTypes,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedResidenceType = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _residenceTimeController,
-                decoration: const InputDecoration(labelText: 'Residence time'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _digitalAddressController,
-                decoration: const InputDecoration(labelText: 'Digital address'),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: TextField(
-                  controller: _areaController,
-                  decoration: const InputDecoration(labelText: 'Area'),
-                ),
-                right: TextField(
-                  controller: _landmarkController,
-                  decoration: const InputDecoration(labelText: 'Landmark'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: TextField(
-                  controller: _incomeSourceController,
-                  decoration: const InputDecoration(labelText: 'Income source'),
-                ),
-                right: TextField(
-                  controller: _dependantsController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Dependants'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Education',
-          child: Column(
-            children: [
-              TextField(
-                controller: _schoolNameController,
-                decoration: const InputDecoration(labelText: 'Current school name'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _courseController,
-                decoration: const InputDecoration(labelText: 'Course of study'),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: TextField(
-                  controller: _graduationYearController,
-                  decoration: const InputDecoration(labelText: 'Graduation year'),
-                ),
-                right: TextField(
-                  controller: _schoolAddressController,
-                  decoration: const InputDecoration(labelText: 'School address'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Work',
-          child: Column(
-            children: [
-              _doubleField(
-                left: TextField(
-                  controller: _workUnitController,
-                  decoration: const InputDecoration(labelText: 'Work unit'),
-                ),
-                right: TextField(
-                  controller: _industryController,
-                  decoration: const InputDecoration(labelText: 'Industry'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: TextField(
-                  controller: _workAddressController,
-                  decoration: const InputDecoration(labelText: 'Work address'),
-                ),
-                right: TextField(
-                  controller: _companyAddressController,
-                  decoration: const InputDecoration(labelText: 'Company address'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: TextField(
-                  controller: _workLandmarkController,
-                  decoration: const InputDecoration(labelText: 'Company landmark'),
-                ),
-                right: _SimpleDropdown(
-                  label: 'Work hours',
-                  value: _selectedWorkHours,
-                  items: _workHoursOptions,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedWorkHours = value;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              _doubleField(
-                left: TextField(
-                  controller: _workIncomeController,
-                  decoration: const InputDecoration(labelText: 'Current income'),
-                ),
-                right: TextField(
-                  controller: _workContentController,
-                  decoration: const InputDecoration(labelText: 'Work content'),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Emergency Contacts',
-          child: Column(
-            children: [
-              _buildContactBlock(
-                title: 'Contact 1',
-                nameController: _contact1NameController,
-                phoneController: _contact1PhoneController,
-                addressController: _contact1AddressController,
-                relationshipValue: _selectedRelationship1,
-                educationValue: _selectedContactEdu1,
-                onRelationshipChanged: (value) {
-                  setState(() {
-                    _selectedRelationship1 = value;
-                  });
-                },
-                onEducationChanged: (value) {
-                  setState(() {
-                    _selectedContactEdu1 = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildContactBlock(
-                title: 'Contact 2',
-                nameController: _contact2NameController,
-                phoneController: _contact2PhoneController,
-                addressController: _contact2AddressController,
-                relationshipValue: _selectedRelationship2,
-                educationValue: _selectedContactEdu2,
-                onRelationshipChanged: (value) {
-                  setState(() {
-                    _selectedRelationship2 = value;
-                  });
-                },
-                onEducationChanged: (value) {
-                  setState(() {
-                    _selectedContactEdu2 = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildContactBlock(
-                title: 'Contact 3',
-                nameController: _contact3NameController,
-                phoneController: _contact3PhoneController,
-                addressController: _contact3AddressController,
-                relationshipValue: _selectedRelationship3,
-                educationValue: _selectedContactEdu3,
-                onRelationshipChanged: (value) {
-                  setState(() {
-                    _selectedRelationship3 = value;
-                  });
-                },
-                onEducationChanged: (value) {
-                  setState(() {
-                    _selectedContactEdu3 = value;
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Identity',
-          child: Column(
-            children: [
-              _doubleField(
-                left: _SimpleDropdown(
-                  label: 'ID type',
-                  value: _selectedIdType,
-                  items: _idTypes,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedIdType = value;
-                    });
-                  },
-                ),
-                right: TextField(
-                  controller: _idNumberController,
-                  decoration: const InputDecoration(labelText: 'ID number'),
-                ),
+              _ProfileHeaderCard(
+                title: _profileDisplayName,
+                customerId: _profileCustomerId,
               ),
               const SizedBox(height: 16),
-              _ImageSelectorCard(
-                label: 'Front ID photo',
-                file: _frontPhoto,
-                onPick: () => _pickImage('front'),
+              _ProfileInfoTile(
+                label: 'Email',
+                value: _emailController.text.trim().isEmpty
+                    ? '-'
+                    : _emailController.text.trim(),
               ),
               const SizedBox(height: 12),
-              _ImageSelectorCard(
-                label: 'Back ID photo',
-                file: _backPhoto,
-                onPick: () => _pickImage('back'),
+              _ProfileInfoTile(
+                label: 'Phone',
+                value: _phoneController.text.trim().isEmpty
+                    ? '-'
+                    : _phoneController.text.trim(),
               ),
               const SizedBox(height: 12),
-              _ImageSelectorCard(
-                label: 'Selfie photo',
-                file: _selfiePhoto,
-                onPick: () => _pickImage('selfie'),
+              _ProfileInfoTile(
+                label: 'Country',
+                value: _profileCountryName,
+              ),
+              const SizedBox(height: 12),
+              _ProfileInfoTile(
+                label: 'ID Verification',
+                value: _profileVerificationStatus,
+              ),
+              const SizedBox(height: 12),
+              _ProfileInfoTile(
+                label: 'Account Created',
+                value: _profileCreatedAt,
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _profileSaving ? null : _saveDraft,
-                      child: Text(_profileSaving ? 'Saving...' : 'Save Draft'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _profileSaving ? null : _submitProfile,
-                      child: Text(
-                        _profileSaving ? 'Submitting...' : 'Submit Profile',
-                      ),
-                    ),
-                  ),
-                ],
+              _CreditScoreCard(score: _creditScoreLabel),
+              const SizedBox(height: 16),
+              _ProfileActionButton(
+                label: 'Edit Profile',
+                onPressed: _openProfileEditSheet,
+              ),
+              const SizedBox(height: 12),
+              _ProfileActionButton(
+                label: 'Change PIN',
+                onPressed: _startPinReset,
+              ),
+              const SizedBox(height: 12),
+              _ProfileActionButton(
+                label: 'Logout',
+                danger: true,
+                onPressed: _logout,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActiveLoanSummaryCard({
+    required bool showOpenRecords,
+  }) {
+    final loan = _activeLoan;
+    if (loan == null) {
+      return const SizedBox.shrink();
+    }
+
+    return _ActiveLoanSummaryCard(
+      statusLabel: '${loan['status'] ?? ''}'.isEmpty ? 'Granted' : '${loan['status']}',
+      title: '${loan['title'] ?? 'Active loan'}',
+      message: '${loan['message'] ?? ''}',
+      amount: _formatMoney(loan['amount'] ?? 0),
+      totalDue: _formatMoney(loan['totalDue'] ?? 0),
+      dueDate: _formatShortDate(loan['dueDate'] ?? ''),
+      timeLeft: _formatLoanTimeLeft(loan),
+      outstanding: _formatMoney(loan['outstandingBalance'] ?? 0),
+      penalty: _formatMoney(loan['overduePenalty'] ?? 0),
+      loanId: '${loan['loanId'] ?? '-'}',
+      onOpenRecords: showOpenRecords ? _openRecordsTab : null,
+      onMakePayment: loan['canMakePayment'] == true ? _openRepaymentModal : null,
+      onExtension:
+          loan['canExtend'] == true && _extensionOptions.isNotEmpty ? _openExtensionModal : null,
     );
   }
 
@@ -2980,6 +3128,577 @@ class _SectionCard extends StatelessWidget {
             const SizedBox(height: 14),
             child,
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DisclosureCard extends StatelessWidget {
+  const _DisclosureCard({
+    required this.title,
+    required this.expanded,
+    required this.onChanged,
+    required this.child,
+  });
+
+  final String title;
+  final bool expanded;
+  final ValueChanged<bool> onChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shadowColor: const Color(0x140F172A),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: expanded,
+          onExpansionChanged: onChanged,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: AppTheme.textMain,
+            ),
+          ),
+          children: [child],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeBannerCard extends StatelessWidget {
+  const _HomeBannerCard({
+    required this.badge,
+    required this.title,
+    required this.message,
+  });
+
+  final String badge;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF7ED), Color(0xFFFFEDD5)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: const Color(0xFFFEC89A)),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (badge.trim().isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(
+                  color: AppTheme.accentInk,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          if (badge.trim().isNotEmpty) const SizedBox(height: 12),
+          if (title.trim().isNotEmpty)
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textMain,
+              ),
+            ),
+          if (message.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: const TextStyle(
+                color: AppTheme.textSoft,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveLoanSummaryCard extends StatelessWidget {
+  const _ActiveLoanSummaryCard({
+    required this.statusLabel,
+    required this.title,
+    required this.message,
+    required this.amount,
+    required this.totalDue,
+    required this.dueDate,
+    required this.timeLeft,
+    required this.outstanding,
+    required this.penalty,
+    required this.loanId,
+    this.onOpenRecords,
+    this.onMakePayment,
+    this.onExtension,
+  });
+
+  final String statusLabel;
+  final String title;
+  final String message;
+  final String amount;
+  final String totalDue;
+  final String dueDate;
+  final String timeLeft;
+  final String outstanding;
+  final String penalty;
+  final String loanId;
+  final VoidCallback? onOpenRecords;
+  final VoidCallback? onMakePayment;
+  final VoidCallback? onExtension;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shadowColor: const Color(0x140F172A),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'ACTIVE LOAN',
+              style: TextStyle(
+                color: AppTheme.accentStrong,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textMain,
+              ),
+            ),
+            if (message.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: const TextStyle(
+                  color: AppTheme.textSoft,
+                  fontSize: 16,
+                  height: 1.4,
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.accentSoft,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                statusLabel,
+                style: const TextStyle(
+                  color: AppTheme.accentInk,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(child: _LoanMetricTile(label: 'Loan Amount', value: amount)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _LoanMetricTile(
+                    label: 'Total Due',
+                    value: totalDue,
+                    emphasized: true,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _LoanMetricTile(label: 'Due Date', value: dueDate)),
+                const SizedBox(width: 12),
+                Expanded(child: _LoanMetricTile(label: 'Time Left', value: timeLeft)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _LoanMetricTile(label: 'Outstanding', value: outstanding)),
+                const SizedBox(width: 12),
+                Expanded(child: _LoanMetricTile(label: 'Penalty', value: penalty)),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Loan ID: $loanId',
+              style: const TextStyle(
+                color: AppTheme.textSoft,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Pay or extend before the due date.',
+              style: TextStyle(
+                color: AppTheme.textSoft,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                if (onOpenRecords != null) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onOpenRecords,
+                      child: const Text('Open Records'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                if (onMakePayment != null)
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: onMakePayment,
+                      child: const Text('Make Payment'),
+                    ),
+                  ),
+                if (onMakePayment != null && onExtension != null) const SizedBox(width: 12),
+                if (onExtension != null)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onExtension,
+                      child: const Text('Extension'),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoanMetricTile extends StatelessWidget {
+  const _LoanMetricTile({
+    required this.label,
+    required this.value,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: emphasized ? AppTheme.accentSoft : Colors.white,
+        border: Border.all(
+          color: emphasized ? const Color(0xFFF6C88F) : AppTheme.border,
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textSoft,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppTheme.textMain,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileHeaderCard extends StatelessWidget {
+  const _ProfileHeaderCard({
+    required this.title,
+    required this.customerId,
+  });
+
+  final String title;
+  final String customerId;
+
+  @override
+  Widget build(BuildContext context) {
+    final letter = title.trim().isEmpty ? 'S' : title.trim()[0].toUpperCase();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [Color(0xFFE86A10), Color(0xFF0F172A)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Text(
+              letter,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 34,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textMain,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'ID: $customerId',
+                  style: const TextStyle(
+                    color: AppTheme.textSoft,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileInfoTile extends StatelessWidget {
+  const _ProfileInfoTile({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF4ED),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textSoft,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppTheme.textMain,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CreditScoreCard extends StatelessWidget {
+  const _CreditScoreCard({
+    required this.score,
+  });
+
+  final String score;
+
+  @override
+  Widget build(BuildContext context) {
+    final parsedScore = double.tryParse(score) ?? 0;
+    final progress = (parsedScore / 850).clamp(0, 1).toDouble();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Credit Score',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textMain,
+                  ),
+                ),
+              ),
+              Text(
+                score,
+                style: const TextStyle(
+                  color: AppTheme.accentStrong,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: const Color(0xFFD8E0EC),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accentStrong),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileActionButton extends StatelessWidget {
+  const _ProfileActionButton({
+    required this.label,
+    required this.onPressed,
+    this.danger = false,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: danger ? const Color(0xFFD92D20) : AppTheme.textMain,
+          side: const BorderSide(color: AppTheme.border),
+          minimumSize: const Size.fromHeight(58),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+          ),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+}
+
+class _ActionSheetShell extends StatelessWidget {
+  const _ActionSheetShell({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textMain,
+                ),
+              ),
+              const SizedBox(height: 16),
+              child,
+            ],
+          ),
         ),
       ),
     );
