@@ -316,30 +316,6 @@ const getCalendarDayDifference = (left, right = new Date()) => {
 
   return Math.round((leftMidnight.getTime() - rightMidnight.getTime()) / (1000 * 3600 * 24));
 };
-const getPortalLoanMetrics = (loan = {}) => {
-  const repaymentAmount = toMoney(loan?.repaymentAmount || 0);
-  const amountPaid = toMoney(loan?.amountPaid || 0);
-  const settled = isSettledPortalLoan(loan);
-  const cutoffDate = settled && loan?.dp ? loan.dp : new Date();
-  const daysRemaining = getCalendarDayDifference(loan?.dop, cutoffDate);
-  const overdueDays = daysRemaining === null ? 0 : Math.max(-daysRemaining, 0);
-  const remainingPrincipal = Math.max(repaymentAmount - amountPaid, 0);
-  const overduePenaltyRate = Number(loan?.overduePenaltyRate || 2);
-  const overduePenalty = toMoney(
-    remainingPrincipal > 0 ? remainingPrincipal * (overduePenaltyRate / 100) * overdueDays : 0
-  );
-  const outstandingBalance = toMoney(remainingPrincipal + overduePenalty);
-
-  return {
-    settled,
-    repaymentAmount,
-    amountPaid,
-    daysRemaining,
-    overdueDays,
-    overduePenalty,
-    outstandingBalance,
-  };
-};
 const getRepaymentMethodLabel = (options = [], key = "") =>
   options.find((item) => item.key === key)?.label || key || "-";
 const getGatewayMobileMoneyNetworks = (lifecycleConfig = {}) =>
@@ -473,59 +449,63 @@ const syncLoanRequestWithOffer = (currentRequest, offer) => {
 
 const buildLoanRecords = (loans = []) =>
   [...loans]
-    .flatMap((loan, index) => {
-      const metrics = getPortalLoanMetrics(loan);
-      const records = [
-        {
-          id: `loan-${loan.ID || index}`,
-          type: "Loan",
-          status: loan.loanStatus || "Review",
-          amount: Number(loan.amount || 0),
-          direction: "credit",
-          date: loan.doa || loan.createdAt,
-          subtitle: `Loan Application - ${loan.duration || "Term not specified"} (${loan.ID || "Pending"})`,
-          badges: getRecordBadges(loan),
-          metaRows: [
-            { label: "Repayment Amount", value: formatCurrency(Number(loan.repaymentAmount || 0)) },
-            { label: "Due Date", value: formatDate(loan.dop) },
-            { label: "Provider", value: loan.disbursementProvider || "-" },
-            { label: "Channel", value: loan.disbursementChannel || "-" },
-          ],
-        },
-      ];
-
-      if (Number(loan.amountPaid || 0) > 0) {
-        records.push({
-          id: `repayment-${loan.ID || index}`,
-          type: "Repayment",
-          status: metrics.settled ? "Completed" : "In progress",
-          amount: Number(loan.amountPaid || 0),
-          direction: "debit",
-          date: loan.dp || loan.updatedAt || loan.doa,
-          subtitle: `Loan repayment${loan.ID ? ` (${loan.ID})` : ""}`,
-          badges: [
-            {
-              label: metrics.settled ? "Payment cleared" : "Partial payment",
-              tone: metrics.settled ? "success" : "info",
-            },
-          ],
-          metaRows: [
-            { label: "Loan ID", value: loan.ID || "-" },
-            { label: "Amount Paid", value: formatCurrency(Number(loan.amountPaid || 0)) },
-            ...(metrics.overduePenalty > 0
-              ? [{ label: "Penalty", value: formatCurrency(metrics.overduePenalty) }]
-              : []),
-            {
-              label: "Balance",
-              value: formatCurrency(metrics.outstandingBalance),
-            },
-          ],
-        });
-      }
-
-      return records;
-    })
+    .map((loan, index) => ({
+      id: `loan-${loan.ID || index}`,
+      type: "Loan",
+      status: loan.loanStatus || "Review",
+      amount: Number(loan.amount || 0),
+      direction: "credit",
+      date: loan.doa || loan.createdAt,
+      subtitle: `Loan Application - ${loan.duration || "Term not specified"} (${loan.ID || "Pending"})`,
+      badges: getRecordBadges(loan),
+      metaRows: [
+        { label: "Repayment Amount", value: formatCurrency(Number(loan.repaymentAmount || 0)) },
+        { label: "Due Date", value: formatDate(loan.dop) },
+        { label: "Provider", value: loan.disbursementProvider || "-" },
+        { label: "Channel", value: loan.disbursementChannel || "-" },
+      ],
+    }))
     .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+
+const buildDerivedPaymentHistory = (loanHistory = [], serverHistory = []) => {
+  const normalizedServerHistory = Array.isArray(serverHistory) ? serverHistory : [];
+  const derivedLoanHistory = [...(Array.isArray(loanHistory) ? loanHistory : [])].flatMap(
+    (loan, loanIndex) =>
+      (Array.isArray(loan?.paymentRecords) ? loan.paymentRecords : []).map((record, recordIndex) => ({
+        id: `loan-${loan?.ID || loanIndex}-${recordIndex}`,
+        transactionTypeLabel: "Loan Repayment",
+        amount: Number(record?.amountPaid || 0),
+        status: "success",
+        date: record?.datePaid || loan?.dp || loan?.updatedAt || loan?.doa || "",
+        reference: "",
+        loanId: loan?.ID || "-",
+        loanAmount: Number(loan?.amount || 0),
+        remainingBalance: Number(
+          loan?.clearRemainingAmount ||
+            loan?.amountRemain ||
+            loan?.amountToPay ||
+            loan?.repaymentAmount ||
+            0
+        ),
+        methodLabel: "Recorded Payment",
+      }))
+  );
+
+  const seen = new Set();
+  return [...normalizedServerHistory, ...derivedLoanHistory]
+    .filter((item) => {
+      const dateKey = String(item?.date || "").split("T")[0];
+      const dedupeKey = `${item?.loanId || ""}|${Number(item?.amount || 0).toFixed(2)}|${
+        item?.reference || ""
+      }|${dateKey}`;
+      if (seen.has(dedupeKey)) {
+        return false;
+      }
+      seen.add(dedupeKey);
+      return true;
+    })
+    .sort((left, right) => new Date(right?.date || 0) - new Date(left?.date || 0));
+};
 
 const buildPayloadPreview = (formData) => ({
   IDinfo: {
@@ -820,7 +800,10 @@ function App() {
     () => sessionAccount?.loanHistory || sessionAccount?.customer?.loan?.loans || [],
     [sessionAccount?.customer?.loan?.loans, sessionAccount?.loanHistory]
   );
-  const paymentHistory = useMemo(() => sessionAccount?.paymentHistory || [], [sessionAccount?.paymentHistory]);
+  const paymentHistory = useMemo(
+    () => buildDerivedPaymentHistory(loanHistory, sessionAccount?.paymentHistory || []),
+    [loanHistory, sessionAccount?.paymentHistory]
+  );
   const loanRecords = useMemo(() => buildLoanRecords(loanHistory), [loanHistory]);
   const hasDraft = Boolean(sessionAccount?.draftApplication);
   const hasProfile = Boolean(sessionAccount?.customer?._id || sessionAccount?.hasProfile);
