@@ -81,6 +81,7 @@ class _HomePageState extends State<HomePage> {
   bool _homeHowItWorksExpanded = false;
   bool _homeFaqsExpanded = false;
   bool _homeContactExpanded = false;
+  bool _paymentHistoryTab = false;
 
   String _authMode = 'login';
   String _activeTab = 'home';
@@ -113,6 +114,8 @@ class _HomePageState extends State<HomePage> {
   String _pendingGatewayType = '';
   String _firebaseIdToken = '';
   Timer? _messageTimer;
+  Timer? _gatewayWatchTimer;
+  int _gatewayWatchAttempts = 0;
 
   Map<String, dynamic> _portalContent = _defaultPortalContent;
   Map<String, dynamic>? _sessionAccount;
@@ -179,10 +182,9 @@ class _HomePageState extends State<HomePage> {
         'Fast customer login, application tracking, and identity verification.',
     'footerText': 'All rights reserved.',
     'footerVersion': '1.5.0',
-    'homeBannerBadge': 'Updates',
-    'homeBannerTitle': 'Stay informed',
-    'homeBannerMessage':
-        'Share promotions, payment reminders, and important notices from admin config.',
+    'homeBannerBadge': '',
+    'homeBannerTitle': '',
+    'homeBannerMessage': '',
     'faqs': [
       'Loan approval is subject to review by the admin team.',
       'You cannot apply for a new loan while another one is active.',
@@ -239,6 +241,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _messageTimer?.cancel();
+    _gatewayWatchTimer?.cancel();
     _phoneController.dispose();
     _otpController.dispose();
     _pinController.dispose();
@@ -323,6 +326,14 @@ class _HomePageState extends State<HomePage> {
 
   List<dynamic> get _loanHistory =>
       _sessionAccount?['loanHistory'] as List<dynamic>? ?? <dynamic>[];
+
+  List<Map<String, dynamic>> get _paymentHistory {
+    final raw = _sessionAccount?['paymentHistory'];
+    if (raw is List) {
+      return raw.whereType<Map<String, dynamic>>().toList();
+    }
+    return const [];
+  }
 
   String get _portalLogoUrl =>
       _api.resolveMediaUrl('${_portalContent['logoUrl'] ?? ''}');
@@ -478,6 +489,9 @@ class _HomePageState extends State<HomePage> {
       if ((savedSession['phone'] ?? '').isNotEmpty) {
         _phoneController.text = savedSession['phone']!;
         await _loadPortalSummary(savedSession['phone']!, quiet: true);
+        if (_pendingGatewayReference.isNotEmpty) {
+          _startPendingGatewayWatch();
+        }
       }
     } catch (error) {
       _syncCountrySelection();
@@ -900,6 +914,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _logout() async {
+    _stopPendingGatewayWatch();
     await _sessionStorage.clearSession();
     await _sessionStorage.clearPendingGateway();
     await _firebasePhoneAuthService.signOut();
@@ -1209,6 +1224,13 @@ class _HomePageState extends State<HomePage> {
       final checkoutUrl = '${data['checkoutUrl'] ?? ''}';
       _pendingGatewayReference = reference;
       _pendingGatewayType = type;
+      _lastTransaction = {
+        'type': type,
+        'amount': data['amount'] ?? _repaymentSummary?['amount'] ?? 0,
+        'reference': reference,
+        'status': 'Pending',
+        'date': DateTime.now().toIso8601String(),
+      };
       await _sessionStorage.savePendingGateway(
         reference: reference,
         type: type,
@@ -1222,9 +1244,10 @@ class _HomePageState extends State<HomePage> {
       }
 
       _setMessage(
-        '${response['message'] ?? 'Continue to make payment.'} Then tap verify pending payment.',
+        '${response['message'] ?? 'Continue to make payment.'} We will keep checking in the background.',
         tone: 'info',
       );
+      _startPendingGatewayWatch();
       return;
     }
 
@@ -1239,6 +1262,7 @@ class _HomePageState extends State<HomePage> {
       };
       _pendingGatewayReference = '';
       _pendingGatewayType = '';
+      _stopPendingGatewayWatch();
       await _sessionStorage.clearPendingGateway();
       await _loadPortalSummary(_phoneController.text.trim(), quiet: true);
       _setMessage(
@@ -1276,6 +1300,48 @@ class _HomePageState extends State<HomePage> {
         });
       }
     }
+  }
+
+  void _stopPendingGatewayWatch() {
+    _gatewayWatchTimer?.cancel();
+    _gatewayWatchTimer = null;
+    _gatewayWatchAttempts = 0;
+  }
+
+  void _startPendingGatewayWatch() {
+    if (_pendingGatewayReference.isEmpty) {
+      return;
+    }
+    _stopPendingGatewayWatch();
+    _gatewayWatchAttempts = 0;
+    _gatewayWatchTimer = Timer.periodic(const Duration(seconds: 8), (timer) async {
+      if (!mounted || _pendingGatewayReference.isEmpty) {
+        timer.cancel();
+        return;
+      }
+      if (_gatewayWatchAttempts >= 20) {
+        timer.cancel();
+        return;
+      }
+      _gatewayWatchAttempts += 1;
+      try {
+        final response = await _api.verifyGateway(_pendingGatewayReference);
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        final success = response['success'];
+        if (success == 1) {
+          await _handleGatewayResponse(
+            response,
+            type: _pendingGatewayType.isEmpty ? 'repayment' : _pendingGatewayType,
+          );
+          timer.cancel();
+        }
+      } catch (_) {
+        // Keep polling quietly for background verification.
+      }
+    });
   }
 
   Map<String, dynamic> _buildApplicationPayload() {
@@ -1716,8 +1782,8 @@ class _HomePageState extends State<HomePage> {
                               _gatewayLoading || _selectedRepaymentMethod.isEmpty
                                   ? null
                                   : () async {
+                                      Navigator.of(sheetContext).pop();
                                       await _submitRepayment();
-                                      modalSetState(() {});
                                     },
                           child: Text(
                             _gatewayLoading ? 'Processing...' : 'Pay Now',
@@ -1858,8 +1924,8 @@ class _HomePageState extends State<HomePage> {
                               _gatewayLoading || _selectedExtensionMethod.isEmpty
                                   ? null
                                   : () async {
+                                      Navigator.of(sheetContext).pop();
                                       await _submitExtension();
-                                      modalSetState(() {});
                                     },
                           child: Text(
                             _gatewayLoading ? 'Processing...' : 'Pay Extension Fee',
@@ -1879,13 +1945,41 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _saveProfileChanges() async {
     final previousTab = _activeTab;
-    await _submitProfile();
-    if (!mounted) {
+    final phone = _phoneController.text.trim();
+    if (!_isValidPhone(phone)) {
+      _setMessage('Enter a valid phone number first.', tone: 'error');
       return;
     }
+    if (_emailController.text.trim().isEmpty) {
+      _setMessage('Email is required before saving the profile.', tone: 'error');
+      return;
+    }
+
     setState(() {
-      _activeTab = previousTab;
+      _profileSaving = true;
     });
+
+    try {
+      final response = await _api.updateProfile(
+        phone: phone,
+        application: _buildApplicationPayload(),
+        countryCode: _selectedCountryCode,
+      );
+      _setMessage(
+        '${response['message'] ?? 'Customer profile updated successfully.'}',
+        tone: 'success',
+      );
+      await _loadPortalSummary(phone, quiet: true);
+    } catch (error) {
+      _setMessage(_cleanError(error), tone: 'error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _profileSaving = false;
+          _activeTab = previousTab;
+        });
+      }
+    }
   }
 
   Future<void> _openProfileEditSheet() async {
@@ -2319,10 +2413,11 @@ class _HomePageState extends State<HomePage> {
       children: [
         _HeroCard(
           title: 'Welcome $displayName',
-          subtitle: 'Your mobile account stays synced with the web app.',
+          showLogo: false,
+          compact: true,
         ),
-        const SizedBox(height: 16),
         if (_homeBannerTitle.isNotEmpty || _homeBannerMessage.isNotEmpty) ...[
+          const SizedBox(height: 16),
           _HomeBannerCard(
             badge: _homeBannerBadge,
             title: _homeBannerTitle,
@@ -2365,11 +2460,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        if (_activeLoan != null)
-          _buildActiveLoanSummaryCard(
-            showOpenRecords: true,
-          ),
         if (_lastTransaction != null) ...[
           const SizedBox(height: 16),
           _SectionCard(
@@ -2537,7 +2627,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         if (hasProfile && !canApply && _activeLoan != null)
-          _buildActiveLoanSummaryCard(showOpenRecords: true),
+          _buildActiveLoanSummaryCard(showOpenRecords: false),
         if (hasProfile && !canApply && _activeLoan == null)
           _SectionCard(
             title: 'Loan Application Locked',
@@ -2658,8 +2748,14 @@ class _HomePageState extends State<HomePage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (_activeLoan != null)
-          _buildActiveLoanSummaryCard(showOpenRecords: false),
+        _RecordsTabSwitcher(
+          showPaymentHistory: _paymentHistoryTab,
+          onChanged: (showPaymentHistory) {
+            setState(() {
+              _paymentHistoryTab = showPaymentHistory;
+            });
+          },
+        ),
         if (_pendingGatewayReference.isNotEmpty) ...[
           const SizedBox(height: 16),
           _SectionCard(
@@ -2690,67 +2786,101 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
         const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Loan Records',
-          child: Column(
-            children: _loanHistory.isEmpty
-                ? const [
-                    Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: Text('No loan records available yet.'),
-                    ),
-                  ]
-                : _loanHistory
-                    .map(
-                      (item) => item is Map<String, dynamic>
-                          ? Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF7F9FC),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Loan ${item['ID'] ?? item['loanId'] ?? '-'}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
+        if (!_paymentHistoryTab)
+          _SectionCard(
+            title: 'Loan Records',
+            child: Column(
+              children: _loanHistory.isEmpty
+                  ? const [
+                      Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text('No loan records available yet.'),
+                      ),
+                    ]
+                  : _loanHistory
+                      .map(
+                        (item) => item is Map<String, dynamic>
+                            ? Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF7F9FC),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Loan ${item['ID'] ?? item['loanId'] ?? '-'}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    _LabelValueRow(
-                                      label: 'Amount',
-                                      value: _formatMoney(item['amount'] ?? 0),
-                                    ),
-                                    _LabelValueRow(
-                                      label: 'Repayment',
-                                      value: _formatMoney(item['repaymentAmount'] ?? 0),
-                                    ),
-                                    _LabelValueRow(
-                                      label: 'Loan Status',
-                                      value: '${item['loanStatus'] ?? '-'}',
-                                    ),
-                                    _LabelValueRow(
-                                      label: 'Payment Status',
-                                      value: '${item['paymentStatus'] ?? '-'}',
-                                    ),
-                                    _LabelValueRow(
-                                      label: 'Applied',
-                                      value: _formatDate(item['doa'] ?? ''),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 8),
+                                      _LabelValueRow(
+                                        label: 'Amount',
+                                        value: _formatMoney(item['amount'] ?? 0),
+                                      ),
+                                      _LabelValueRow(
+                                        label: 'Repayment',
+                                        value: _formatMoney(item['repaymentAmount'] ?? 0),
+                                      ),
+                                      _LabelValueRow(
+                                        label: 'Loan Status',
+                                        value: '${item['loanStatus'] ?? '-'}',
+                                      ),
+                                      _LabelValueRow(
+                                        label: 'Payment Status',
+                                        value: '${item['paymentStatus'] ?? '-'}',
+                                      ),
+                                      _LabelValueRow(
+                                        label: 'Applied',
+                                        value: _formatDate(item['doa'] ?? ''),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    )
-                    .toList(),
+                              )
+                            : const SizedBox.shrink(),
+                      )
+                      .toList(),
+            ),
           ),
-        ),
+        if (_paymentHistoryTab)
+          _SectionCard(
+            title: 'Payment History',
+            child: Column(
+              children: _paymentHistory.isEmpty
+                  ? const [
+                      Padding(
+                        padding: EdgeInsets.only(top: 4),
+                        child: Text('No payment history available yet.'),
+                      ),
+                    ]
+                  : _paymentHistory
+                      .map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _PaymentHistoryTile(
+                            title:
+                                '${item['transactionTypeLabel'] ?? item['transactionType'] ?? 'Payment'}',
+                            amount: _formatMoney(item['amount'] ?? 0),
+                            status: '${item['status'] ?? '-'}',
+                            date: _formatDate(item['date'] ?? item['createdAt'] ?? ''),
+                            reference: '${item['reference'] ?? '-'}',
+                            loanId: '${item['loanId'] ?? '-'}',
+                            loanAmount: _formatMoney(item['loanAmount'] ?? 0),
+                            remainingBalance:
+                                _formatMoney(item['remainingBalance'] ?? 0),
+                            method: '${item['methodLabel'] ?? item['methodKey'] ?? '-'}',
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
       ],
     );
   }
@@ -2972,17 +3102,21 @@ class _HeroCard extends StatelessWidget {
     this.logoUrl = '',
     required this.title,
     this.subtitle = '',
+    this.showLogo = true,
+    this.compact = false,
   });
 
   final String logoUrl;
   final String title;
   final String subtitle;
+  final bool showLogo;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(compact ? 16 : 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
@@ -3003,11 +3137,13 @@ class _HeroCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _BrandLogo(
-            logoUrl: logoUrl,
-            title: title,
-          ),
-          const SizedBox(width: 14),
+          if (showLogo) ...[
+            _BrandLogo(
+              logoUrl: logoUrl,
+              title: title,
+            ),
+            const SizedBox(width: 14),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3016,14 +3152,14 @@ class _HeroCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: compact ? 20 : 24,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 if (subtitle.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     subtitle,
                     style: const TextStyle(
@@ -3237,6 +3373,140 @@ class _HomeBannerCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _RecordsTabSwitcher extends StatelessWidget {
+  const _RecordsTabSwitcher({
+    required this.showPaymentHistory,
+    required this.onChanged,
+  });
+
+  final bool showPaymentHistory;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F5F9),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RecordsTabButton(
+              label: 'Loan Records',
+              selected: !showPaymentHistory,
+              onPressed: () => onChanged(false),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _RecordsTabButton(
+              label: 'Payment History',
+              selected: showPaymentHistory,
+              onPressed: () => onChanged(true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordsTabButton extends StatelessWidget {
+  const _RecordsTabButton({
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: selected ? Colors.white : Colors.transparent,
+        foregroundColor: selected ? AppTheme.textMain : AppTheme.textSoft,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentHistoryTile extends StatelessWidget {
+  const _PaymentHistoryTile({
+    required this.title,
+    required this.amount,
+    required this.status,
+    required this.date,
+    required this.reference,
+    required this.loanId,
+    required this.loanAmount,
+    required this.remainingBalance,
+    required this.method,
+  });
+
+  final String title;
+  final String amount;
+  final String status;
+  final String date;
+  final String reference;
+  final String loanId;
+  final String loanAmount;
+  final String remainingBalance;
+  final String method;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textMain,
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('$amount • $status'),
+          ),
+          children: [
+            _LabelValueRow(label: 'Reference', value: reference),
+            _LabelValueRow(label: 'Date', value: date),
+            _LabelValueRow(label: 'Loan ID', value: loanId),
+            _LabelValueRow(label: 'Loan Amount', value: loanAmount),
+            _LabelValueRow(label: 'Remaining Balance', value: remainingBalance),
+            _LabelValueRow(label: 'Method', value: method),
+          ],
+        ),
       ),
     );
   }

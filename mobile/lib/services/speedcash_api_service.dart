@@ -135,6 +135,21 @@ class SpeedCashApiService {
     );
   }
 
+  Future<Map<String, dynamic>> updateProfile({
+    required String phone,
+    required Map<String, dynamic> application,
+    required String countryCode,
+  }) {
+    return _request(
+      path: '/application/update-profile',
+      body: {
+        'phone': phone,
+        'countryCode': countryCode,
+        'application': application,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> applyLoan(Map<String, dynamic> payload) {
     return _request(path: '/portal/apply-loan', body: payload);
   }
