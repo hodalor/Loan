@@ -1,0 +1,35 @@
+name: speedcash_mobile
+description: SpeedCash customer mobile app.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: 1.0.9
+  firebase_auth: 5.7.0
+  firebase_core: 3.15.2
+  flutter_dotenv: 5.2.1
+  http: 1.2.2
+  image_picker: 1.1.2
+  intl: 0.19.0
+  shared_preferences: 2.3.2
+  url_launcher: 6.3.1
+
+dependency_overrides:
+  flutter_plugin_android_lifecycle: 2.0.24
+  image_picker_android: 0.8.12+21
+  url_launcher_android: 6.3.14
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
