@@ -7,6 +7,7 @@ import {
   readSystemConfig,
   resetSystemConfig,
 } from "../../../libs/systemConfig";
+import { resolveMediaUrl } from "../../../libs/mediaUrl";
 import { _getSystemConfig, _updateSystemConfig } from "../../../handlers";
 import { GlobalContext } from "../../../libs/context/globalContext";
 
@@ -136,6 +137,7 @@ export default function SystemConfig() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [configReady, setConfigReady] = React.useState(false);
+  const [homeBannerImageFile, setHomeBannerImageFile] = React.useState(null);
   const [termDraft, setTermDraft] = React.useState(() =>
     buildLoanTermDraft({}, defaultSystemConfig.loanTerms.length)
   );
@@ -163,6 +165,7 @@ export default function SystemConfig() {
           : readSystemConfig() || defaultSystemConfig;
 
       setConfig(nextConfig);
+      setHomeBannerImageFile(null);
       setTermDraft(buildLoanTermDraft({}, (nextConfig.loanTerms || []).length));
       setLevelDraft(buildLoanLevelDraft({}));
       setExtensionDraft(buildExtensionDraft({}));
@@ -184,6 +187,22 @@ export default function SystemConfig() {
 
     loadConfig();
   }, []);
+
+  const resolvedBannerPreviewUrl = React.useMemo(() => {
+    if (homeBannerImageFile instanceof File) {
+      return URL.createObjectURL(homeBannerImageFile);
+    }
+
+    return resolveMediaUrl(config.portalContent?.homeBannerImageUrl || "");
+  }, [config.portalContent?.homeBannerImageUrl, homeBannerImageFile]);
+
+  React.useEffect(() => {
+    return () => {
+      if (resolvedBannerPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(resolvedBannerPreviewUrl);
+      }
+    };
+  }, [resolvedBannerPreviewUrl]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -606,9 +625,13 @@ export default function SystemConfig() {
   const handleSave = async () => {
     setSaving(true);
 
-    const response = await _updateSystemConfig(config);
+    const response = await _updateSystemConfig({
+      ...config,
+      homeBannerImageFile,
+    });
     if (response.success === 1 && response.data) {
       setConfig(response.data);
+      setHomeBannerImageFile(null);
       saveSystemConfig(response.data);
       setSavedAt(new Date().toLocaleString());
       resetTermEditor((response.data.loanTerms || []).length);
@@ -623,6 +646,7 @@ export default function SystemConfig() {
   const handleReset = () => {
     const nextConfig = resetSystemConfig();
     setConfig(nextConfig);
+    setHomeBannerImageFile(null);
     setSavedAt("");
     resetTermEditor(nextConfig.loanTerms.length);
     resetLevelEditor();
@@ -1708,6 +1732,53 @@ export default function SystemConfig() {
                         }
                         placeholder="1.5.0"
                       />
+                    </div>
+                    <div>
+                      <label className="app-label">Home Banner Image</label>
+                      <label className="flex min-h-[140px] w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center transition hover:border-blue-400 hover:bg-blue-50/60">
+                        <span className="text-sm font-semibold text-slate-700">
+                          {homeBannerImageFile?.name || "Upload home banner image"}
+                        </span>
+                        <span className="mt-1 text-xs text-slate-500">
+                          PNG, JPG, WEBP, HEIC or HEIF. Recommended wide banner image.
+                        </span>
+                        <input
+                          hidden
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp,image/heic,image/heif"
+                          disabled={!canSaveConfig}
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] || null;
+                            setHomeBannerImageFile(file);
+                          }}
+                        />
+                      </label>
+                      {resolvedBannerPreviewUrl ? (
+                        <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                          <img
+                            src={resolvedBannerPreviewUrl}
+                            alt="Home banner preview"
+                            className="h-40 w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-slate-500">
+                          No home banner uploaded yet.
+                        </p>
+                      )}
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          className="app-btn app-btn-secondary"
+                          disabled={!canSaveConfig}
+                          onClick={() => {
+                            setHomeBannerImageFile(null);
+                            updatePortalContentField("homeBannerImageUrl", "");
+                          }}
+                        >
+                          Remove Banner
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

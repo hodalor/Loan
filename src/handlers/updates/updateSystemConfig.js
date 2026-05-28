@@ -5,16 +5,25 @@ const _updateSystemConfig = async (data) => {
   let resp = {};
 
   try {
+    const { homeBannerImageFile, ...configPayload } = data || {};
+    const formData = new FormData();
+    formData.append(
+      "config",
+      JSON.stringify({
+        ...configPayload,
+      })
+    );
+    formData.append("auditActor", JSON.stringify(getAuditActor()));
+    if (homeBannerImageFile instanceof File) {
+      formData.append("homeBannerImage", homeBannerImageFile);
+    }
+
     const request = await fetch(`${adminBaseUrl}system-config`, {
       method: "PATCH",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        ...data,
-        auditActor: getAuditActor(),
-      }),
+      body: formData,
     });
 
     resp = await request.json();

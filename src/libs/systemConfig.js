@@ -241,6 +241,10 @@ export const defaultSystemConfig = {
     tagline: "Fast customer login, application tracking, and identity verification.",
     footerText: "All rights reserved.",
     footerVersion: "1.5.0",
+    homeBannerImageUrl: "",
+    homeBannerBadge: "",
+    homeBannerTitle: "",
+    homeBannerMessage: "",
     faqs: [
       "Loan approval is subject to review by the admin team.",
       "You cannot apply for a new loan while another one is active.",
