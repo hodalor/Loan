@@ -1208,6 +1208,10 @@
   text-align: center;
 }
 
+.home-hero-card-compact {
+  padding: 16px 18px;
+}
+
 .home-hero-card h2,
 .offer-card h2,
 .review-card h2,
@@ -1221,6 +1225,45 @@
   margin: 8px 0 0;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.home-banner-card {
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.home-banner-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  object-fit: cover;
+}
+
+.quick-stats-grid-mobile {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.quick-stat-card {
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px;
+}
+
+.quick-stat-card small {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+}
+
+.quick-stat-card strong {
+  color: var(--text-main);
+  font-size: 18px;
 }
 
 .home-feature-grid {
@@ -1705,6 +1748,67 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.records-tab-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-radius: 18px;
+  background: #f3f5f9;
+}
+
+.records-tab-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 14px;
+  padding: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.records-tab-btn-active {
+  background: #fff;
+  color: var(--text-main);
+}
+
+.payment-history-card {
+  border-radius: 18px;
+  background: #f7f9fc;
+  padding: 14px;
+}
+
+.payment-history-card summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.payment-history-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.payment-history-card summary span {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.payment-history-card summary strong {
+  color: var(--text-main);
+}
+
+.payment-history-card summary small {
+  color: var(--text-soft);
+}
+
+.payment-history-body {
+  margin-top: 14px;
 }
 
 .record-card {

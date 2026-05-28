@@ -65,6 +65,7 @@ let runtimeCurrencySymbol = "K";
 const buildDefaultPortalContent = () => ({
   appName: "SPEED CASH",
   logoUrl: "",
+  homeBannerImageUrl: "",
   tagline: "Fast customer login, application tracking, and identity verification.",
   footerText: "All rights reserved.",
   footerVersion: "1.5.0",
@@ -819,6 +820,7 @@ function App() {
     () => sessionAccount?.loanHistory || sessionAccount?.customer?.loan?.loans || [],
     [sessionAccount?.customer?.loan?.loans, sessionAccount?.loanHistory]
   );
+  const paymentHistory = useMemo(() => sessionAccount?.paymentHistory || [], [sessionAccount?.paymentHistory]);
   const loanRecords = useMemo(() => buildLoanRecords(loanHistory), [loanHistory]);
   const hasDraft = Boolean(sessionAccount?.draftApplication);
   const hasProfile = Boolean(sessionAccount?.customer?._id || sessionAccount?.hasProfile);
@@ -2313,7 +2315,6 @@ function App() {
                   displayName={displayName}
                   offer={loanOffer}
                   content={portalContent}
-                  activeLoan={activeLoan}
                   transactionReceipt={transactionReceipt}
                   hasProfile={hasProfile}
                   hasDraft={hasDraft}
@@ -2420,7 +2421,11 @@ function App() {
               ) : null}
 
               {activeTab === "history" ? (
-                <RecordsTab records={loanRecords} onStartApplication={handleOpenApply} />
+                <RecordsTab
+                  records={loanRecords}
+                  paymentHistory={paymentHistory}
+                  onStartApplication={handleOpenApply}
+                />
               ) : null}
 
               {activeTab === "profile" ? (
@@ -2463,7 +2468,6 @@ function HomeTab({
   displayName,
   offer,
   content,
-  activeLoan,
   transactionReceipt,
   hasProfile,
   hasDraft,
@@ -2471,23 +2475,14 @@ function HomeTab({
   onOpenHistory,
 }) {
   const canApplyNow = Boolean(offer?.canApply);
-  const applyCardText = !hasProfile
-    ? "Complete your profile first to unlock loan offers"
-    : canApplyNow
-    ? `Get instant loans up to ${formatCurrency(offer?.maxAmount || 0)}`
-    : `Current loan status: ${offer?.activeLoanStatus || "Review"}`;
-  const applyButtonLabel = hasDraft
-    ? "Continue Profile"
-    : !hasProfile
-    ? "Complete Profile"
-    : canApplyNow
-    ? "Apply Now"
-    : "View Status";
   const faqItems = content?.faqs?.length ? content.faqs : buildDefaultPortalContent().faqs;
   const guideItems =
     content?.repaymentTutorials?.length
       ? content.repaymentTutorials
       : buildDefaultPortalContent().repaymentTutorials;
+  const homeBannerImageUrl = resolveMediaUrl(
+    content?.homeBannerImageUrl || buildDefaultPortalContent().homeBannerImageUrl
+  );
   const supportItems = [
     { label: "WhatsApp", value: content?.supportWhatsapp || buildDefaultPortalContent().supportWhatsapp },
     { label: "Phone", value: content?.supportPhone || buildDefaultPortalContent().supportPhone },
@@ -2496,56 +2491,30 @@ function HomeTab({
 
   return (
     <div className="portal-stack">
-      <div className="home-hero-card">
-        <h2>Welcome, {displayName}</h2>
-        <p>Your trusted partner for quick and easy loans.</p>
+      <div className="home-hero-card home-hero-card-compact">
+        <h2>Welcome {displayName}</h2>
       </div>
 
-      <div className="home-feature-grid">
-        <FeatureActionCard
-          tone="blue"
-          title="Apply for Loan"
-          text={applyCardText}
-          buttonLabel={applyButtonLabel}
-          onClick={onStartApply}
-        />
-        <FeatureActionCard
-          tone="green"
-          title="Loan History"
-          text="View your loan transactions"
-          buttonLabel="View History"
-          onClick={onOpenHistory}
-        />
-      </div>
-
-      <div className="quick-stats-card">
-        <h3>Quick Stats</h3>
-        <div className="quick-stats-grid">
-          <QuickStat label="Available Credit" value={formatCurrency(offer?.availableCredit || 0)} />
-          <QuickStat label="Loans Completed" value={String(offer?.settledLoans || 0)} />
-          <QuickStat label="Credit Score" value={String(offer?.creditScore || 0)} />
-        </div>
-      </div>
-
-      {activeLoan ? (
-        <div className="status-callout-card">
-          <strong>{activeLoan.title || "Loan status"}</strong>
-          <span>{activeLoan.message}</span>
-          <span>
-            {activeLoan.loanId ? `Loan ID: ${activeLoan.loanId}` : "Loan record available"} ·{" "}
-            {activeLoan.dueDate
-              ? formatDate(activeLoan.dueDate)
-              : activeLoan.statusKey === "awaiting-disbursement"
-              ? "Awaiting disbursement"
-              : "Waiting for review"}
-          </span>
-          {activeLoan.statusKey === "approved" || activeLoan.statusKey === "overdue" ? (
-            <span>
-              Total due: {formatCurrency(activeLoan.totalDue || 0)} · {formatDaysLabel(activeLoan.daysRemaining)}
-            </span>
-          ) : null}
+      {homeBannerImageUrl ? (
+        <div className="home-banner-card">
+          <img src={homeBannerImageUrl} alt="Home banner" />
         </div>
       ) : null}
+
+      <div className="quick-stats-grid quick-stats-grid-mobile">
+        <div className="quick-stat-card">
+          <small>Available Credit</small>
+          <strong>{formatCurrency(offer?.availableCredit || 0)}</strong>
+        </div>
+        <div className="quick-stat-card">
+          <small>Completed Loans</small>
+          <strong>{String(offer?.settledLoans || 0)}</strong>
+        </div>
+        <div className="quick-stat-card">
+          <small>Credit Score</small>
+          <strong>{String(offer?.creditScore || 0)}</strong>
+        </div>
+      </div>
 
       {transactionReceipt ? (
         <div className="transaction-receipt-card">
@@ -2584,6 +2553,31 @@ function HomeTab({
           ) : null}
         </div>
       ) : null}
+
+      <div className="home-feature-grid">
+        <FeatureActionCard
+          tone="blue"
+          title="Apply"
+          text={
+            hasDraft
+              ? "Continue your draft profile or application."
+              : !hasProfile
+              ? "Complete your profile first to unlock loan offers."
+              : canApplyNow
+              ? `Get instant loans up to ${formatCurrency(offer?.maxAmount || 0)}`
+              : `Current loan status: ${offer?.activeLoanStatus || "Review"}`
+          }
+          buttonLabel={hasDraft ? "Continue Profile" : canApplyNow ? "Apply Now" : "Open Apply"}
+          onClick={onStartApply}
+        />
+        <FeatureActionCard
+          tone="green"
+          title="Records"
+          text="Open loan records and payment history."
+          buttonLabel="Open Records"
+          onClick={onOpenHistory}
+        />
+      </div>
 
       <GuideAccordion title="Repayment Tutorials" items={guideItems} tone="blue" />
       <GuideAccordion title="Frequently Asked Questions" items={faqItems} tone="cyan" />
@@ -2630,7 +2624,6 @@ function LoanApplyTab({
   onOpenRepayment,
   onOpenExtension,
   onClearLifecycleAction,
-  onOpenRecords,
 }) {
   if (!offer) {
     return <div className="portal-loading">Loading available loan offer...</div>;
@@ -2657,11 +2650,6 @@ function LoanApplyTab({
             </div>
           </div>
 
-          <div className="actions portal-actions">
-            <button type="button" className="ghost-btn" onClick={onOpenRecords}>
-              Open Records
-            </button>
-          </div>
         </div>
       );
     }
@@ -2682,11 +2670,6 @@ function LoanApplyTab({
             </div>
           </div>
 
-          <div className="actions portal-actions">
-            <button type="button" className="ghost-btn" onClick={onOpenRecords}>
-              Open Records
-            </button>
-          </div>
         </div>
       );
     }
@@ -2992,9 +2975,6 @@ function LoanApplyTab({
 
           {!lifecycleAction ? (
             <div className="actions portal-actions">
-              <button type="button" className="ghost-btn" onClick={onOpenRecords}>
-                Open Records
-              </button>
               <button
                 type="button"
                 className="primary-btn"
@@ -3046,11 +3026,6 @@ function LoanApplyTab({
           </div>
         </div>
 
-        <div className="actions portal-actions">
-          <button type="button" className="ghost-btn" onClick={onOpenRecords}>
-            Open Records
-          </button>
-        </div>
       </div>
     );
   }
@@ -3425,10 +3400,29 @@ function ProfileApplicationFlow({
   );
 }
 
-function RecordsTab({ records, onStartApplication }) {
+function RecordsTab({ records, paymentHistory, onStartApplication }) {
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+
   return (
     <div className="portal-stack">
-      {records.length === 0 ? (
+      <div className="records-tab-switcher">
+        <button
+          type="button"
+          className={`records-tab-btn ${!showPaymentHistory ? "records-tab-btn-active" : ""}`}
+          onClick={() => setShowPaymentHistory(false)}
+        >
+          Loan Records
+        </button>
+        <button
+          type="button"
+          className={`records-tab-btn ${showPaymentHistory ? "records-tab-btn-active" : ""}`}
+          onClick={() => setShowPaymentHistory(true)}
+        >
+          Payment History
+        </button>
+      </div>
+
+      {!showPaymentHistory && records.length === 0 ? (
         <div className="empty-state-card">
           <h3>No records yet</h3>
           <p>Your loan and repayment records will appear here once activity starts.</p>
@@ -3436,50 +3430,80 @@ function RecordsTab({ records, onStartApplication }) {
             Open Apply
           </button>
         </div>
+      ) : showPaymentHistory && !(paymentHistory || []).length ? (
+        <div className="empty-state-card">
+          <h3>No payment history yet</h3>
+          <p>Your repayments and extension transactions will appear here.</p>
+        </div>
       ) : (
         <div className="record-card-list">
-          {records.map((record) => (
-            <div key={record.id} className="record-card">
-              <div className="record-card-top">
-                <div className={`record-icon ${record.direction === "credit" ? "record-credit" : "record-debit"}`}>
-                  {record.direction === "credit" ? "L" : "R"}
-                </div>
-                <div className="record-main">
-                  <div className="record-title-row">
-                    <strong>{record.type}</strong>
-                    <span className={`record-amount ${record.direction === "credit" ? "record-amount-plus" : "record-amount-minus"}`}>
-                      {record.direction === "credit" ? "+" : "-"} {formatCurrency(record.amount)}
-                    </span>
-                  </div>
-                  <span className="record-status">{record.status}</span>
-                  {record.badges?.length ? (
-                    <div className="record-badge-row">
-                      {record.badges.map((badge) => (
-                        <span
-                          key={`${record.id}-${badge.label}`}
-                          className={`record-badge record-badge-${badge.tone || "neutral"}`}
-                        >
-                          {badge.label}
+          {!showPaymentHistory
+            ? records.map((record) => (
+                <div key={record.id} className="record-card">
+                  <div className="record-card-top">
+                    <div className={`record-icon ${record.direction === "credit" ? "record-credit" : "record-debit"}`}>
+                      {record.direction === "credit" ? "L" : "R"}
+                    </div>
+                    <div className="record-main">
+                      <div className="record-title-row">
+                        <strong>{record.type}</strong>
+                        <span className={`record-amount ${record.direction === "credit" ? "record-amount-plus" : "record-amount-minus"}`}>
+                          {record.direction === "credit" ? "+" : "-"} {formatCurrency(record.amount)}
                         </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  <p>{record.subtitle}</p>
-                  {record.metaRows?.length ? (
-                    <div className="record-meta-grid">
-                      {record.metaRows.map((item) => (
-                        <div key={`${record.id}-${item.label}`} className="record-meta-card">
-                          <small>{item.label}</small>
-                          <strong>{item.value}</strong>
+                      </div>
+                      <span className="record-status">{record.status}</span>
+                      {record.badges?.length ? (
+                        <div className="record-badge-row">
+                          {record.badges.map((badge) => (
+                            <span
+                              key={`${record.id}-${badge.label}`}
+                              className={`record-badge record-badge-${badge.tone || "neutral"}`}
+                            >
+                              {badge.label}
+                            </span>
+                          ))}
                         </div>
-                      ))}
+                      ) : null}
+                      <p>{record.subtitle}</p>
+                      {record.metaRows?.length ? (
+                        <div className="record-meta-grid">
+                          {record.metaRows.map((item) => (
+                            <div key={`${record.id}-${item.label}`} className="record-meta-card">
+                              <small>{item.label}</small>
+                              <strong>{item.value}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <small>{formatDate(record.date)}</small>
                     </div>
-                  ) : null}
-                  <small>{formatDate(record.date)}</small>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              ))
+            : (paymentHistory || []).map((item, index) => (
+                <details
+                  key={item.id || item.reference || `${item.loanId}-${index}`}
+                  className="payment-history-card"
+                >
+                  <summary>
+                    <span>
+                      <strong>{item.transactionTypeLabel || item.transactionType || "Payment"}</strong>
+                      <small>{formatCurrency(item.amount || 0)} · {item.status || "-"}</small>
+                    </span>
+                    <small>{formatDate(item.date)}</small>
+                  </summary>
+                  <div className="payment-history-body">
+                    <ReviewRow label="Reference" value={item.reference || "-"} />
+                    <ReviewRow label="Loan ID" value={item.loanId || "-"} />
+                    <ReviewRow label="Loan Amount" value={formatCurrency(item.loanAmount || 0)} />
+                    <ReviewRow
+                      label="Remaining Balance"
+                      value={formatCurrency(item.remainingBalance || 0)}
+                    />
+                    <ReviewRow label="Method" value={item.methodLabel || "-"} />
+                  </div>
+                </details>
+              ))}
         </div>
       )}
     </div>
@@ -3578,15 +3602,6 @@ function FeatureActionCard({ tone, title, text, buttonLabel, onClick }) {
       <button type="button" onClick={onClick}>
         {buttonLabel}
       </button>
-    </div>
-  );
-}
-
-function QuickStat({ label, value }) {
-  return (
-    <div className="quick-stat">
-      <strong>{value}</strong>
-      <span>{label}</span>
     </div>
   );
 }
