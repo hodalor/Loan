@@ -1266,55 +1266,6 @@
   font-size: 18px;
 }
 
-.home-feature-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.feature-action-card {
-  border-radius: 18px;
-  padding: 14px 13px;
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
-}
-
-.feature-action-blue {
-  background: linear-gradient(135deg, var(--surface-dark), var(--surface-dark-alt));
-}
-
-.feature-action-green {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-}
-
-.feature-action-card strong {
-  display: block;
-  font-size: 16px;
-}
-
-.feature-action-card p {
-  margin: 6px 0 10px;
-  color: rgba(255, 255, 255, 0.92);
-  line-height: 1.4;
-  font-size: 13px;
-}
-
-.feature-action-card button {
-  min-width: 132px;
-  border: 0;
-  border-radius: 12px;
-  padding: 9px 13px;
-  background: rgba(255, 255, 255, 0.94);
-  color: var(--surface-dark-alt);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.feature-action-green button {
-  color: var(--accent-ink);
-}
-
 .quick-stats-card h3 {
   margin: 0 0 12px;
   text-align: center;
@@ -1927,38 +1878,31 @@
   color: var(--text-soft);
 }
 
-.record-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  margin: 7px 0 4px;
-}
-
-.record-meta-card {
+.record-detail-list {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
-  min-width: 0;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-soft);
-  padding: 8px 9px;
+  margin: 10px 0 6px;
 }
 
-.record-meta-card small {
-  display: inline;
-  margin-bottom: 0;
+.record-detail-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.record-detail-row span {
   color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.25;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
-.record-meta-card strong {
+.record-detail-row strong {
   flex-shrink: 0;
   color: var(--text-main);
   font-size: 13px;
-  line-height: 1.25;
+  line-height: 1.4;
   text-align: right;
 }
 
@@ -1968,8 +1912,7 @@
 }
 
 @media (max-width: 360px) {
-  .loan-status-grid,
-  .record-meta-grid {
+  .loan-status-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -2051,7 +1994,6 @@
 }
 
 @media (min-width: 768px) {
-  .home-feature-grid,
   .term-grid {
     grid-template-columns: 1fr;
   }
@@ -2066,10 +2008,6 @@
 }
 
 @media (max-width: 640px) {
-  .record-meta-grid {
-    grid-template-columns: 1fr;
-  }
-
   .loan-status-hero-top,
   .record-title-row {
     flex-direction: column;

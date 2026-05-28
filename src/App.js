@@ -294,28 +294,6 @@ const formatDaysLabel = (days) => {
   const overdueDays = Math.abs(days);
   return `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`;
 };
-const SETTLED_PAYMENT_STATUSES = ["Paid", "Payed"];
-const isSettledPortalLoan = (loan = {}) =>
-  SETTLED_PAYMENT_STATUSES.includes(String(loan?.paymentStatus || "").trim()) ||
-  String(loan?.caseStatus || "").trim() === "Completed" ||
-  toMoney(loan?.amountPaid) + 0.009 >= toMoney(loan?.repaymentAmount);
-const getCalendarDayDifference = (left, right = new Date()) => {
-  const leftDate = new Date(left);
-  const rightDate = new Date(right);
-
-  if (Number.isNaN(leftDate.getTime()) || Number.isNaN(rightDate.getTime())) {
-    return null;
-  }
-
-  const leftMidnight = new Date(leftDate.getFullYear(), leftDate.getMonth(), leftDate.getDate());
-  const rightMidnight = new Date(
-    rightDate.getFullYear(),
-    rightDate.getMonth(),
-    rightDate.getDate()
-  );
-
-  return Math.round((leftMidnight.getTime() - rightMidnight.getTime()) / (1000 * 3600 * 24));
-};
 const getRepaymentMethodLabel = (options = [], key = "") =>
   options.find((item) => item.key === key)?.label || key || "-";
 const getGatewayMobileMoneyNetworks = (lifecycleConfig = {}) =>
@@ -338,11 +316,10 @@ const getRecordBadges = (loan = {}) => {
   }
 
   if (loan.paymentStatus) {
+    const paymentStatus = String(loan.paymentStatus).trim();
     badges.push({
-      label: loan.paymentStatus,
-      tone: SETTLED_PAYMENT_STATUSES.includes(String(loan.paymentStatus).trim())
-        ? "success"
-        : "neutral",
+      label: paymentStatus,
+      tone: ["Paid", "Payed"].includes(paymentStatus) ? "success" : "neutral",
     });
   }
 
@@ -2302,7 +2279,6 @@ function App() {
                   hasProfile={hasProfile}
                   hasDraft={hasDraft}
                   onStartApply={handleOpenApply}
-                  onOpenHistory={() => setActiveTab("history")}
                 />
               ) : null}
 
@@ -2452,12 +2428,7 @@ function HomeTab({
   offer,
   content,
   transactionReceipt,
-  hasProfile,
-  hasDraft,
-  onStartApply,
-  onOpenHistory,
 }) {
-  const canApplyNow = Boolean(offer?.canApply);
   const faqItems = content?.faqs?.length ? content.faqs : buildDefaultPortalContent().faqs;
   const guideItems =
     content?.repaymentTutorials?.length
@@ -2536,31 +2507,6 @@ function HomeTab({
           ) : null}
         </div>
       ) : null}
-
-      <div className="home-feature-grid">
-        <FeatureActionCard
-          tone="blue"
-          title="Apply"
-          text={
-            hasDraft
-              ? "Continue your draft profile or application."
-              : !hasProfile
-              ? "Complete your profile first to unlock loan offers."
-              : canApplyNow
-              ? `Get instant loans up to ${formatCurrency(offer?.maxAmount || 0)}`
-              : `Current loan status: ${offer?.activeLoanStatus || "Review"}`
-          }
-          buttonLabel={hasDraft ? "Continue Profile" : canApplyNow ? "Apply Now" : "Open Apply"}
-          onClick={onStartApply}
-        />
-        <FeatureActionCard
-          tone="green"
-          title="Records"
-          text="Open loan records and payment history."
-          buttonLabel="Open Records"
-          onClick={onOpenHistory}
-        />
-      </div>
 
       <GuideAccordion title="Repayment Tutorials" items={guideItems} tone="blue" />
       <GuideAccordion title="Frequently Asked Questions" items={faqItems} tone="cyan" />
@@ -3449,10 +3395,10 @@ function RecordsTab({ records, paymentHistory, onStartApplication }) {
                       ) : null}
                       <p>{record.subtitle}</p>
                       {record.metaRows?.length ? (
-                        <div className="record-meta-grid">
+                        <div className="record-detail-list">
                           {record.metaRows.map((item) => (
-                            <div key={`${record.id}-${item.label}`} className="record-meta-card">
-                              <small>{item.label}</small>
+                            <div key={`${record.id}-${item.label}`} className="record-detail-row">
+                              <span>{item.label}</span>
                               <strong>{item.value}</strong>
                             </div>
                           ))}
@@ -3574,18 +3520,6 @@ function BottomNav({ activeTab, onChange }) {
         </button>
       ))}
     </nav>
-  );
-}
-
-function FeatureActionCard({ tone, title, text, buttonLabel, onClick }) {
-  return (
-    <div className={`feature-action-card feature-action-${tone}`}>
-      <strong>{title}</strong>
-      <p>{text}</p>
-      <button type="button" onClick={onClick}>
-        {buttonLabel}
-      </button>
-    </div>
   );
 }
 
