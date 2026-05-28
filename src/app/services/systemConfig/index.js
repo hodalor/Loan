@@ -213,6 +213,10 @@ const DEFAULT_PORTAL_CONTENT = {
   tagline: "Fast customer login, application tracking, and identity verification.",
   footerText: "All rights reserved.",
   footerVersion: "1.5.0",
+  homeBannerImageUrl: "",
+  homeBannerBadge: "",
+  homeBannerTitle: "",
+  homeBannerMessage: "",
   faqs: [
     "Loan approval is subject to review by the admin team.",
     "You cannot apply for a new loan while another one is active.",
@@ -462,6 +466,18 @@ const sanitizePortalContent = (content = {}) => ({
   footerText: String(content?.footerText || DEFAULT_PORTAL_CONTENT.footerText).trim(),
   footerVersion: String(
     content?.footerVersion || DEFAULT_PORTAL_CONTENT.footerVersion
+  ).trim(),
+  homeBannerImageUrl: String(
+    content?.homeBannerImageUrl || DEFAULT_PORTAL_CONTENT.homeBannerImageUrl
+  ).trim(),
+  homeBannerBadge: String(
+    content?.homeBannerBadge || DEFAULT_PORTAL_CONTENT.homeBannerBadge
+  ).trim(),
+  homeBannerTitle: String(
+    content?.homeBannerTitle || DEFAULT_PORTAL_CONTENT.homeBannerTitle
+  ).trim(),
+  homeBannerMessage: String(
+    content?.homeBannerMessage || DEFAULT_PORTAL_CONTENT.homeBannerMessage
   ).trim(),
   faqs: sanitizeTextList(content?.faqs, DEFAULT_PORTAL_CONTENT.faqs),
   repaymentTutorials: sanitizeTextList(

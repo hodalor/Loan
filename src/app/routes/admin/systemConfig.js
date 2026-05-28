@@ -3,6 +3,8 @@ const {
   getSystemConfig,
   saveSystemConfig,
 } = require("../../services/systemConfig");
+const { upload } = require("../../../libs/uploadImage");
+const { resolveUploadedFileUrl } = require("../../../libs/mediaStorage");
 const {
   getAuditActorFromRequest,
   summarizeSystemConfig,
@@ -11,6 +13,16 @@ const {
 } = require("../../../libs/audit");
 
 const router = express.Router();
+const uploadSystemConfigAssets = (req, res, next) =>
+  upload.single("homeBannerImage")(req, res, (error) => {
+    if (error) {
+      return res.status(400).json({
+        success: 0,
+        message: error.message || "Invalid image upload.",
+      });
+    }
+    return next();
+  });
 
 router.get("/system-config", async (req, res) => {
   try {
@@ -41,10 +53,27 @@ router.get("/system-config", async (req, res) => {
   }
 });
 
-router.patch("/system-config", async (req, res) => {
+router.patch("/system-config", uploadSystemConfigAssets, async (req, res) => {
   try {
     const previousConfig = await getSystemConfig();
-    const { auditActor, ...payload } = req.body || {};
+    const rawBody = req.body || {};
+    const parsedConfig =
+      typeof rawBody.config === "string" ? JSON.parse(rawBody.config || "{}") : rawBody;
+    const parsedAuditActor =
+      typeof rawBody.auditActor === "string"
+        ? JSON.parse(rawBody.auditActor || "{}")
+        : rawBody.auditActor || {};
+    const payload = {
+      ...parsedConfig,
+    };
+
+    if (req.file) {
+      payload.portalContent = {
+        ...(payload.portalContent || previousConfig.portalContent || {}),
+        homeBannerImageUrl: await resolveUploadedFileUrl(req, req.file, "portal/banner"),
+      };
+    }
+
     const config = await saveSystemConfig(payload);
 
     await logAuditEvent({
@@ -55,7 +84,7 @@ router.patch("/system-config", async (req, res) => {
       status: "success",
       message: "System configuration updated successfully.",
       req,
-      actor: getAuditActorFromRequest(req, auditActor || {}),
+      actor: getAuditActorFromRequest(req, parsedAuditActor || {}),
       details: {
         changedFields: listChangedFields(
           summarizeSystemConfig(previousConfig),

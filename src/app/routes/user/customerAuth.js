@@ -252,11 +252,15 @@ const resolveCountryProfile = ({ systemConfig = {}, customer = null, access = nu
 const buildPortalContent = (systemConfig = {}) => ({
   appName: systemConfig.portalContent?.appName || "SPEED CASH",
   logoUrl: systemConfig.portalContent?.logoUrl || "",
+  homeBannerImageUrl: systemConfig.portalContent?.homeBannerImageUrl || "",
   tagline:
     systemConfig.portalContent?.tagline ||
     "Fast customer login, application tracking, and identity verification.",
   footerText: systemConfig.portalContent?.footerText || "All rights reserved.",
   footerVersion: systemConfig.portalContent?.footerVersion || "1.5.0",
+  homeBannerBadge: systemConfig.portalContent?.homeBannerBadge || "",
+  homeBannerTitle: systemConfig.portalContent?.homeBannerTitle || "",
+  homeBannerMessage: systemConfig.portalContent?.homeBannerMessage || "",
   faqs: systemConfig.portalContent?.faqs || [],
   repaymentTutorials: systemConfig.portalContent?.repaymentTutorials || [],
   supportPhone: systemConfig.portalContent?.supportPhone || "",
@@ -326,6 +330,89 @@ const sanitizePortalTransaction = (transaction = {}) => ({
   processedAt: transaction.processedAt || null,
   failureReason: transaction.failureReason || "",
 });
+const buildPortalPaymentHistory = async (user = null, loans = []) => {
+  const loanList = Array.isArray(loans) ? loans : [];
+  const gatewayTransactions = user?.phone
+    ? await GatewayTransactions.find({ phone: user.phone }).sort({ createdAt: -1 }).limit(30).lean()
+    : [];
+
+  const gatewayRecords = gatewayTransactions.map((transaction, index) => {
+    const relatedLoan = loanList.find(
+      (loan) => String(loan?.ID || "") === String(transaction.loanId || "")
+    );
+
+    return {
+      id: `gateway-${transaction.reference || index}`,
+      ...sanitizePortalTransaction(transaction),
+      transactionTypeLabel:
+        transaction.transactionType === "extension" ? "Loan Extension" : "Loan Repayment",
+      methodLabel: String(transaction.methodKey || "")
+        .replaceAll("-", " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase()),
+      date: transaction.processedAt || transaction.verifiedAt || transaction.createdAt || null,
+      loanAmount: Number(relatedLoan?.amount || 0),
+      remainingBalance: Number(
+        relatedLoan?.clearRemainingAmount ||
+          relatedLoan?.amountRemain ||
+          relatedLoan?.amountToPay ||
+          relatedLoan?.repaymentAmount ||
+          0
+      ),
+      loanStatus: relatedLoan?.loanStatus || "",
+      paymentStatus: relatedLoan?.paymentStatus || "",
+    };
+  });
+
+  const embeddedPaymentRecords = loanList.flatMap((loan, loanIndex) =>
+    (Array.isArray(loan?.paymentRecords) ? loan.paymentRecords : []).map((record, recordIndex) => ({
+      id: `embedded-${loan?.ID || loanIndex}-${recordIndex}`,
+      provider: "manual",
+      reference: "",
+      transactionType: "repayment",
+      transactionTypeLabel: "Loan Repayment",
+      status: "success",
+      processed: true,
+      amount: Number(record?.amountPaid || 0),
+      currency: config.paystackCurrency || "GHS",
+      methodKey: "",
+      methodLabel: "Recorded Payment",
+      loanId: loan?.ID || "",
+      checkoutUrl: "",
+      verifiedAt: record?.datePaid || null,
+      processedAt: record?.datePaid || null,
+      failureReason: "",
+      date: record?.datePaid || loan?.dp || loan?.updatedAt || loan?.doa || null,
+      loanAmount: Number(loan?.amount || 0),
+      remainingBalance: Number(
+        loan?.clearRemainingAmount ||
+          loan?.amountRemain ||
+          loan?.amountToPay ||
+          loan?.repaymentAmount ||
+          0
+      ),
+      loanStatus: loan?.loanStatus || "",
+      paymentStatus: loan?.paymentStatus || "",
+    }))
+  );
+
+  const gatewayMatchKeys = new Set(
+    gatewayRecords.map((record) => {
+      const dateKey = record.date ? new Date(record.date).toISOString().slice(0, 10) : "";
+      return `${record.loanId}|${Number(record.amount || 0).toFixed(2)}|${dateKey}`;
+    })
+  );
+
+  return [...gatewayRecords, ...embeddedPaymentRecords]
+    .filter((record) => {
+      if (!record.id.startsWith("embedded-")) {
+        return true;
+      }
+      const dateKey = record.date ? new Date(record.date).toISOString().slice(0, 10) : "";
+      const dedupeKey = `${record.loanId}|${Number(record.amount || 0).toFixed(2)}|${dateKey}`;
+      return !gatewayMatchKeys.has(dedupeKey);
+    })
+    .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+};
 const getPaystackReferenceFromPayload = (payload = {}) =>
   String(
     payload?.data?.reference ||
@@ -1564,9 +1651,11 @@ const buildPortalSummaryData = async (req, phone) => {
   const refreshedLoans = await Loans.find({ userId: updatedUser.userId }).lean();
   const syncedUser = await syncUserLoanSnapshotWithCollection(updatedUser, refreshedLoans);
   const resolvedCustomer = await resolveUserMediaUrls(req, syncedUser);
+  const paymentHistory = await buildPortalPaymentHistory(syncedUser, refreshedLoans);
 
   return {
     loanHistory: refreshedLoans,
+    paymentHistory,
     activeLoan: buildActiveLoanView(syncedUser, refreshedConfig, refreshedLoans),
     offer: buildPortalOffer(syncedUser, refreshedConfig, refreshedLoans),
     content: buildPortalContent(refreshedConfig),
@@ -3405,6 +3494,112 @@ router.post("/application/save-draft", async (req, res) => {
         phone: access.phone,
         updatedAt: access?.updatedAt || new Date(),
         country: countryProfile,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: 0,
+      message: "Internal error: code(500)!",
+    });
+  }
+});
+
+router.post("/application/update-profile", async (req, res) => {
+  try {
+    const phone = sanitizePhone(req.body?.phone);
+    const application = req.body?.application;
+
+    if (!phone || !application) {
+      return res.status(400).json({
+        success: 0,
+        message: "Phone number and application data are required.",
+      });
+    }
+
+    const access = await CustomerAccess.findOne({ phone });
+    const existingUser = await User.findOne({ phone });
+
+    if (!access || !access.isPinSet || !existingUser) {
+      return res.status(400).json({
+        success: 0,
+        message: "Existing customer profile not found.",
+      });
+    }
+
+    const personal = application.personal || {};
+    const countryProfile = resolveCountryProfile({
+      systemConfig: await getSystemConfig(),
+      customer: existingUser,
+      access,
+      countryCode: req.body?.countryCode || application?.countryCode || existingUser.countryCode,
+    });
+
+    existingUser.email = personal.email || existingUser.email;
+    existingUser.countryCode = countryProfile.code || existingUser.countryCode || "";
+    existingUser.countryName = countryProfile.name || existingUser.countryName || "";
+    existingUser.countryDialCode =
+      countryProfile.dialCode || existingUser.countryDialCode || "";
+    existingUser.locale = countryProfile.locale || existingUser.locale || "";
+    existingUser.timeZone = countryProfile.timeZone || existingUser.timeZone || "UTC";
+    existingUser.currencyCode = countryProfile.currencyCode || existingUser.currencyCode || "";
+    existingUser.currencySymbol =
+      countryProfile.currencySymbol || existingUser.currencySymbol || "";
+    existingUser.IDinfo = {
+      ...(existingUser.IDinfo?.toObject?.() || existingUser.IDinfo || {}),
+      gender: personal.gender || existingUser.IDinfo?.gender || "",
+    };
+    existingUser.pesonalInfo = {
+      ...(existingUser.pesonalInfo?.toObject?.() || existingUser.pesonalInfo || {}),
+      dob: personal.dob || existingUser.pesonalInfo?.dob || "",
+      schoolStatus:
+        personal.schoolStatus === "Yes"
+          ? true
+          : personal.schoolStatus === "No"
+          ? false
+          : existingUser.pesonalInfo?.schoolStatus ?? false,
+      educationalLevel:
+        personal.educationalLevel || existingUser.pesonalInfo?.educationalLevel || "",
+      residenceType: personal.residenceType || existingUser.pesonalInfo?.residenceType || "",
+      dAddress: personal.digitalAddress || existingUser.pesonalInfo?.dAddress || "",
+      areaName: personal.areaName || existingUser.pesonalInfo?.areaName || "",
+      landMark: personal.landmark || existingUser.pesonalInfo?.landMark || "",
+      residenceTime: personal.residenceTime || existingUser.pesonalInfo?.residenceTime || "",
+      incomeSource: personal.incomeSource || existingUser.pesonalInfo?.incomeSource || "",
+      maritalStatus: personal.maritalStatus || existingUser.pesonalInfo?.maritalStatus || "",
+      relativesINOC: personal.dependants || existingUser.pesonalInfo?.relativesINOC || "",
+      bUPphone: personal.backupPhone || existingUser.pesonalInfo?.bUPphone || "",
+    };
+    existingUser.educationInfo = {
+      ...(existingUser.educationInfo?.toObject?.() || existingUser.educationInfo || {}),
+      highestLevel:
+        personal.educationalLevel || existingUser.educationInfo?.highestLevel || "",
+    };
+
+    const savedUser = await existingUser.save({ validateModifiedOnly: true });
+
+    await CustomerAccess.findOneAndUpdate(
+      { phone },
+      {
+        $set: {
+          countryCode: savedUser.countryCode || access.countryCode || "",
+          countryName: savedUser.countryName || access.countryName || "",
+          countryDialCode: savedUser.countryDialCode || access.countryDialCode || "",
+          locale: savedUser.locale || access.locale || "",
+          currencyCode: savedUser.currencyCode || access.currencyCode || "",
+          currencySymbol: savedUser.currencySymbol || access.currencySymbol || "",
+        },
+      }
+    );
+
+    return res.status(200).json({
+      success: 1,
+      message: "Customer profile updated successfully.",
+      data: {
+        phone: savedUser.phone,
+        userId: savedUser.userId,
+        customerId: savedUser._id,
+        hasProfile: true,
       },
     });
   } catch (error) {

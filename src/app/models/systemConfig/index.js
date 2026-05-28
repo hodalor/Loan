@@ -236,6 +236,22 @@ const portalContentSchema = new mongoose.Schema(
       type: String,
       default: "1.5.0",
     },
+    homeBannerImageUrl: {
+      type: String,
+      default: "",
+    },
+    homeBannerBadge: {
+      type: String,
+      default: "",
+    },
+    homeBannerTitle: {
+      type: String,
+      default: "",
+    },
+    homeBannerMessage: {
+      type: String,
+      default: "",
+    },
     faqs: {
       type: [String],
       default: [],
