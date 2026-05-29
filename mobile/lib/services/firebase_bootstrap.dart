@@ -3,7 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import '../firebase/firebase_options.dart';
 
 class FirebaseBootstrap {
-  static bool get isConfigured => !DefaultFirebaseOptions.isPlaceholder;
+  static bool get isConfigured =>
+      DefaultFirebaseOptions.isConfiguredForCurrentPlatform;
 
   static Future<bool> initialize() async {
     if (!isConfigured) {

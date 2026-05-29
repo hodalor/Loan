@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "684116041224",
+    "project_id": "loan-d61b8",
+    "storage_bucket": "loan-d61b8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:684116041224:android:f6ecfb4559725ecd2e7bbd",
+        "android_client_info": {
+          "package_name": "com.speedcash.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDxB9_TdighvOtXe7l72JwfauWiigf4fo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

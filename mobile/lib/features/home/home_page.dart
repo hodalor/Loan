@@ -82,8 +82,9 @@ class _HomePageState extends State<HomePage> {
   bool _homeFaqsExpanded = false;
   bool _homeContactExpanded = false;
   bool _paymentHistoryTab = false;
+  int _applicationStep = 0;
 
-  String _authMode = 'login';
+  String _authScreen = 'login';
   String _activeTab = 'home';
   String _selectedCountryCode = '';
   String _selectedGender = '';
@@ -174,6 +175,29 @@ class _HomePageState extends State<HomePage> {
     'Part time',
     'Shift',
     'Flexible',
+  ];
+
+  static const List<Map<String, String>> _applicationSteps = [
+    {
+      'id': 'personal',
+      'label': 'Personal Info',
+    },
+    {
+      'id': 'education',
+      'label': 'Education Info',
+    },
+    {
+      'id': 'work',
+      'label': 'Work Info',
+    },
+    {
+      'id': 'emergency',
+      'label': 'Emergency Info',
+    },
+    {
+      'id': 'identity',
+      'label': 'ID Info',
+    },
   ];
 
   static const Map<String, dynamic> _defaultPortalContent = {
@@ -493,6 +517,187 @@ class _HomePageState extends State<HomePage> {
     return const [];
   }
 
+  bool get _hasProfile => _sessionAccount?['hasProfile'] == true;
+
+  bool get _hasDraftApplication => _sessionAccount?['draftApplication'] is Map;
+
+  bool get _needsProfileCompletion => !_hasProfile || _hasDraftApplication;
+
+  int get _lastApplicationStepIndex => _applicationSteps.length - 1;
+
+  Map<String, String> get _currentApplicationStep =>
+      _applicationSteps[_applicationStep.clamp(0, _lastApplicationStepIndex)];
+
+  void _clearApplicationForm({bool clearPhone = false}) {
+    final existingPhone = _phoneController.text;
+    final controllers = <TextEditingController>[
+      _firstNameController,
+      _middleNameController,
+      _lastNameController,
+      _emailController,
+      _backupPhoneController,
+      _dobController,
+      _digitalAddressController,
+      _areaController,
+      _landmarkController,
+      _residenceTimeController,
+      _incomeSourceController,
+      _dependantsController,
+      _schoolNameController,
+      _courseController,
+      _graduationYearController,
+      _schoolAddressController,
+      _workUnitController,
+      _industryController,
+      _workAddressController,
+      _companyAddressController,
+      _workLandmarkController,
+      _workIncomeController,
+      _workContentController,
+      _idNumberController,
+      _contact1NameController,
+      _contact1PhoneController,
+      _contact1AddressController,
+      _contact2NameController,
+      _contact2PhoneController,
+      _contact2AddressController,
+      _contact3NameController,
+      _contact3PhoneController,
+      _contact3AddressController,
+    ];
+
+    for (final controller in controllers) {
+      controller.clear();
+    }
+
+    _selectedGender = '';
+    _selectedMaritalStatus = '';
+    _selectedEducationLevel = '';
+    _selectedSchoolStatus = '';
+    _selectedResidenceType = '';
+    _selectedWorkHours = '';
+    _selectedRelationship1 = '';
+    _selectedRelationship2 = '';
+    _selectedRelationship3 = '';
+    _selectedContactEdu1 = '';
+    _selectedContactEdu2 = '';
+    _selectedContactEdu3 = '';
+    _selectedIdType = '';
+    _frontPhoto = null;
+    _backPhoto = null;
+    _selfiePhoto = null;
+    _applicationStep = 0;
+
+    if (clearPhone) {
+      _phoneController.clear();
+    } else {
+      _phoneController.text = existingPhone;
+    }
+  }
+
+  void _syncApplicationStepFromSession() {
+    final draft = _sessionAccount?['draftApplication'];
+    int nextStep = 0;
+    if (draft is Map) {
+      final rawMeta = draft['meta'];
+      if (rawMeta is Map) {
+        nextStep = int.tryParse('${rawMeta['applicationStep'] ?? 0}') ?? 0;
+      }
+    }
+
+    _applicationStep = nextStep.clamp(0, _lastApplicationStepIndex);
+  }
+
+  bool _validateApplicationStep(int stepIndex) {
+    switch (_applicationSteps[stepIndex]['id']) {
+      case 'personal':
+        return [
+          _firstNameController.text,
+          _lastNameController.text,
+          _phoneController.text,
+          _emailController.text,
+          _dobController.text,
+          _selectedGender,
+          _selectedMaritalStatus,
+          _selectedEducationLevel,
+          _selectedSchoolStatus,
+          _selectedResidenceType,
+          _digitalAddressController.text,
+          _areaController.text,
+          _incomeSourceController.text,
+        ].every((value) => value.trim().isNotEmpty);
+      case 'education':
+        return [
+          _schoolNameController.text,
+          _selectedEducationLevel,
+          _courseController.text,
+          _schoolAddressController.text,
+        ].every((value) => value.trim().isNotEmpty);
+      case 'work':
+        return [
+          _workContentController.text,
+          _workUnitController.text,
+          _industryController.text,
+          _workAddressController.text,
+          _selectedWorkHours,
+          _workIncomeController.text,
+        ].every((value) => value.trim().isNotEmpty);
+      case 'emergency':
+        return [
+          _contact1NameController.text,
+          _contact1PhoneController.text,
+          _selectedRelationship1,
+          _contact1AddressController.text,
+          _selectedContactEdu1,
+          _contact2NameController.text,
+          _contact2PhoneController.text,
+          _selectedRelationship2,
+          _contact2AddressController.text,
+          _selectedContactEdu2,
+          _contact3NameController.text,
+          _contact3PhoneController.text,
+          _selectedRelationship3,
+          _contact3AddressController.text,
+          _selectedContactEdu3,
+        ].every((value) => value.trim().isNotEmpty);
+      case 'identity':
+        return _selectedIdType.trim().isNotEmpty &&
+            _idNumberController.text.trim().isNotEmpty &&
+            _frontPhoto != null &&
+            _backPhoto != null &&
+            _selfiePhoto != null;
+      default:
+        return true;
+    }
+  }
+
+  Future<void> _goToNextApplicationStep() async {
+    if (!_validateApplicationStep(_applicationStep)) {
+      _setMessage(
+        'Provide all required information on this screen before continuing.',
+        tone: 'error',
+      );
+      return;
+    }
+
+    final saved = await _saveDraft(showSuccessMessage: false);
+    if (!mounted || !saved) {
+      return;
+    }
+
+    setState(() {
+      _applicationStep = (_applicationStep + 1).clamp(0, _lastApplicationStepIndex);
+    });
+    _setMessage('Draft saved. Continue with the next screen.', tone: 'info');
+  }
+
+  void _goToPreviousApplicationStep() {
+    setState(() {
+      _applicationStep = (_applicationStep - 1).clamp(0, _lastApplicationStepIndex);
+    });
+    _setMessage('Returned to the previous screen.', tone: 'info');
+  }
+
   List<Map<String, dynamic>> get _mobileMoneyNetworks {
     final lifecycleNetworks = _lifecycleConfig?['mobileMoneyNetworks'];
     if (lifecycleNetworks is List && lifecycleNetworks.isNotEmpty) {
@@ -565,19 +770,23 @@ class _HomePageState extends State<HomePage> {
 
       _sessionAccount = data;
       _isSignedIn = true;
-      _activeTab = 'home';
       _syncCountrySelection(
         preferredCode: '${data['country']?['code'] ?? _selectedCountryCode}',
       );
 
-      if (_customer != null) {
-        _hydrateProfileFromCustomer(_customer!);
+      _clearApplicationForm();
+      _phoneController.text = phone;
+
+      final customer = data['customer'];
+      if (customer is Map<String, dynamic>) {
+        _hydrateProfileFromCustomer(customer);
       }
 
       final draft = data['draftApplication'];
       if (draft is Map<String, dynamic>) {
         _hydrateDraft(draft);
       }
+      _syncApplicationStepFromSession();
 
       if (_loanAmountController.text.isEmpty && _offer != null) {
         _loanAmountController.text = '${_offer!['defaultAmount'] ?? ''}';
@@ -825,7 +1034,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _otpRequested = true;
       });
-      _setMessage('OTP sent successfully.', tone: 'success');
+      _setMessage('OTP sent successfully. Enter the code to continue.', tone: 'success');
     } catch (error) {
       _setMessage(_cleanError(error), tone: 'error');
     } finally {
@@ -837,26 +1046,55 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _setPin() async {
+  void _openOtpFlow({required bool resetPin}) {
+    setState(() {
+      _authScreen = 'otp';
+      _resetPinMode = resetPin;
+      _otpRequested = false;
+      _otpController.clear();
+      _pinController.clear();
+      _confirmPinController.clear();
+      _firebaseIdToken = '';
+    });
+
+    _setMessage(
+      resetPin
+          ? 'Request OTP to reset your 4-digit PIN.'
+          : 'Request OTP first, then verify to create your PIN.',
+      tone: 'info',
+    );
+  }
+
+  void _backToLoginAuth() {
+    setState(() {
+      _authScreen = 'login';
+      _resetPinMode = false;
+      _otpRequested = false;
+      _otpController.clear();
+      _pinController.clear();
+      _confirmPinController.clear();
+      _firebaseIdToken = '';
+    });
+  }
+
+  void _backToOtpAuth() {
+    setState(() {
+      _authScreen = 'otp';
+      _pinController.clear();
+      _confirmPinController.clear();
+    });
+  }
+
+  Future<void> _verifyOtp() async {
     final phone = _phoneController.text.trim();
     final otp = _otpController.text.trim();
-    final pin = _pinController.text.trim();
-    final confirmPin = _confirmPinController.text.trim();
 
     if (!_isValidPhone(phone)) {
       _setMessage('Enter a valid phone number.', tone: 'error');
       return;
     }
-    if (otp.length < 4) {
+    if (otp.isEmpty) {
       _setMessage('Enter the OTP code you received.', tone: 'error');
-      return;
-    }
-    if (!_isValidPin(pin) || !_isValidPin(confirmPin)) {
-      _setMessage('PIN must be exactly 4 digits.', tone: 'error');
-      return;
-    }
-    if (pin != confirmPin) {
-      _setMessage('PIN and confirm PIN do not match.', tone: 'error');
       return;
     }
 
@@ -876,6 +1114,53 @@ class _HomePageState extends State<HomePage> {
         });
       }
 
+      setState(() {
+        _authScreen = 'pin';
+      });
+      _setMessage(
+        _resetPinMode
+            ? 'OTP verified. Set your new 4-digit PIN.'
+            : 'OTP verified. Create a 4-digit PIN to continue.',
+        tone: 'success',
+      );
+    } catch (error) {
+      _setMessage(_cleanError(error), tone: 'error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _authLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _setPin() async {
+    final phone = _phoneController.text.trim();
+    final pin = _pinController.text.trim();
+    final confirmPin = _confirmPinController.text.trim();
+
+    if (!_isValidPhone(phone)) {
+      _setMessage('Enter a valid phone number.', tone: 'error');
+      return;
+    }
+    if (!_isValidPin(pin) || !_isValidPin(confirmPin)) {
+      _setMessage('PIN must be exactly 4 digits.', tone: 'error');
+      return;
+    }
+    if (pin != confirmPin) {
+      _setMessage('PIN and confirm PIN do not match.', tone: 'error');
+      return;
+    }
+    if (_isRealOtpMode && _firebaseIdToken.isEmpty) {
+      _setMessage('Verify the SMS OTP before saving your PIN.', tone: 'error');
+      return;
+    }
+
+    setState(() {
+      _authLoading = true;
+    });
+
+    try {
       final response = await _api.setPin({
         'phone': phone,
         'pin': pin,
@@ -884,18 +1169,40 @@ class _HomePageState extends State<HomePage> {
         if (_firebaseIdToken.isNotEmpty) 'firebaseIdToken': _firebaseIdToken,
       });
 
+      final responseData = response['data'];
+      final accountPhone = responseData is Map<String, dynamic>
+          ? '${responseData['phone'] ?? phone}'
+          : phone;
+
       _loginPinController.text = pin;
-      _authMode = 'login';
       _otpRequested = false;
       _otpController.clear();
       _pinController.clear();
       _confirmPinController.clear();
       _firebaseIdToken = '';
-      _resetPinMode = false;
       await _firebasePhoneAuthService.signOut();
 
+      if (_resetPinMode) {
+        setState(() {
+          _authScreen = 'login';
+          _resetPinMode = false;
+        });
+        _setMessage(
+          'PIN updated. You can now sign in with your phone number.',
+          tone: 'success',
+        );
+        return;
+      }
+
+      await _loadPortalSummary(accountPhone, quiet: true);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeTab = 'apply';
+      });
       _setMessage(
-        '${response['message'] ?? 'PIN saved successfully.'} You can now log in.',
+        '${response['message'] ?? 'PIN saved successfully.'} Complete your profile to unlock loan offers.',
         tone: 'success',
       );
     } catch (error) {
@@ -938,11 +1245,19 @@ class _HomePageState extends State<HomePage> {
         throw Exception('Login response is invalid.');
       }
 
-      _sessionAccount = data;
-      _isSignedIn = true;
       await _loadPortalSummary(phone, quiet: true);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _activeTab = _needsProfileCompletion ? 'apply' : 'home';
+      });
       _setMessage(
-        'Login successful.',
+        _hasDraftApplication
+            ? 'Signed in successfully. Continue your required information.'
+            : _hasProfile
+                ? 'Signed in successfully. Welcome back.'
+                : 'Signed in successfully. Complete your profile to continue.',
         tone: 'success',
         autoClearAfter: const Duration(seconds: 3),
       );
@@ -964,6 +1279,7 @@ class _HomePageState extends State<HomePage> {
     await _firebasePhoneAuthService.signOut();
 
     setState(() {
+      _clearApplicationForm(clearPhone: true);
       _sessionAccount = null;
       _repaymentSummary = null;
       _extensionSummary = null;
@@ -972,6 +1288,10 @@ class _HomePageState extends State<HomePage> {
       _pendingGatewayType = '';
       _isSignedIn = false;
       _activeTab = 'home';
+      _authScreen = 'login';
+      _resetPinMode = false;
+      _otpRequested = false;
+      _loginPinController.clear();
     });
 
     _setMessage('Logged out successfully.', tone: 'success');
@@ -982,18 +1302,14 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _authMode = 'signup';
-      _resetPinMode = true;
-    });
-    _setMessage('Enter your phone number to reset PIN.', tone: 'info');
+    _openOtpFlow(resetPin: true);
   }
 
-  Future<void> _saveDraft() async {
+  Future<bool> _saveDraft({bool showSuccessMessage = true}) async {
     final phone = _phoneController.text.trim();
     if (!_isValidPhone(phone)) {
       _setMessage('Enter a valid phone number first.', tone: 'error');
-      return;
+      return false;
     }
 
     setState(() {
@@ -1007,13 +1323,17 @@ class _HomePageState extends State<HomePage> {
         'application': _buildApplicationPayload(),
       });
 
-      _setMessage(
-        '${response['message'] ?? 'Draft saved successfully.'}',
-        tone: 'success',
-      );
+      if (showSuccessMessage) {
+        _setMessage(
+          '${response['message'] ?? 'Draft saved successfully.'}',
+          tone: 'success',
+        );
+      }
       await _loadPortalSummary(phone, quiet: true);
+      return true;
     } catch (error) {
       _setMessage(_cleanError(error), tone: 'error');
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -1031,6 +1351,13 @@ class _HomePageState extends State<HomePage> {
     }
     if (_emailController.text.trim().isEmpty) {
       _setMessage('Email is required before submitting the profile.', tone: 'error');
+      return;
+    }
+    if (!_validateApplicationStep(_lastApplicationStepIndex)) {
+      _setMessage(
+        'Complete the required identity information before submitting.',
+        tone: 'error',
+      );
       return;
     }
 
@@ -1391,6 +1718,9 @@ class _HomePageState extends State<HomePage> {
   Map<String, dynamic> _buildApplicationPayload() {
     return {
       'countryCode': _selectedCountryCode,
+      'meta': {
+        'applicationStep': _applicationStep,
+      },
       'personal': {
         'firstName': _firstNameController.text.trim(),
         'middleName': _middleNameController.text.trim(),
@@ -2044,7 +2374,7 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _InlineInfoCard(
+                  const _InlineInfoCard(
                     title: 'Locked Fields',
                     body:
                         'Names and your main login phone number are managed by admin and cannot be edited here.',
@@ -2194,6 +2524,7 @@ class _HomePageState extends State<HomePage> {
                           onPressed: _profileSaving
                               ? null
                               : () async {
+                                  final navigator = Navigator.of(sheetContext);
                                   final future = _saveProfileChanges();
                                   modalSetState(() {});
                                   await future;
@@ -2201,7 +2532,7 @@ class _HomePageState extends State<HomePage> {
                                     return;
                                   }
                                   if (_messageTone == 'success') {
-                                    Navigator.of(sheetContext).pop();
+                                    navigator.pop();
                                   } else {
                                     modalSetState(() {});
                                   }
@@ -2328,33 +2659,23 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 16),
         _SectionCard(
-          title: _authMode == 'login'
+          title: _authScreen == 'login'
               ? 'Login'
-              : _resetPinMode
-                  ? 'Reset PIN'
-                  : 'Create PIN',
+              : _authScreen == 'otp'
+                  ? 'Verify phone'
+                  : 'Set 4-digit PIN',
           child: Column(
             children: [
-              _CountryField(
-                value: _selectedCountryCode,
-                countries: _countries,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCountryCode = value;
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Phone number',
-                  hintText: '${_selectedCountry['phoneExample'] ?? '0970000000'}',
+              if (_authScreen == 'login') ...[
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Phone number',
+                    hintText: '${_selectedCountry['phoneExample'] ?? '0970000000'}',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              if (_authMode == 'login')
+                const SizedBox(height: 12),
                 TextField(
                   controller: _loginPinController,
                   keyboardType: TextInputType.number,
@@ -2363,7 +2684,41 @@ class _HomePageState extends State<HomePage> {
                     labelText: '4-digit PIN',
                   ),
                 ),
-              if (_authMode != 'login') ...[
+              ],
+              if (_authScreen == 'otp') ...[
+                _CountryField(
+                  value: _selectedCountryCode,
+                  countries: _countries,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCountryCode = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Phone number',
+                    hintText: '${_selectedCountry['phoneExample'] ?? '0970000000'}',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _authLoading ? null : _requestOtp,
+                    child: Text(
+                      _authLoading
+                          ? 'Requesting...'
+                          : _otpRequested
+                              ? 'Resend OTP'
+                              : 'Request OTP',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _otpController,
                   keyboardType: TextInputType.number,
@@ -2372,12 +2727,27 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                Text(
+                  _otpRequested
+                      ? _isRealOtpMode
+                          ? 'OTP requested for this phone number. Enter the SMS code sent to your phone.'
+                          : 'OTP requested for this phone number. Use the demo code shown in the message banner.'
+                      : _resetPinMode
+                          ? 'Reset access for this phone number.'
+                          : 'Create a new account PIN after verifying your phone.',
+                  style: const TextStyle(
+                    color: AppTheme.textSoft,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+              if (_authScreen == 'pin') ...[
                 TextField(
                   controller: _pinController,
                   keyboardType: TextInputType.number,
                   obscureText: true,
                   decoration: const InputDecoration(
-                    labelText: 'New 4-digit PIN',
+                    labelText: '4-digit PIN',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -2391,7 +2761,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
               const SizedBox(height: 16),
-              if (_authMode == 'login')
+              if (_authScreen == 'login')
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -2399,27 +2769,42 @@ class _HomePageState extends State<HomePage> {
                     child: Text(_authLoading ? 'Signing in...' : 'Login'),
                   ),
                 ),
-              if (_authMode != 'login') ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: _authLoading ? null : _requestOtp,
-                    child: Text(
-                      _authLoading
-                          ? 'Requesting OTP...'
-                          : _otpRequested
-                              ? 'Resend OTP'
-                              : 'Request OTP',
+              if (_authScreen == 'otp') ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _authLoading ? null : _backToLoginAuth,
+                        child: const Text('Back'),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _authLoading ? null : _verifyOtp,
+                        child: Text(_authLoading ? 'Verifying...' : 'Verify and continue'),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _authLoading ? null : _setPin,
-                    child: Text(_authLoading ? 'Saving PIN...' : 'Verify OTP And Save PIN'),
-                  ),
+              ],
+              if (_authScreen == 'pin') ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _authLoading ? null : _backToOtpAuth,
+                        child: const Text('Back'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _authLoading ? null : _setPin,
+                        child: Text(_authLoading ? 'Saving...' : 'Save PIN'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
               const SizedBox(height: 12),
@@ -2427,32 +2812,15 @@ class _HomePageState extends State<HomePage> {
                 spacing: 12,
                 runSpacing: 8,
                 children: [
-                  TextButton(
-                    onPressed: _authLoading
-                        ? null
-                        : () {
-                            setState(() {
-                              _authMode = _authMode == 'login' ? 'signup' : 'login';
-                              _resetPinMode = false;
-                            });
-                          },
-                    child: Text(
-                      _authMode == 'login'
-                          ? 'Create account PIN'
-                          : 'Back to login',
-                    ),
-                  ),
-                  if (_authMode == 'login')
+                  if (_authScreen == 'login')
                     TextButton(
-                      onPressed: _authLoading
-                          ? null
-                          : () {
-                              setState(() {
-                                _authMode = 'signup';
-                                _resetPinMode = true;
-                              });
-                            },
-                      child: const Text('Reset PIN'),
+                      onPressed: _authLoading ? null : () => _openOtpFlow(resetPin: false),
+                      child: const Text('Sign up'),
+                    ),
+                  if (_authScreen == 'login')
+                    TextButton(
+                      onPressed: _authLoading ? null : () => _openOtpFlow(resetPin: true),
+                      child: const Text('Forgot PIN?'),
                     ),
                 ],
               ),
@@ -2693,30 +3061,557 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildApplicationStepContent() {
+    switch (_currentApplicationStep['id']) {
+      case 'personal':
+        return Column(
+          children: [
+            _CountryField(
+              value: _selectedCountryCode,
+              countries: _countries,
+              onChanged: (value) {
+                setState(() {
+                  _syncCountrySelection(preferredCode: value);
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: TextField(
+                controller: _firstNameController,
+                decoration: const InputDecoration(labelText: 'First name'),
+              ),
+              right: TextField(
+                controller: _lastNameController,
+                decoration: const InputDecoration(labelText: 'Last name'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _middleNameController,
+              decoration: const InputDecoration(labelText: 'Middle name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneController,
+              readOnly: true,
+              decoration: const InputDecoration(labelText: 'Main phone number'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _backupPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Alternative phone number'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _dobController,
+              decoration: const InputDecoration(labelText: 'Date of birth'),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: _SimpleDropdown(
+                label: 'Gender',
+                value: _selectedGender,
+                items: const ['Male', 'Female'],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedGender = value;
+                  });
+                },
+              ),
+              right: _SimpleDropdown(
+                label: 'Marital status',
+                value: _selectedMaritalStatus,
+                items: _maritalStatuses,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedMaritalStatus = value;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: _SimpleDropdown(
+                label: 'Education level',
+                value: _selectedEducationLevel,
+                items: _educationLevels,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedEducationLevel = value;
+                  });
+                },
+              ),
+              right: _SimpleDropdown(
+                label: 'In school',
+                value: _selectedSchoolStatus,
+                items: const ['Yes', 'No'],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedSchoolStatus = value;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            _SimpleDropdown(
+              label: 'Residence type',
+              value: _selectedResidenceType,
+              items: _residenceTypes,
+              onChanged: (value) {
+                setState(() {
+                  _selectedResidenceType = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: TextField(
+                controller: _digitalAddressController,
+                decoration: const InputDecoration(labelText: 'Digital address'),
+              ),
+              right: TextField(
+                controller: _areaController,
+                decoration: const InputDecoration(labelText: 'Area name'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: TextField(
+                controller: _landmarkController,
+                decoration: const InputDecoration(labelText: 'Landmark'),
+              ),
+              right: TextField(
+                controller: _residenceTimeController,
+                decoration: const InputDecoration(labelText: 'Years at residence'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: TextField(
+                controller: _incomeSourceController,
+                decoration: const InputDecoration(labelText: 'Main income source'),
+              ),
+              right: TextField(
+                controller: _dependantsController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Number of dependants'),
+              ),
+            ),
+          ],
+        );
+      case 'education':
+        return Column(
+          children: [
+            TextField(
+              controller: _schoolNameController,
+              decoration: const InputDecoration(labelText: 'School name'),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: _SimpleDropdown(
+                label: 'Highest level',
+                value: _selectedEducationLevel,
+                items: _educationLevels,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedEducationLevel = value;
+                  });
+                },
+              ),
+              right: TextField(
+                controller: _graduationYearController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Graduation year'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _courseController,
+              decoration: const InputDecoration(labelText: 'Course of study'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _schoolAddressController,
+              decoration: const InputDecoration(labelText: 'School address'),
+            ),
+          ],
+        );
+      case 'work':
+        return Column(
+          children: [
+            _doubleField(
+              left: TextField(
+                controller: _workContentController,
+                decoration: const InputDecoration(labelText: 'Job title or work content'),
+              ),
+              right: TextField(
+                controller: _workUnitController,
+                decoration: const InputDecoration(labelText: 'Work unit'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: TextField(
+                controller: _industryController,
+                decoration: const InputDecoration(labelText: 'Industry'),
+              ),
+              right: _SimpleDropdown(
+                label: 'Work hours',
+                value: _selectedWorkHours,
+                items: _workHoursOptions,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedWorkHours = value;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _workAddressController,
+              decoration: const InputDecoration(labelText: 'Work address'),
+            ),
+            const SizedBox(height: 12),
+            _doubleField(
+              left: TextField(
+                controller: _companyAddressController,
+                decoration: const InputDecoration(labelText: 'Company address'),
+              ),
+              right: TextField(
+                controller: _workLandmarkController,
+                decoration: const InputDecoration(labelText: 'Company landmark'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _workIncomeController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Current income'),
+            ),
+          ],
+        );
+      case 'emergency':
+        return Column(
+          children: [
+            _buildEmergencyContactCard(
+              title: 'Emergency Contact 1',
+              nameController: _contact1NameController,
+              phoneController: _contact1PhoneController,
+              addressController: _contact1AddressController,
+              relationshipValue: _selectedRelationship1,
+              educationValue: _selectedContactEdu1,
+              onRelationshipChanged: (value) {
+                setState(() {
+                  _selectedRelationship1 = value;
+                });
+              },
+              onEducationChanged: (value) {
+                setState(() {
+                  _selectedContactEdu1 = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildEmergencyContactCard(
+              title: 'Emergency Contact 2',
+              nameController: _contact2NameController,
+              phoneController: _contact2PhoneController,
+              addressController: _contact2AddressController,
+              relationshipValue: _selectedRelationship2,
+              educationValue: _selectedContactEdu2,
+              onRelationshipChanged: (value) {
+                setState(() {
+                  _selectedRelationship2 = value;
+                });
+              },
+              onEducationChanged: (value) {
+                setState(() {
+                  _selectedContactEdu2 = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildEmergencyContactCard(
+              title: 'Emergency Contact 3',
+              nameController: _contact3NameController,
+              phoneController: _contact3PhoneController,
+              addressController: _contact3AddressController,
+              relationshipValue: _selectedRelationship3,
+              educationValue: _selectedContactEdu3,
+              onRelationshipChanged: (value) {
+                setState(() {
+                  _selectedRelationship3 = value;
+                });
+              },
+              onEducationChanged: (value) {
+                setState(() {
+                  _selectedContactEdu3 = value;
+                });
+              },
+            ),
+          ],
+        );
+      case 'identity':
+        return Column(
+          children: [
+            _SimpleDropdown(
+              label: 'ID type',
+              value: _selectedIdType,
+              items: _idTypes,
+              onChanged: (value) {
+                setState(() {
+                  _selectedIdType = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _idNumberController,
+              decoration: const InputDecoration(labelText: 'ID number'),
+            ),
+            const SizedBox(height: 12),
+            _ImageSelectorCard(
+              label: 'Front of ID',
+              file: _frontPhoto,
+              onPick: () => _pickImage('front'),
+            ),
+            const SizedBox(height: 12),
+            _ImageSelectorCard(
+              label: 'Back of ID',
+              file: _backPhoto,
+              onPick: () => _pickImage('back'),
+            ),
+            const SizedBox(height: 12),
+            _ImageSelectorCard(
+              label: 'Selfie photo',
+              file: _selfiePhoto,
+              onPick: () => _pickImage('selfie'),
+            ),
+          ],
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildEmergencyContactCard({
+    required String title,
+    required TextEditingController nameController,
+    required TextEditingController phoneController,
+    required TextEditingController addressController,
+    required String relationshipValue,
+    required String educationValue,
+    required ValueChanged<String> onRelationshipChanged,
+    required ValueChanged<String> onEducationChanged,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FC),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textMain,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _doubleField(
+            left: TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Full name'),
+            ),
+            right: TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone number'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _doubleField(
+            left: _SimpleDropdown(
+              label: 'Relationship',
+              value: relationshipValue,
+              items: _relationshipOptions,
+              onChanged: onRelationshipChanged,
+            ),
+            right: _SimpleDropdown(
+              label: 'Education level',
+              value: educationValue,
+              items: _educationLevels,
+              onChanged: onEducationChanged,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: addressController,
+            decoration: const InputDecoration(labelText: 'Address'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCompletionFlow() {
+    final currentStep = _currentApplicationStep;
+    final isLastStep = _applicationStep == _lastApplicationStepIndex;
+
+    return Column(
+      children: [
+        _SectionCard(
+          title: 'Complete Your Profile',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _hasDraftApplication
+                    ? 'Finish the required information below to unlock loan offers.'
+                    : 'After setting your PIN, complete the same KYC steps used on web before applying.',
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: List.generate(_applicationSteps.length, (index) {
+                  final item = _applicationSteps[index];
+                  final isActive = index == _applicationStep;
+                  final isCompleted = index < _applicationStep;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? AppTheme.accent
+                          : isCompleted
+                              ? const Color(0xFFE9F8EF)
+                              : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${index + 1}. ${item['label'] ?? ''}',
+                      style: TextStyle(
+                        color: isActive
+                            ? Colors.white
+                            : isCompleted
+                                ? const Color(0xFF0F7B3B)
+                                : AppTheme.textSoft,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      currentStep['label'] ?? 'Profile Step',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textMain,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isLastStep
+                          ? 'Upload your ID details and submit the profile.'
+                          : 'Complete this section, save it, and move to the next one.',
+                      style: const TextStyle(color: AppTheme.textSoft),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildApplicationStepContent(),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _profileSaving ? null : () => _saveDraft(),
+                  child: Text(_profileSaving ? 'Saving...' : 'Save Draft'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_applicationStep > 0) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _profileSaving ? null : _goToPreviousApplicationStep,
+                        child: const Text('Previous'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _profileSaving
+                            ? null
+                            : (isLastStep ? _submitProfile : _goToNextApplicationStep),
+                        child: Text(
+                          _profileSaving
+                              ? 'Saving...'
+                              : isLastStep
+                                  ? 'Submit Profile'
+                                  : 'Next',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _profileSaving ? null : _goToNextApplicationStep,
+                    child: Text(_profileSaving ? 'Saving...' : 'Next'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildApplyTab() {
-    final hasProfile = _sessionAccount?['hasProfile'] == true || _customer != null;
     final canApply = _offer?['canApply'] == true;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (!hasProfile)
-          const _SectionCard(
-            title: 'Complete Profile First',
-            child: Text(
-              'Submit your personal profile and identity documents before applying for a loan.',
-            ),
-          ),
-        if (hasProfile && !canApply && _activeLoan != null)
+        if (_needsProfileCompletion) _buildProfileCompletionFlow(),
+        if (!_needsProfileCompletion && !canApply && _activeLoan != null)
           _buildActiveLoanSummaryCard(showOpenRecords: false),
-        if (hasProfile && !canApply && _activeLoan == null)
+        if (!_needsProfileCompletion && !canApply && _activeLoan == null)
           _SectionCard(
             title: 'Loan Application Locked',
             child: Text(
               '${_offer?['activeLoanStatus'] ?? 'You already have an active loan.'}',
             ),
           ),
-        if (hasProfile && canApply)
+        if (!_needsProfileCompletion && canApply)
           _SectionCard(
             title: 'Loan Builder',
             child: Column(

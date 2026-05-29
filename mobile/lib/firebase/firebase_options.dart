@@ -4,13 +4,26 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, Tar
 import '../config/mobile_env.dart';
 
 class DefaultFirebaseOptions {
-  static bool get isPlaceholder => !isConfigured;
+  static bool get isPlaceholder => !isConfiguredForCurrentPlatform;
 
-  static bool get isConfigured {
-    return _hasCoreFields &&
-        _hasWebFields &&
-        _hasAndroidFields &&
-        _hasIosFields;
+  static bool get isConfiguredForCurrentPlatform {
+    if (!_hasCoreFields) {
+      return false;
+    }
+
+    if (kIsWeb) {
+      return _hasWebFields;
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return _hasAndroidFields;
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        return _hasIosFields;
+      default:
+        return false;
+    }
   }
 
   static FirebaseOptions get currentPlatform {
