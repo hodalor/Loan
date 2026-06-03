@@ -52,3 +52,10 @@ export const resolveMediaUrl = (value = "") => {
 
   return normalized;
 };
+
+export const isLegacyMediaUrl = (value = "") => {
+  const normalized = normalizeValue(value);
+  if (!normalized) return false;
+
+  return UPLOAD_URL_PATTERN.test(normalized);
+};

@@ -2,7 +2,7 @@ import React from "react";
 import { GlobalContext } from "../../../libs/context/globalContext";
 import DefaultLoader from "../../../components/loaders/defaultLoader";
 import SimpleDataTable from "../../../components/tables/SimpleDataTable";
-import { resolveMediaUrl } from "../../../libs/mediaUrl";
+import { isLegacyMediaUrl, resolveMediaUrl } from "../../../libs/mediaUrl";
 import { readSystemConfig } from "../../../libs/systemConfig";
 import _updateCustomerPaymentOperator from "../../../handlers/updates/updateCustomerPaymentOperator";
 
@@ -936,6 +936,7 @@ function DetailInput({ label, value, onChange, disabled }) {
 
 function ImageCard({ title, src }) {
   const resolvedSrc = resolveMediaUrl(src);
+  const isLegacySource = isLegacyMediaUrl(src);
   const [imageLoadFailed, setImageLoadFailed] = React.useState(false);
 
   React.useEffect(() => {
@@ -944,9 +945,19 @@ function ImageCard({ title, src }) {
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+        {isLegacySource ? (
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+            Legacy Storage
+          </span>
+        ) : null}
       </div>
+      {isLegacySource ? (
+        <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          This image still uses an old `/upload` path. Re-upload it to move it into persistent storage.
+        </div>
+      ) : null}
       {resolvedSrc && !imageLoadFailed ? (
         <img
           src={resolvedSrc}

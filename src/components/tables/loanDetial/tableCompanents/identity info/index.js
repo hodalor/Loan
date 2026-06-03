@@ -8,8 +8,18 @@ import {
   DetailSectionHint,
   StatusBadge,
 } from "../../DetailSectionCard";
-import { resolveMediaUrl } from "../../../../../libs/mediaUrl";
+import { isLegacyMediaUrl, resolveMediaUrl } from "../../../../../libs/mediaUrl";
 import useResolvedLoanDetails from "../../useResolvedLoanDetails";
+
+function LegacyMediaNotice({ show = false }) {
+  if (!show) return null;
+
+  return (
+    <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      This image still points to a legacy `/upload` file. Re-upload it so it is saved in persistent storage.
+    </div>
+  );
+}
 
 export default function IdentityInfo() {
   const { modalTitle, setmodalTitle, setImageToView } = React.useContext(GlobalContext);
@@ -22,6 +32,10 @@ export default function IdentityInfo() {
   const livePhoto = resolveMediaUrl(customer?.userImage || loan?.facialRecog || "");
   const idFront = resolveMediaUrl(customer?.IDinfo?.idFront || "");
   const idBack = resolveMediaUrl(customer?.IDinfo?.idBack || "");
+  const livePhotoLegacy =
+    isLegacyMediaUrl(customer?.userImage || "") || isLegacyMediaUrl(loan?.facialRecog || "");
+  const idFrontLegacy = isLegacyMediaUrl(customer?.IDinfo?.idFront || "");
+  const idBackLegacy = isLegacyMediaUrl(customer?.IDinfo?.idBack || "");
   const canOpenLivePhoto = Boolean(livePhoto) && !livePhotoFailed;
   const canOpenIdFront = Boolean(idFront) && !idFrontFailed;
   const canOpenIdBack = Boolean(idBack) && !idBackFailed;
@@ -71,6 +85,8 @@ export default function IdentityInfo() {
           text={
             customerProfileLoading
               ? "Loading the full identity record and verification images."
+              : livePhotoLegacy || idFrontLegacy || idBackLegacy
+              ? "Some identity images still use legacy /upload storage and should be re-uploaded."
               : "Tap any available image to open it in the preview modal."
           }
         />
@@ -89,8 +105,24 @@ export default function IdentityInfo() {
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-slate-900">Living photo</span>
-              <StatusBadge tone={livePhotoFailed ? "danger" : livePhoto ? "success" : "neutral"}>
-                {livePhotoFailed ? "Failed" : livePhoto ? "Available" : "Missing"}
+              <StatusBadge
+                tone={
+                  livePhotoFailed
+                    ? "danger"
+                    : livePhotoLegacy
+                    ? "warning"
+                    : livePhoto
+                    ? "success"
+                    : "neutral"
+                }
+              >
+                {livePhotoFailed
+                  ? "Failed"
+                  : livePhotoLegacy
+                  ? "Legacy"
+                  : livePhoto
+                  ? "Available"
+                  : "Missing"}
               </StatusBadge>
             </div>
             {canOpenLivePhoto ? (
@@ -105,6 +137,7 @@ export default function IdentityInfo() {
                 {livePhotoFailed ? "Image failed to load" : "No image"}
               </div>
             )}
+            <LegacyMediaNotice show={livePhotoLegacy} />
           </button>
 
           <button
@@ -119,8 +152,24 @@ export default function IdentityInfo() {
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-slate-900">ID front photo</span>
-              <StatusBadge tone={idFrontFailed ? "danger" : idFront ? "success" : "neutral"}>
-                {idFrontFailed ? "Failed" : idFront ? "Available" : "Missing"}
+              <StatusBadge
+                tone={
+                  idFrontFailed
+                    ? "danger"
+                    : idFrontLegacy
+                    ? "warning"
+                    : idFront
+                    ? "success"
+                    : "neutral"
+                }
+              >
+                {idFrontFailed
+                  ? "Failed"
+                  : idFrontLegacy
+                  ? "Legacy"
+                  : idFront
+                  ? "Available"
+                  : "Missing"}
               </StatusBadge>
             </div>
             {canOpenIdFront ? (
@@ -135,6 +184,7 @@ export default function IdentityInfo() {
                 {idFrontFailed ? "Image failed to load" : "No image"}
               </div>
             )}
+            <LegacyMediaNotice show={idFrontLegacy} />
           </button>
 
           <button
@@ -149,8 +199,24 @@ export default function IdentityInfo() {
           >
             <div className="mb-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-slate-900">ID back photo</span>
-              <StatusBadge tone={idBackFailed ? "danger" : idBack ? "success" : "neutral"}>
-                {idBackFailed ? "Failed" : idBack ? "Available" : "Missing"}
+              <StatusBadge
+                tone={
+                  idBackFailed
+                    ? "danger"
+                    : idBackLegacy
+                    ? "warning"
+                    : idBack
+                    ? "success"
+                    : "neutral"
+                }
+              >
+                {idBackFailed
+                  ? "Failed"
+                  : idBackLegacy
+                  ? "Legacy"
+                  : idBack
+                  ? "Available"
+                  : "Missing"}
               </StatusBadge>
             </div>
             {canOpenIdBack ? (
@@ -165,6 +231,7 @@ export default function IdentityInfo() {
                 {idBackFailed ? "Image failed to load" : "No image"}
               </div>
             )}
+            <LegacyMediaNotice show={idBackLegacy} />
           </button>
         </div>
       </DetailSectionCard>
