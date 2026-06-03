@@ -64,6 +64,8 @@ export const resetFirebasePhoneVerification = () => {
 
 const mapFirebasePhoneAuthError = (error) => {
   const code = String(error?.code || "").trim();
+  const message = String(error?.message || "").trim();
+  const normalized = `${code} ${message}`.toLowerCase();
 
   if (code === "auth/billing-not-enabled") {
     return "Firebase billing is not enabled for phone auth. Upgrade the Firebase project to Blaze and enable billing before using real SMS OTP.";
@@ -81,7 +83,21 @@ const mapFirebasePhoneAuthError = (error) => {
     return "Too many OTP requests were made. Please wait and try again.";
   }
 
-  return error?.message || "Firebase phone verification failed.";
+  // Firebase sometimes surfaces vague phone-auth failures as auth/error-code:-39.
+  // In practice this is usually a temporary quota/carrier restriction rather than a form bug.
+  if (
+    normalized.includes("auth/error-code:-39") ||
+    normalized.includes("error-code:-39") ||
+    normalized.includes("code:39") ||
+    normalized.includes("quota") ||
+    normalized.includes("too many") ||
+    normalized.includes("invalid application verifier") ||
+    normalized.includes("invalid app credential")
+  ) {
+    return "Firebase could not send the OTP right now. This is usually caused by SMS quota limits, carrier restrictions, or a reCAPTCHA token that Firebase rejected. Wait a bit and try again. If it keeps failing, confirm the current domain is authorized in Firebase Authentication and test with another number/network.";
+  }
+
+  return message || "Firebase phone verification failed.";
 };
 
 export const requestFirebasePhoneOtp = async ({
