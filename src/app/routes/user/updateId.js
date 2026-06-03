@@ -51,13 +51,19 @@ router.patch(
       }
 
       const idFront = req.files?.idFrontImage?.[0]
-        ? await resolveUploadedFileUrl(req, req.files.idFrontImage[0], "identity/front")
+        ? await resolveUploadedFileUrl(req, req.files.idFrontImage[0], "identity/front", {
+            requireSupabase: true,
+          })
         : user.IDinfo.idFront;
       const idBack = req.files?.idBackImage?.[0]
-        ? await resolveUploadedFileUrl(req, req.files.idBackImage[0], "identity/back")
+        ? await resolveUploadedFileUrl(req, req.files.idBackImage[0], "identity/back", {
+            requireSupabase: true,
+          })
         : user.IDinfo.idBack;
       const livePhoto = req.files?.livePhotoImage?.[0]
-        ? await resolveUploadedFileUrl(req, req.files.livePhotoImage[0], "identity/selfie")
+        ? await resolveUploadedFileUrl(req, req.files.livePhotoImage[0], "identity/selfie", {
+            requireSupabase: true,
+          })
         : user.userImage;
       const gCardNumber = String(
         req.body?.gCardNumber || user.IDinfo.gCardNumber || ""
@@ -139,7 +145,9 @@ router.patch(
       });
       return res.status(500).json({
         success: 0,
-        message: "Internal error: code(500)!",
+        message:
+          error.message ||
+          "Identity upload failed before the customer record could be updated.",
       });
     }
   }

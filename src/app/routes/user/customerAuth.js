@@ -3638,13 +3638,19 @@ router.post(
       const existingUser = await User.findOne({ phone });
       const files = {
         frontPhoto: req.files?.frontPhoto?.[0]
-          ? await resolveUploadedFileUrl(req, req.files.frontPhoto[0], "identity/front")
+          ? await resolveUploadedFileUrl(req, req.files.frontPhoto[0], "identity/front", {
+              requireSupabase: true,
+            })
           : "",
         backPhoto: req.files?.backPhoto?.[0]
-          ? await resolveUploadedFileUrl(req, req.files.backPhoto[0], "identity/back")
+          ? await resolveUploadedFileUrl(req, req.files.backPhoto[0], "identity/back", {
+              requireSupabase: true,
+            })
           : "",
         selfiePhoto: req.files?.selfiePhoto?.[0]
-          ? await resolveUploadedFileUrl(req, req.files.selfiePhoto[0], "identity/selfie")
+          ? await resolveUploadedFileUrl(req, req.files.selfiePhoto[0], "identity/selfie", {
+              requireSupabase: true,
+            })
           : "",
       };
 
@@ -3739,7 +3745,9 @@ router.post(
       console.log(error);
       return res.status(500).json({
         success: 0,
-        message: "Internal error: code(500)!",
+        message:
+          error.message ||
+          "Profile submission failed before identity images could be saved.",
       });
     }
   }

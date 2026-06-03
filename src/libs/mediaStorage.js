@@ -36,6 +36,21 @@ const getBackendBaseUrl = (req) => {
   return "";
 };
 
+const deleteTempUploadFile = async (filePath = "") => {
+  if (!filePath) return;
+
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      console.error("Temporary upload cleanup failed.", {
+        message: error?.message || "Unknown cleanup error",
+        filePath,
+      });
+    }
+  }
+};
+
 const buildLocalFileUrl = (req, file) => {
   if (!file?.filename) return "";
   const baseUrl = getBackendBaseUrl(req);
@@ -318,7 +333,12 @@ const uploadLocalFilePathToSupabase = async ({
   return uploadFileToSupabase({ file, folder });
 };
 
-const resolveUploadedFileUrl = async (req, file, folder = "general") => {
+const resolveUploadedFileUrl = async (
+  req,
+  file,
+  folder = "general",
+  { requireSupabase = false } = {}
+) => {
   const localUrl = buildLocalFileUrl(req, file);
 
   if (!file?.path) {
@@ -326,9 +346,28 @@ const resolveUploadedFileUrl = async (req, file, folder = "general") => {
   }
 
   try {
+    if (requireSupabase && !isSupabaseStorageEnabled()) {
+      throw new Error("Supabase storage is not configured for persistent uploads.");
+    }
+
     const cloudUrl = await uploadFileToSupabase({ file, folder });
-    return cloudUrl || localUrl;
+
+    if (cloudUrl) {
+      await deleteTempUploadFile(file.path);
+      return cloudUrl;
+    }
+
+    if (requireSupabase) {
+      throw new Error("Cloud upload completed without returning a stored file URL.");
+    }
+
+    return localUrl;
   } catch (error) {
+    if (requireSupabase) {
+      await deleteTempUploadFile(file.path);
+      throw error;
+    }
+
     console.error("Supabase upload failed, falling back to local file URL.", {
       message: error?.message || "Unknown upload error",
       bucket: getSupabaseConfig().bucket,

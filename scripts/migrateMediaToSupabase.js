@@ -18,6 +18,10 @@ const args = process.argv.slice(2);
 const shouldApply = args.includes("--apply");
 const limitArg = args.find((item) => item.startsWith("--limit="));
 const perCollectionLimit = limitArg ? Number.parseInt(limitArg.split("=")[1], 10) : 0;
+const phoneArg = args.find((item) => item.startsWith("--phone="));
+const userIdArg = args.find((item) => item.startsWith("--user-id="));
+const targetPhone = phoneArg ? String(phoneArg.split("=")[1] || "").trim() : "";
+const targetUserId = userIdArg ? String(userIdArg.split("=")[1] || "").trim() : "";
 const uploadDir = path.resolve(__dirname, "../upload");
 const uploadUrlPattern = /\/upload\/([^?#]+)/i;
 const cache = new Map();
@@ -34,6 +38,8 @@ const summary = {
   missingFiles: 0,
   failed: 0,
   updatedDocuments: 0,
+  matchedUsers: 0,
+  matchedLoans: 0,
 };
 
 const toIterable = (value) => (Array.isArray(value) ? value : []);
@@ -208,6 +214,16 @@ const migrateUserDocument = async (user) => {
   }
 
   for (const [loanIndex, loan] of toIterable(user.loan?.loans).entries()) {
+    const facialRecogResult = await migrateMediaField({
+      currentValue: loan?.facialRecog,
+      folder: "identity/selfie",
+      docLabel: `${userLabel} loan[${loanIndex}]`,
+      fieldLabel: "facialRecog",
+    });
+    if (facialRecogResult.changed) {
+      updates[`loan.loans.${loanIndex}.facialRecog`] = facialRecogResult.value;
+    }
+
     for (const [extIndex, record] of toIterable(loan.extRecords).entries()) {
       const result = await migrateMediaField({
         currentValue: record?.proofUrl,
@@ -254,6 +270,16 @@ const migrateUserDocument = async (user) => {
 const migrateLoanDocument = async (loan) => {
   const updates = {};
   const loanLabel = `Loan(${loan.ID || loan._id})`;
+
+  const facialRecogResult = await migrateMediaField({
+    currentValue: loan.facialRecog,
+    folder: "identity/selfie",
+    docLabel: loanLabel,
+    fieldLabel: "facialRecog",
+  });
+  if (facialRecogResult.changed) {
+    updates.facialRecog = facialRecogResult.value;
+  }
 
   for (const [extIndex, record] of toIterable(loan.extRecords).entries()) {
     const result = await migrateMediaField({
@@ -335,19 +361,41 @@ async function runMigration() {
     console.log(`Per-collection limit: ${perCollectionLimit}`);
   }
 
-  const users = await withLimit(User.find());
+  const userQuery = {};
+  if (targetPhone) {
+    userQuery.phone = targetPhone;
+  }
+  if (targetUserId) {
+    userQuery.userId = targetUserId;
+  }
+
+  const users = await withLimit(User.find(userQuery));
+  summary.matchedUsers = users.length;
   for (const user of users) {
     await migrateUserDocument(user);
   }
 
-  const loans = await withLimit(Loans.find());
+  const resolvedUserIds = [
+    ...new Set(users.map((user) => String(user?.userId || "").trim()).filter(Boolean)),
+  ];
+  const loanQuery = {};
+  if (targetUserId) {
+    loanQuery.userId = targetUserId;
+  } else if (resolvedUserIds.length > 0) {
+    loanQuery.userId = { $in: resolvedUserIds };
+  }
+
+  const loans = await withLimit(Loans.find(loanQuery));
+  summary.matchedLoans = loans.length;
   for (const loan of loans) {
     await migrateLoanDocument(loan);
   }
 
-  const configs = await withLimit(SystemConfig.find());
-  for (const configDoc of configs) {
-    await migrateSystemConfigDocument(configDoc);
+  if (!targetPhone && !targetUserId) {
+    const configs = await withLimit(SystemConfig.find());
+    for (const configDoc of configs) {
+      await migrateSystemConfigDocument(configDoc);
+    }
   }
 
   console.log("Migration summary:", summary);
