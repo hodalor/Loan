@@ -1563,7 +1563,7 @@ function App() {
       showMessage(
         "success",
         response.data?.otpCode
-          ? `OTP requested successfully. Demo OTP: ${response.data.otpCode}`
+          ? `OTP requested successfully. Your OTP is: ${response.data.otpCode}`
           : "OTP requested successfully."
       );
     } catch (error) {
