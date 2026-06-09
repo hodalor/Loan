@@ -2315,7 +2315,7 @@ function App() {
                   <p className="support-copy">
                     {isRealOtpMode
                       ? `OTP requested for ${formData.otp.phone}. Enter the SMS code sent to your phone.`
-                      : `OTP requested for ${formData.otp.phone}. Use the demo code shown in the message banner.`}
+                      : `OTP requested for ${formData.otp.phone}. Use the code shown in the message banner.`}
                   </p>
                 ) : null}
                 {isRealOtpMode ? <div id="firebase-recaptcha-container" /> : null}
