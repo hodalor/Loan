@@ -1921,11 +1921,15 @@ router.post("/auth/set-pin", async (req, res) => {
 
     let verification = null;
     if (systemConfig.authVerification?.otpMode === "real") {
-      verification = await verifyFirebasePhoneToken({
-        idToken: req.body?.firebaseIdToken,
-        phone,
-        firebaseWebConfig: systemConfig.authVerification?.firebaseWebConfig,
-      });
+      if (String(req.body?.verificationMode || "").trim() === "server-otp-fallback") {
+        verification = consumeVerifiedOtp({ phone, purpose });
+      } else {
+        verification = await verifyFirebasePhoneToken({
+          idToken: req.body?.firebaseIdToken,
+          phone,
+          firebaseWebConfig: systemConfig.authVerification?.firebaseWebConfig,
+        });
+      }
     } else {
       verification = consumeVerifiedOtp({ phone, purpose });
     }
@@ -3752,5 +3756,110 @@ router.post(
     }
   }
 );
+
+
+router.post("/application/delete-profile", async (req, res) => {
+  try {
+    const phone = sanitizePhone(req.body?.phone);
+
+    if (!phone) {
+      return res.status(400).json({
+        success: 0,
+        message: "Phone number is required.",
+      });
+    }
+
+    const systemConfig = await getSystemConfig();
+    const countryProfile = resolveCountryProfile({
+      systemConfig,
+      countryCode: req.body?.countryCode,
+    });
+    const phoneLookup = buildPhoneLookupQuery(
+      [phone],
+      countryProfile.dialCode || req.body?.countryDialCode || ""
+    );
+
+    const [access, customer] = await Promise.all([
+      CustomerAccess.findOne(phoneLookup),
+      User.findOne(phoneLookup),
+    ]);
+
+    if (!access && !customer) {
+      return res.status(404).json({
+        success: 0,
+        message: "Customer profile not found.",
+      });
+    }
+
+    const globalLoans = customer?.userId
+      ? await Loans.find({ userId: customer.userId }).lean()
+      : [];
+    const activeLoan = customer
+      ? buildActiveLoanView(customer, systemConfig, globalLoans)
+      : null;
+
+    const outstandingBalance = toMoney(activeLoan?.outstandingBalance || 0);
+    const totalDue = toMoney(activeLoan?.totalDue || 0);
+    const statusKey = `${activeLoan?.statusKey || ""}`;
+    const hasActiveObligation =
+      outstandingBalance > 0.009 ||
+      totalDue > 0.009 ||
+      ["review", "awaiting-disbursement", "approved", "overdue"].includes(statusKey);
+
+    if (hasActiveObligation) {
+      return res.status(400).json({
+        success: 0,
+        message:
+          "You cannot delete your profile while you still have an outstanding loan balance or an active loan. Please repay first.",
+        data: {
+          outstandingBalance,
+          totalDue,
+          loanStatus: activeLoan?.status || "",
+          statusKey,
+        },
+      });
+    }
+
+    const phonesToClear = buildPhoneLookupCandidates(
+      [phone, access?.phone, customer?.phone],
+      countryProfile.dialCode || access?.countryDialCode || customer?.countryDialCode || ""
+    );
+
+    if (customer?.userId) {
+      await Loans.deleteMany({ userId: customer.userId });
+    }
+
+    if (customer?._id) {
+      await User.findByIdAndDelete(customer._id);
+    } else if (phonesToClear.length) {
+      await User.deleteMany({ phone: { $in: phonesToClear } });
+    }
+
+    if (phonesToClear.length) {
+      await CustomerAccess.deleteMany({ phone: { $in: phonesToClear } });
+      await GatewayTransactions.deleteMany({
+        $or: [
+          { phone: { $in: phonesToClear } },
+          ...(customer?.userId ? [{ userId: customer.userId }] : []),
+        ],
+      });
+    }
+
+    return res.status(200).json({
+      success: 1,
+      message: "Your profile has been deleted successfully.",
+      data: {
+        phone,
+        deleted: true,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: 0,
+      message: error.message || "Internal error: code(500)!",
+    });
+  }
+});
 
 module.exports = router;
