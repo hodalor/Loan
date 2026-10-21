@@ -1703,6 +1703,16 @@
   height: 20px;
 }
 
+.terms-check a {
+  color: #0b8f4d;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.terms-check a:hover {
+  color: #087a41;
+}
+
 .record-card-list {
   display: flex;
   flex-direction: column;

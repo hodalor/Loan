@@ -26,6 +26,16 @@
   status = 200
 
 [[redirects]]
+  from = "/delete-account"
+  to = "/delete-account/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/delete-account/"
+  to = "/delete-account/index.html"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

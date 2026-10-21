@@ -27,6 +27,30 @@ import "./App.css";
 import InstallAppPrompt from "./components/InstallAppPrompt";
 import { resolveMediaUrl } from "./libs/mediaUrl";
 
+const LEGAL_TERMS_PATH = "/tandc";
+const LEGAL_PRIVACY_PATH = "/privacy";
+
+function LegalAcceptCheck({ checked, onChange }) {
+  return (
+    <label className="terms-check">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>
+        Accept SpeedCash{" "}
+        <a href={LEGAL_TERMS_PATH} target="_blank" rel="noreferrer">
+          Terms &amp; Conditions
+        </a>{" "}
+        <a href={LEGAL_PRIVACY_PATH} target="_blank" rel="noreferrer">
+          privacy policy
+        </a>
+      </span>
+    </label>
+  );
+}
+
 const APPLICATION_STEPS = [
   { id: "personal", label: "Personal info" },
   { id: "education", label: "Education info" },
@@ -755,6 +779,7 @@ function App() {
   const [authMode, setAuthMode] = useState("signup");
   const [otpRequested, setOtpRequested] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [signupTermsAccepted, setSignupTermsAccepted] = useState(false);
   const [draftLoading, setDraftLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
@@ -1448,6 +1473,9 @@ function App() {
     setAuthMode(mode);
     setScreen("otp");
     setOtpRequested(false);
+    if (mode === "signup") {
+      setSignupTermsAccepted(false);
+    }
     setFormData((current) => ({
       ...current,
       otp: {
@@ -1708,6 +1736,11 @@ function App() {
 
     if (usingFirebaseOtp && !firebaseIdToken) {
       showMessage("error", "Verify the SMS OTP before saving your PIN.");
+      return;
+    }
+
+    if (authMode !== "reset" && !signupTermsAccepted) {
+      showMessage("error", "Accept the SpeedCash Terms & Conditions and privacy policy to create an account.");
       return;
     }
 
@@ -2436,6 +2469,13 @@ function App() {
                     onChange={(value) => updateSection("pinSetup", "confirmPin", value)}
                   />
                 </div>
+
+                {authMode !== "reset" ? (
+                  <LegalAcceptCheck
+                    checked={signupTermsAccepted}
+                    onChange={setSignupTermsAccepted}
+                  />
+                ) : null}
 
                 <div className="actions">
                   <button
@@ -3316,14 +3356,10 @@ function LoanApplyTab({
               <li>By checking the box below, you agree to these terms.</li>
             </ol>
 
-            <label className="terms-check">
-              <input
-                type="checkbox"
-                checked={loanRequest.acceptedTerms}
-                onChange={(event) => onChange("acceptedTerms", event.target.checked)}
-              />
-              <span>I have read and agree to the Terms and Conditions</span>
-            </label>
+            <LegalAcceptCheck
+              checked={loanRequest.acceptedTerms}
+              onChange={(checked) => onChange("acceptedTerms", checked)}
+            />
           </div>
 
           <div className="actions portal-actions">
