@@ -67,6 +67,18 @@ const mapFirebasePhoneAuthError = (error) => {
   const message = String(error?.message || "").trim();
   const normalized = `${code} ${message}`.toLowerCase();
 
+  if (
+    code === "auth/network-request-failed" ||
+    normalized.includes("network-request-failed") ||
+    normalized.includes("grecaptcha") ||
+    normalized.includes("recaptcha") ||
+    normalized.includes("gstatic") ||
+    normalized.includes("err_timed_out") ||
+    normalized.includes("timed out")
+  ) {
+    return "Firebase could not reach the reCAPTCHA verification service. This usually means the browser could not load Google reCAPTCHA resources on the current network.";
+  }
+
   if (code === "auth/billing-not-enabled") {
     return "Firebase billing is not enabled for phone auth. Upgrade the Firebase project to Blaze and enable billing before using real SMS OTP.";
   }
@@ -98,6 +110,21 @@ const mapFirebasePhoneAuthError = (error) => {
   }
 
   return message || "Firebase phone verification failed.";
+};
+
+const isFirebaseNetworkRequestError = (error) => {
+  const code = String(error?.code || "").trim();
+  const message = String(error?.message || "").trim().toLowerCase();
+
+  return (
+    code === "auth/network-request-failed" ||
+    message.includes("network-request-failed") ||
+    message.includes("grecaptcha") ||
+    message.includes("recaptcha") ||
+    message.includes("gstatic") ||
+    message.includes("err_timed_out") ||
+    message.includes("timed out")
+  );
 };
 
 export const requestFirebasePhoneOtp = async ({
@@ -142,7 +169,10 @@ export const requestFirebasePhoneOtp = async ({
       window.grecaptcha.reset(recaptchaWidgetId);
     }
 
-    throw new Error(mapFirebasePhoneAuthError(error));
+    const mappedError = new Error(mapFirebasePhoneAuthError(error));
+    mappedError.code = error?.code || "";
+    mappedError.isNetworkError = isFirebaseNetworkRequestError(error);
+    throw mappedError;
   }
 };
 
@@ -160,6 +190,9 @@ export const verifyFirebasePhoneOtp = async ({ confirmationResult, otp = "" }) =
       phoneNumber: credential.user.phoneNumber || "",
     };
   } catch (error) {
-    throw new Error(mapFirebasePhoneAuthError(error));
+    const mappedError = new Error(mapFirebasePhoneAuthError(error));
+    mappedError.code = error?.code || "";
+    mappedError.isNetworkError = isFirebaseNetworkRequestError(error);
+    throw mappedError;
   }
 };
