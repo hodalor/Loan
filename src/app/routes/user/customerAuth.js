@@ -19,7 +19,11 @@ const {
   verifyOtp,
   consumeVerifiedOtp,
 } = require("../../services/customerAuth");
-const { getSystemConfig, getActiveCountryConfig } = require("../../services/systemConfig");
+const {
+  DEFAULT_LOAN_TERMS,
+  getSystemConfig,
+  getActiveCountryConfig,
+} = require("../../services/systemConfig");
 const { verifyFirebasePhoneToken } = require("../../services/customerAuth/firebase");
 const { logSystemEvent } = require("../../../libs/logger");
 
@@ -206,10 +210,18 @@ const buildLoanCalculations = ({ amount, term }) => {
     dueDate: dueDate.toISOString(),
   };
 };
-const getConfiguredLoanTerms = (systemConfig = {}) =>
-  (Array.isArray(systemConfig.loanTerms) ? systemConfig.loanTerms : [])
-    .filter((term) => term?.isEnabled)
+const MIN_PLAY_COMPLIANT_LOAN_DAYS = 61;
+const getConfiguredLoanTerms = (systemConfig = {}) => {
+  const eligibleTerms = (Array.isArray(systemConfig.loanTerms) ? systemConfig.loanTerms : [])
+    .filter((term) => term?.isEnabled && Number(term.days || 0) >= MIN_PLAY_COMPLIANT_LOAN_DAYS)
     .sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+
+  if (eligibleTerms.length > 0) {
+    return eligibleTerms;
+  }
+
+  return DEFAULT_LOAN_TERMS.filter((term) => Number(term.days || 0) >= MIN_PLAY_COMPLIANT_LOAN_DAYS);
+};
 const buildCountryProfile = (country = {}) => ({
   code: String(country.code || "").trim().toUpperCase(),
   name: String(country.name || "").trim(),
