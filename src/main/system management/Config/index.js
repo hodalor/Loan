@@ -398,12 +398,38 @@ export default function SystemConfig() {
     setActiveTab("country");
   };
   const handleToggleCountry = (countryCode) => {
-    setConfig((current) => ({
-      ...current,
-      countries: (current.countries || []).map((item) =>
+    setConfig((current) => {
+      const nextCountries = (current.countries || []).map((item) =>
         item.code === countryCode ? { ...item, isEnabled: !item.isEnabled } : item
-      ),
-    }));
+      );
+      const toggled = nextCountries.find((item) => item.code === countryCode);
+      const isDeactivatingActiveCountry =
+        toggled?.isEnabled === false && current.activeCountryCode === countryCode;
+
+      return {
+        ...current,
+        countries: nextCountries,
+        activeCountryCode: isDeactivatingActiveCountry
+          ? nextCountries.find((item) => item.isEnabled)?.code || ""
+          : current.activeCountryCode,
+      };
+    });
+  };
+  const handleSetActiveCountry = (countryCode) => {
+    setConfig((current) => {
+      const targetCountry = (current.countries || []).find(
+        (item) => item.code === countryCode
+      );
+
+      if (!targetCountry || targetCountry.isEnabled === false) {
+        return current;
+      }
+
+      return {
+        ...current,
+        activeCountryCode: countryCode,
+      };
+    });
   };
   const updateCountryDraftField = (field, value) => {
     setCountryDraft((current) => ({
@@ -464,11 +490,19 @@ export default function SystemConfig() {
       const nextCountries = exists
         ? countries.map((item) => (item.code === code ? nextCountry : item))
         : [...countries, nextCountry];
+      const sortedCountries = [...nextCountries].sort((left, right) =>
+        left.name.localeCompare(right.name)
+      );
+      const hasValidActiveCountry = sortedCountries.some(
+        (item) => item.code === current.activeCountryCode && item.isEnabled
+      );
 
       return {
         ...current,
-        countries: nextCountries.sort((left, right) => left.name.localeCompare(right.name)),
-        activeCountryCode: current.activeCountryCode || code,
+        countries: sortedCountries,
+        activeCountryCode: hasValidActiveCountry
+          ? current.activeCountryCode
+          : sortedCountries.find((item) => item.isEnabled)?.code || code,
       };
     });
 
@@ -625,8 +659,19 @@ export default function SystemConfig() {
   const handleSave = async () => {
     setSaving(true);
 
+    const enabledCountries = (config.countries || []).filter((item) => item.isEnabled);
+    const hasValidActiveCountry = enabledCountries.some(
+      (item) => item.code === config.activeCountryCode
+    );
+    const payload = hasValidActiveCountry
+      ? config
+      : {
+          ...config,
+          activeCountryCode: enabledCountries[0]?.code || config.activeCountryCode || "",
+        };
+
     const response = await _updateSystemConfig({
-      ...config,
+      ...payload,
       homeBannerImageFile,
     });
     if (response.success === 1 && response.data) {
@@ -932,11 +977,13 @@ export default function SystemConfig() {
                             resetCountryEditor(e.target.value);
                           }}
                         >
-                          {(config.countries || []).map((country) => (
-                            <option key={country.code} value={country.code}>
-                              {country.name} ({country.code})
-                            </option>
-                          ))}
+                          {(config.countries || [])
+                            .filter((country) => country.isEnabled)
+                            .map((country) => (
+                              <option key={country.code} value={country.code}>
+                                {country.name} ({country.code})
+                              </option>
+                            ))}
                         </select>
                       </div>
                       <div>
@@ -1005,6 +1052,15 @@ export default function SystemConfig() {
                             </div>
 
                             <div className="flex flex-wrap gap-2">
+                              {country.isEnabled &&
+                              config.activeCountryCode !== country.code ? (
+                                <CompactActionButton
+                                  label="Make Active"
+                                  disabled={!canSaveConfig}
+                                  onClick={() => handleSetActiveCountry(country.code)}
+                                  tone="success"
+                                />
+                              ) : null}
                               <CompactActionButton
                                 label="Edit"
                                 disabled={!canSaveConfig}

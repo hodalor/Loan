@@ -101,7 +101,7 @@ export const defaultSystemConfig = {
       isEnabled: true,
     },
   ],
-  activeCountryCode: "ZM",
+  activeCountryCode: "GH",
   countries: [
     {
       code: "ZM",
