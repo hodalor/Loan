@@ -106,30 +106,30 @@ const buildDefaultPortalContent = () => ({
     "Review the summary, accept the terms, and submit the request.",
     "Track approval and repayment progress from Records.",
   ],
-  supportPhone: "+260 000 000 000",
+  supportPhone: "+233 000 000 000",
   supportEmail: "customer@cedilending.com",
-  supportWhatsapp: "+260 000 000 000",
+  supportWhatsapp: "+233 000 000 000",
   activeCountry: {
-    code: "ZM",
-    name: "Zambia",
-    locale: "en-ZM",
-    currencyCode: "ZMW",
-    currencySymbol: "K",
-    dialCode: "+260",
-    phoneExample: "0970000000",
+    code: "GH",
+    name: "Ghana",
+    locale: "en-GH",
+    currencyCode: "GHS",
+    currencySymbol: "GH₵",
+    dialCode: "+233",
+    phoneExample: "0240000000",
     paymentProviders: [],
     mobileMoneyNetworks: [],
     cardProviders: [],
   },
   countries: [
     {
-      code: "ZM",
-      name: "Zambia",
-      locale: "en-ZM",
-      currencyCode: "ZMW",
-      currencySymbol: "K",
-      dialCode: "+260",
-      phoneExample: "0970000000",
+      code: "GH",
+      name: "Ghana",
+      locale: "en-GH",
+      currencyCode: "GHS",
+      currencySymbol: "GH₵",
+      dialCode: "+233",
+      phoneExample: "0240000000",
       paymentProviders: [],
       mobileMoneyNetworks: [],
       cardProviders: [],
@@ -160,12 +160,12 @@ const buildInitialState = () => ({
   otp: {
     phone: "",
     otp: "",
-    countryCode: "ZM",
+    countryCode: "GH",
   },
   login: {
     phone: "",
     pin: "",
-    countryCode: "ZM",
+    countryCode: "GH",
   },
   pinSetup: {
     pin: "",
@@ -176,7 +176,7 @@ const buildInitialState = () => ({
     middleName: "",
     lastName: "",
     phone: "",
-    countryCode: "ZM",
+    countryCode: "GH",
     backupPhone: "",
     email: "",
     dob: "",
@@ -571,7 +571,7 @@ const mapCustomerToFormState = (customer = {}) => ({
     middleName: customer.IDinfo?.middleName || "",
     lastName: customer.IDinfo?.lastName || "",
     phone: customer.phone || "",
-    countryCode: customer.countryCode || "ZM",
+    countryCode: customer.countryCode || "GH",
     backupPhone: customer.pesonalInfo?.bUPphone || "",
     email: customer.email || "",
     dob: customer.pesonalInfo?.dob || "",
@@ -774,6 +774,7 @@ const validateStepById = (stepId, formData) => {
 function App() {
   const firebaseConfirmationRef = useRef(null);
   const portalSessionRestoredRef = useRef(false);
+  const manualCountrySelectionRef = useRef(false);
   const [screen, setScreen] = useState("login");
   const [activeTab, setActiveTab] = useState("home");
   const [authMode, setAuthMode] = useState("signup");
@@ -791,9 +792,7 @@ function App() {
   const [loanOffer, setLoanOffer] = useState(null);
   const [loanRequest, setLoanRequest] = useState(buildInitialLoanRequest);
   const [portalContent, setPortalContent] = useState(buildDefaultPortalContent);
-  const [selectedCountryCode, setSelectedCountryCode] = useState(
-    buildDefaultPortalContent().activeCountry.code
-  );
+  const [selectedCountryCode, setSelectedCountryCode] = useState("");
   const [activeLoan, setActiveLoan] = useState(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [lifecycleAction, setLifecycleAction] = useState("");
@@ -928,6 +927,7 @@ function App() {
   const handleCountryChange = (countryCode) => {
     const nextCountry = getCountryByCode(availableCountries, countryCode) || selectedCountry;
 
+    manualCountrySelectionRef.current = true;
     setSelectedCountryCode(countryCode);
     applyRuntimeCountryFormatting(nextCountry || buildDefaultPortalContent().activeCountry);
     setFormData((current) => ({
@@ -1148,7 +1148,7 @@ function App() {
       buildDefaultPortalContent().activeCountry.code;
     const nextCountry = getCountryByCode(availableCountries, defaultCountryCode) || selectedCountry;
 
-    if (nextCountry?.code && !selectedCountryCode) {
+    if (nextCountry?.code && !manualCountrySelectionRef.current) {
       setSelectedCountryCode(nextCountry.code);
     }
 
@@ -1515,102 +1515,42 @@ function App() {
         const resolvedCountry =
           getCountryByCode(availableCountries, resolvedCountryCode) || selectedCountry;
 
-        try {
-          const { confirmationResult, e164Phone } = await requestFirebasePhoneOtp({
-            firebaseConfig: firebaseWebConfig,
+        const { confirmationResult, e164Phone } = await requestFirebasePhoneOtp({
+          firebaseConfig: firebaseWebConfig,
+          phone,
+          dialCode: resolvedCountry?.dialCode || "",
+          recaptchaContainerId: "firebase-recaptcha-container",
+        });
+
+        firebaseConfirmationRef.current = confirmationResult;
+        setOtpVerificationMethod("firebase");
+        setOtpRequested(true);
+        setFormData((current) => ({
+          ...current,
+          otp: {
+            ...current.otp,
             phone,
-            dialCode: resolvedCountry?.dialCode || "",
-            recaptchaContainerId: "firebase-recaptcha-container",
-          });
-
-          firebaseConfirmationRef.current = confirmationResult;
-          setOtpVerificationMethod("firebase");
-          setOtpRequested(true);
-          setFormData((current) => ({
-            ...current,
-            otp: {
-              ...current.otp,
-              phone,
-              otp: "",
-              countryCode: resolvedCountryCode,
-            },
-            login: {
-              ...current.login,
-              phone,
-              countryCode: resolvedCountryCode,
-            },
-            personal: {
-              ...current.personal,
-              phone,
-              countryCode: resolvedCountryCode,
-            },
-          }));
-
-          if (resolvedCountryCode) {
-            setSelectedCountryCode(resolvedCountryCode);
-          }
-
-          showMessage("success", `OTP sent by SMS to ${e164Phone}. Enter the code to continue.`);
-          return;
-        } catch (error) {
-          const shouldFallbackToServerOtp = Boolean(error?.isNetworkError);
-
-          if (!shouldFallbackToServerOtp) {
-            throw error;
-          }
-
-          resetFirebasePhoneVerification();
-          const response = await requestCustomerOtp({
+            otp: "",
+            countryCode: resolvedCountryCode,
+          },
+          login: {
+            ...current.login,
             phone,
-            purpose: authMode,
-            countryCode: formData.otp.countryCode || selectedCountryCode,
-          });
+            countryCode: resolvedCountryCode,
+          },
+          personal: {
+            ...current.personal,
+            phone,
+            countryCode: resolvedCountryCode,
+          },
+        }));
 
-          if (response.success === 0) {
-            throw new Error(
-              response.message ||
-                error?.message ||
-                "Firebase OTP request failed and the backup OTP service is unavailable."
-            );
-          }
-
-          const fallbackCountryCode =
-            response.data?.country?.code || formData.otp.countryCode || selectedCountryCode;
-
-          setOtpVerificationMethod("server");
-          setOtpRequested(true);
-          setFormData((current) => ({
-            ...current,
-            otp: {
-              ...current.otp,
-              phone,
-              otp: "",
-              countryCode: fallbackCountryCode,
-            },
-            login: {
-              ...current.login,
-              phone,
-              countryCode: fallbackCountryCode,
-            },
-            personal: {
-              ...current.personal,
-              phone,
-              countryCode: fallbackCountryCode,
-            },
-          }));
-
-          if (fallbackCountryCode) {
-            setSelectedCountryCode(fallbackCountryCode);
-          }
-
-          showMessage(
-            "success",
-            response.data?.otpCode
-              ? `Firebase OTP is temporarily unavailable on this network. Backup OTP requested successfully. Your OTP is: ${response.data.otpCode}`
-              : "Firebase OTP is temporarily unavailable on this network. Backup OTP requested successfully."
-          );
-          return;
+        if (resolvedCountryCode) {
+          setSelectedCountryCode(resolvedCountryCode);
         }
+
+        showMessage("success", `OTP sent by SMS to ${e164Phone}. Enter the code to continue.`);
+        return;
       }
 
       const response = await requestCustomerOtp({
@@ -1751,7 +1691,6 @@ function App() {
       purpose: authMode,
       countryCode: formData.otp.countryCode || selectedCountryCode,
       firebaseIdToken: usingFirebaseOtp ? firebaseIdToken : "",
-      verificationMode: usingFirebaseOtp ? "firebase" : "server-otp-fallback",
     });
     setAuthLoading(false);
 
@@ -2335,7 +2274,7 @@ function App() {
                 <div className="form-grid single">
                   <Field
                     label="Phone number"
-                    placeholder={selectedCountry?.phoneExample || "0970000000"}
+                    placeholder={selectedCountry?.phoneExample || "0240000000"}
                     value={formData.login.phone}
                     onChange={(value) => updateSection("login", "phone", value)}
                   />
@@ -2388,7 +2327,7 @@ function App() {
                   />
                   <Field
                     label="Phone number"
-                    placeholder={selectedCountry?.phoneExample || "0970000000"}
+                    placeholder={selectedCountry?.phoneExample || "0240000000"}
                     value={formData.otp.phone}
                     onChange={(value) => updateSection("otp", "phone", value)}
                   />
