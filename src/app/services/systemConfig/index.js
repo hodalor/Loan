@@ -265,7 +265,7 @@ const DEFAULT_CONFIG = {
   extensionPeriods: DEFAULT_EXTENSION_PERIODS,
   overduePenaltyRate: 2,
   repaymentOptions: DEFAULT_REPAYMENT_OPTIONS,
-  activeCountryCode: "ZM",
+  activeCountryCode: "GH",
   countries: DEFAULT_COUNTRIES,
   allowPartialRepayment: true,
   portalContent: DEFAULT_PORTAL_CONTENT,
@@ -573,7 +573,12 @@ const sanitizeIncomingConfig = (payload = {}) => {
   )
     .trim()
     .toUpperCase();
-  if (!nextConfig.countries.some((country) => country.code === nextConfig.activeCountryCode)) {
+
+  const activeCountry = nextConfig.countries.find(
+    (country) => country.code === nextConfig.activeCountryCode
+  );
+
+  if (!activeCountry || activeCountry.isEnabled === false) {
     nextConfig.activeCountryCode =
       nextConfig.countries.find((country) => country.isEnabled)?.code ||
       nextConfig.countries[0]?.code ||
@@ -619,8 +624,11 @@ const getActiveCountryConfig = (systemConfig = {}) => {
     .toUpperCase();
 
   return (
+    countries.find(
+      (country) => country.code === activeCountryCode && country.isEnabled !== false
+    ) ||
+    countries.find((country) => country.isEnabled !== false) ||
     countries.find((country) => country.code === activeCountryCode) ||
-    countries.find((country) => country.isEnabled) ||
     countries[0] ||
     DEFAULT_COUNTRIES[0]
   );

@@ -1933,15 +1933,11 @@ router.post("/auth/set-pin", async (req, res) => {
 
     let verification = null;
     if (systemConfig.authVerification?.otpMode === "real") {
-      if (String(req.body?.verificationMode || "").trim() === "server-otp-fallback") {
-        verification = consumeVerifiedOtp({ phone, purpose });
-      } else {
-        verification = await verifyFirebasePhoneToken({
-          idToken: req.body?.firebaseIdToken,
-          phone,
-          firebaseWebConfig: systemConfig.authVerification?.firebaseWebConfig,
-        });
-      }
+      verification = await verifyFirebasePhoneToken({
+        idToken: req.body?.firebaseIdToken,
+        phone,
+        firebaseWebConfig: systemConfig.authVerification?.firebaseWebConfig,
+      });
     } else {
       verification = consumeVerifiedOtp({ phone, purpose });
     }

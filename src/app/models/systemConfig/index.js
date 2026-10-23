@@ -405,7 +405,7 @@ const systemConfigSchema = new mongoose.Schema(
     },
     activeCountryCode: {
       type: String,
-      default: "ZM",
+      default: "GH",
     },
     countries: {
       type: [countryConfigSchema],
